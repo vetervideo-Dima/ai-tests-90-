@@ -22,8 +22,8 @@
     ],
     "total_tokens": 138436,
     "total_minutes": 14.9,
-    "est_usd": 0.23,
-    "rate_usd_per_mtok": 1.65,
-    "note": "оценка: API-эквивалент по смешанной ставке, не реальное списание"
+    "est_usd": 1.91,
+    "note": "оценка: API-эквивалент по модели tools/cost.py, не реальное списание",
+    "processed_tokens": 3009194
   }
 }

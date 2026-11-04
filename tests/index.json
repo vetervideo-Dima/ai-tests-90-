@@ -5,16 +5,23 @@
    "site_subtitle": "Коллекция визуальных тестов нейросети: 3D, шейдеры, сайты, моушен, вектор, игры. Каждый тест — v1 (честный one-shot) и v2 (автономная доработка после самопроверки).",
    "model": null,
    "effort": "high",
-   "blended_usd_per_mtok": 1.65,
-   "repo_url": "https://github.com/vetervideo-Dima/ai-tests-90-"
+   "repo_url": "https://github.com/vetervideo-Dima/ai-tests-90-",
+   "pricing": {
+    "input": 4,
+    "output": 20,
+    "cache_read": 0.2,
+    "cache_write": 5
+   },
+   "baseline_tokens": 50000,
+   "out_share": 0.5
   },
   "summary": {
    "total": 76,
-   "done": 0,
-   "ok": 0,
-   "tokens": 0,
-   "usd": 0,
-   "minutes": 0
+   "done": 1,
+   "ok": 1,
+   "tokens": 138436,
+   "usd": 1.91,
+   "minutes": 14.9
   },
   "waves": {
    "1": "Флагманы 3D",
@@ -1042,8 +1049,10 @@
    "wave_name": "Флагманы 3D",
    "status": "pending",
    "entries": {},
-   "shots": {},
-   "shot": null,
+   "shots": {
+    "v1": "v1/screenshot.png"
+   },
+   "shot": "v1/screenshot.png",
    "date": null,
    "notes": "",
    "v1_issues": "",
@@ -1090,20 +1099,33 @@
    "kind": "html",
    "wave": 1,
    "wave_name": "Флагманы 3D",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-04",
+   "notes": "Парящий воксельный остров с пагодой, сакурой, прудом, мостом, тории и фонарями. Собственный мешер с отсечением граней и AO по вершинам, ветер в листве, опадающие лепестки, кои. Ошибок в консоли нет ни в v1, ни в v2.",
+   "v1_issues": "Ошибок нет. Облака серые и висят на переднем плане, пагоду и пруд закрывают кроны, остров мелковат в кадре, нет bloom у фонарей, предупреждения о deprecated THREE.Clock и PCFSoftShadowMap.",
+   "v2_changes": "Bloom (UnrealBloomPass) на фонарях и окнах, ручей и водопад с края острова с брызгами, шейдер воды (блики на пруду, течение у водопада), бабочки, светлые облака вдали и под островом, новый ракурс (вход через тории), автоповорот возобновляется после взаимодействия, мешер на типизированных массивах, Timer вместо Clock, PCFShadowMap с запечённой картой теней, на мобильных меньше DPR, частиц и разрешение тени.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 138436,
+   "minutes": 14.9,
+   "usd": 1.91,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 138436,
+     "tool_uses": 30,
+     "duration_ms": 895285
+    }
+   ]
   },
   {
    "n": 44,
@@ -1142,8 +1164,11 @@
    "wave_name": "Флагманы 3D",
    "status": "pending",
    "entries": {},
-   "shots": {},
-   "shot": null,
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "v2/screenshot.png",
    "date": null,
    "notes": "",
    "v1_issues": "",

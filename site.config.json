@@ -3,6 +3,13 @@
   "site_subtitle": "Коллекция визуальных тестов нейросети: 3D, шейдеры, сайты, моушен, вектор, игры. Каждый тест — v1 (честный one-shot) и v2 (автономная доработка после самопроверки).",
   "model": null,
   "effort": "high",
-  "blended_usd_per_mtok": 1.65,
-  "repo_url": "https://github.com/vetervideo-Dima/ai-tests-90-"
+  "repo_url": "https://github.com/vetervideo-Dima/ai-tests-90-",
+  "pricing": {
+    "input": 4,
+    "output": 20,
+    "cache_read": 0.2,
+    "cache_write": 5
+  },
+  "baseline_tokens": 50000,
+  "out_share": 0.5
 }

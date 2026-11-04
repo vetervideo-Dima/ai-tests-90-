@@ -1,0 +1,8 @@
+{
+  "site_title": "Один промпт — один результат",
+  "site_subtitle": "Коллекция визуальных тестов нейросети: 3D, шейдеры, сайты, моушен, вектор, игры. Каждый тест — v1 (честный one-shot) и v2 (автономная доработка после самопроверки).",
+  "model": null,
+  "effort": "high",
+  "blended_usd_per_mtok": 1.65,
+  "repo_url": "https://github.com/vetervideo-Dima/ai-tests-90-"
+}

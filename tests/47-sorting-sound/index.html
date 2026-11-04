@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>47 · Sorting Sound — Один промпт — один результат</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;500;800&family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/site.css">
+
+</head>
+<body>
+<div id="app"></div>
+<script id="data" type="application/json">{"site": {"config": {"site_title": "Один промпт — один результат", "site_subtitle": "Коллекция визуальных тестов нейросети: 3D, шейдеры, сайты, моушен, вектор, игры. Каждый тест — v1 (честный one-shot) и v2 (автономная доработка после самопроверки).", "model": null, "effort": "high", "blended_usd_per_mtok": 1.65, "repo_url": "https://github.com/vetervideo-Dima/ai-tests-90-"}, "summary": {"total": 76, "done": 0, "ok": 0, "tokens": 0, "usd": 0, "minutes": 0}, "waves": {"1": "Флагманы 3D", "2": "Генеративка и шейдеры", "3": "Сайты и моушен", "4": "Вектор и игры", "5": "Видео-код и прочее", "6": "Новый 3D-пакет", "7": "Сравнение effort", "8": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)", "9": "3D-предметка и интерьеры (адаптация подборки ChatGPT)", "10": "Вектор, моушен, обложки, текст (адаптация подборки ChatGPT)"}}, "test": {"n": 47, "slug": "47-sorting-sound", "title": "Sorting Sound", "genre": "Объяснялки, dataviz, звук", "source": "оригинал. HTML.", "fmt": "HTML", "kind": "html", "wave": 1, "wave_name": "Флагманы 3D", "status": "pending", "entries": {}, "shots": {}, "shot": null, "date": null, "notes": "", "v1_issues": "", "v2_changes": "", "effort": "high", "model": null, "tokens": null, "minutes": null, "usd": null, "runs": [], "files": ["PROMPT.md"]}, "prompt_md": "# 47 · Sorting Sound\n\n- **Жанр:** Объяснялки, dataviz, звук\n- **Источник:** оригинал. HTML.\n- **Формат выхода:** HTML\n- **Волна:** 1\n- **Корректировка для облачного режима:** Все HTML: библиотеки только из `vendor/` по относительному пути (importmap), без CDN — это правило важнее того, что написано в промпте. Исключение: Google Fonts.\n\n## Системный промпт\n\n```\nYou are a world-class creative technologist. Output exactly one complete, self-contained file in a single code block. No explanations. For HTML: inline all CSS/JS; CDN libraries only if explicitly allowed (ES module import maps from jsdelivr/unpkg). Must run by double-clicking in Chrome. Target 60 FPS, handle resize, use devicePixelRatio.\n```\n\n## Промпт\n\n```\nSorting visualizer with sound, one HTML file: 8 algorithms (bubble, insertion, selection, merge, quick, heap, radix, shell) racing side by side on the same array, each comparison plays a Web Audio tone mapped to value, comparison/swap counters, speed slider, pseudo-code panel highlighting the current line.\n```\n", "readme_md": "", "prev": "46-earth-magnetic-field", "next": "48-ambient-machine", "prev_title": "Earth Magnetic Field", "next_title": "Ambient Machine"}</script>
+<script type="module" src="../../assets/test.js"></script>
+</body>
+</html>

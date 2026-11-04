@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Neon Life</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#020308;overflow:hidden;color:#cfe;}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+  #hud{position:fixed;left:16px;top:14px;font:12px/1.55 'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+       pointer-events:none;text-shadow:0 0 8px rgba(0,255,255,.45);transition:opacity .8s;user-select:none;max-width:calc(100vw - 56px);
+       padding:10px 12px;margin:-10px -12px;border-radius:12px;background:rgba(2,3,10,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+  #hud h1{font:800 20px/1 'Orbitron','Segoe UI',system-ui,sans-serif;letter-spacing:.2em;margin:0 0 10px;color:#fff;
+          text-shadow:0 0 4px #0ff,0 0 14px #0ff,0 0 30px #f0f}
+  #stats span{color:#fff}
+  #help{margin-top:8px;color:#8ab;opacity:.85}
+  #help b{color:#0ff;font-weight:600}
+  #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(10px);opacity:0;transition:opacity .5s,transform .5s;
+         font:12px/1.4 'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;color:#fff;padding:8px 14px;border-radius:999px;
+         background:rgba(10,0,30,.55);border:1px solid rgba(255,0,255,.45);box-shadow:0 0 18px rgba(255,0,255,.35),inset 0 0 12px rgba(0,255,255,.15);
+         pointer-events:none;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #help .touch{display:none}
+  #btns{position:fixed;right:16px;bottom:16px;display:flex;gap:8px;z-index:2;transition:opacity .8s}
+  #btns button{font:600 12px/1 'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;color:#dff;background:rgba(8,4,24,.55);
+       border:1px solid rgba(0,255,255,.45);border-radius:10px;padding:10px 12px;min-width:44px;min-height:40px;cursor:pointer;
+       box-shadow:0 0 12px rgba(0,255,255,.25),inset 0 0 10px rgba(255,0,255,.12);-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px)}
+  #btns button:active{background:rgba(0,255,255,.18)}
+  @media (pointer:coarse), (max-width:640px){
+    #help .key{display:none} #help .touch{display:inline}
+    #hud{font-size:11px;top:12px} #hud h1{font-size:17px;margin-bottom:8px}
+    #toast{bottom:76px;white-space:normal;text-align:center;border-radius:14px;width:max-content}
+  }
+  @media (pointer:fine) and (min-width:641px){ #btns{display:none} }
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font:16px 'JetBrains Mono',monospace;color:#f6a;text-align:center;padding:24px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <h1>NEON&nbsp;LIFE</h1>
+  <div id="stats">gen <span id="sGen">0</span> · pop <span id="sPop">–</span> · Δ <span id="sChg">–</span><br>
+  <span id="sRate">30</span> gen/s · <span id="sFps">–</span> fps · auto-reseed <span id="sAuto">on</span></div>
+  <div id="help"><span class="key"><b>drag</b> draw · <b>shift-drag</b> erase · <b>wheel</b> zoom · <b>right-drag</b> pan<br>
+  <b>space</b> pause · <b>R</b> reseed · <b>C</b> clear · <b>A</b> auto · <b>[ ]</b> speed · <b>0</b> reset view · <b>H</b> hide</span>
+  <span class="touch"><b>tap/drag</b> draw · <b>pinch</b> zoom · <b>two fingers</b> pan</span></div>
+</div>
+<div id="btns"><button data-k=" " aria-label="pause">❚❚</button><button data-k="r">SEED</button><button data-k="c">CLEAR</button><button data-k="0">FIT</button></div>
+<div id="toast"></div>
+<div id="err"></div>
+<script>
+(() => {
+'use strict';
+const N = 1024;
+const canvas = document.getElementById('c');
+const $ = id => document.getElementById(id);
+const hud = $('hud'), toastEl = $('toast'), btns = $('btns'); let hudOp = -1;
+
+// ------------------------------------------------------------------ GLSL
+const VS = `#version 300 es
+void main(){ vec2 p = vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2)); gl_Position = vec4(p*2.0-1.0, 0.0, 1.0); }`;
+const HEAD = `#version 300 es
+precision highp float; precision highp int; precision highp sampler2D;
+out vec4 o;
+float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+`;
+const FS_SIM = HEAD + `
+uniform sampler2D uState; uniform float uAgeStep; uniform float uDecay;
+int at(ivec2 p){ return int(texelFetch(uState, (p + 1024) & 1023, 0).r > 0.5); }
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 s = texelFetch(uState, p, 0);
+  int n = at(p+ivec2(-1,-1)) + at(p+ivec2(0,-1)) + at(p+ivec2(1,-1))
+        + at(p+ivec2(-1, 0))                       + at(p+ivec2(1, 0))
+        + at(p+ivec2(-1, 1)) + at(p+ivec2(0, 1)) + at(p+ivec2(1, 1));
+  bool a = s.r > 0.5;
+  bool na = a ? (n == 2 || n == 3) : (n == 3);
+  float age = s.g, trail = s.b;
+  if (na) { age = a ? min(age + uAgeStep, 1.0) : 0.0; trail = 1.0; }
+  else    { trail = max(trail * uDecay - 1.0/255.0, 0.0); }
+  o = vec4(na ? 1.0 : 0.0, age, trail, (na != a) ? 1.0 : 0.0);
+}`;
+const FS_PAINT = HEAD + `
+uniform sampler2D uState; uniform vec2 uA; uniform vec2 uB; uniform float uR; uniform float uErase; uniform float uSeed;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 s = texelFetch(uState, p, 0);
+  vec2 c = vec2(p) + 0.5;
+  vec2 d = mod(c - uA + 512.0, 1024.0) - 512.0;
+  vec2 ab = uB - uA;
+  float t = clamp(dot(d, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+  float dist = length(d - ab*t);
+  o = s;
+  if (dist <= uR) {
+    if (uErase > 0.5) o = vec4(0.0, s.g, s.b*0.4, s.r > 0.5 ? 1.0 : 0.0);
+    else if (uR < 1.6 || hash(c + uSeed) < 0.5) o = vec4(1.0, 0.0, 1.0, 1.0);
+  }
+}`;
+const FS_MERGE = HEAD + `
+uniform sampler2D uState; uniform sampler2D uStamp;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 s = texelFetch(uState, p, 0);
+  float m = texelFetch(uStamp, p, 0).r;
+  if (m > 0.75) o = vec4(1.0, 0.0, 1.0, 1.0);
+  else if (m > 0.25) o = vec4(0.0, s.g, s.b, s.r > 0.5 ? 1.0 : 0.0);
+  else o = s;
+}`;
+const FS_REDUCE = HEAD + `
+uniform sampler2D uState;
+void main(){
+  ivec2 b = ivec2(gl_FragCoord.xy) * 16;
+  float a = 0.0, c = 0.0;
+  for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) {
+    vec4 s = texelFetch(uState, b + ivec2(x, y), 0); a += s.r; c += s.a;
+  }
+  o = vec4(a/256.0, c/256.0, 0.0, 1.0);
+}`;
+const FS_COLOR = HEAD + `
+uniform sampler2D uState; uniform float uHue;
+vec3 neon(float t){
+  t = clamp(t, 0.0, 1.0) * 4.0;
+  const vec3 c0 = vec3(0.30, 1.00, 1.00), c1 = vec3(0.12, 0.42, 1.00), c2 = vec3(0.78, 0.16, 1.00),
+             c3 = vec3(1.00, 0.10, 0.55), c4 = vec3(1.00, 0.52, 0.06);
+  return t < 1.0 ? mix(c0, c1, t) : t < 2.0 ? mix(c1, c2, t-1.0) : t < 3.0 ? mix(c2, c3, t-2.0) : mix(c3, c4, t-3.0);
+}
+vec3 hueRot(vec3 c, float a){ const vec3 k = vec3(0.57735); float ca = cos(a);
+  return max(c*ca + cross(k, c)*sin(a) + k*dot(k, c)*(1.0-ca), 0.0); }
+void main(){
+  vec4 s = texelFetch(uState, ivec2(gl_FragCoord.xy), 0);
+  float age = pow(s.g, 0.55);
+  vec3 col;
+  if (s.r > 0.5) {
+    vec3 h = hueRot(neon(age), uHue);
+    float young = 1.0 - smoothstep(0.0, 0.03, s.g);
+    col = mix(h, vec3(0.75, 1.0, 1.0), young*0.3);
+    col *= 1.0 - 0.45*smoothstep(0.4, 1.0, age);
+  } else {
+    float t = s.b;
+    // trail: hue drifts toward hot pink as it fades, so motion leaves a coloured comet tail
+    vec3 h = hueRot(neon(min(age + 0.25 + (1.0 - t)*0.35, 1.0)), uHue + 0.25);
+    col = h * pow(t, 1.45) * 0.75;
+  }
+  o = vec4(col, 1.0);
+}`;
+const SCENE = `
+uniform sampler2D uColor; uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform float uExposure;
+vec3 sceneAt(vec2 frag, bool sharp){
+  vec2 cell = (frag - 0.5*uRes)/uScale + uCenter;
+  if (sharp && uScale > 2.5) {
+    vec2 ci = floor(cell); vec2 f = cell - ci - 0.5;
+    vec3 c = textureLod(uColor, (ci + 0.5)/1024.0, 0.0).rgb;
+    float r = max(abs(f.x), abs(f.y));
+    float aa = 1.0/uScale;
+    float gap = clamp(0.04 + 0.5/uScale, 0.0, 0.2);
+    float m = 1.0 - smoothstep(0.5 - gap - aa, 0.5 - gap + aa, r);
+    float k = smoothstep(2.5, 7.0, uScale);
+    return c * mix(1.0, m*1.15, k) * uExposure;
+  }
+  return texture(uColor, cell/1024.0).rgb * uExposure;
+}`;
+const FS_PRE = HEAD + SCENE + `
+uniform vec2 uLvl; uniform float uThr; uniform float uKnee;
+void main(){
+  vec3 c = sceneAt(gl_FragCoord.xy * (uRes/uLvl), false);
+  float b = max(c.r, max(c.g, c.b));
+  float soft = clamp(b - uThr + uKnee, 0.0, 2.0*uKnee); soft = soft*soft/(4.0*uKnee + 1e-4);
+  float w = max(soft, b - uThr) / max(b, 1e-4);
+  o = vec4(c*w, 1.0);
+}`;
+const FS_DOWN = HEAD + `
+uniform sampler2D uSrc; uniform vec2 uSrcSize; uniform vec2 uDstSize;
+void main(){
+  vec2 uv = gl_FragCoord.xy / uDstSize; vec2 h = 1.0/uSrcSize;
+  vec3 s = texture(uSrc, uv).rgb*4.0;
+  s += texture(uSrc, uv - h).rgb + texture(uSrc, uv + h).rgb;
+  s += texture(uSrc, uv + vec2(h.x, -h.y)).rgb + texture(uSrc, uv - vec2(h.x, -h.y)).rgb;
+  o = vec4(s/8.0, 1.0);
+}`;
+const FS_UP = HEAD + `
+uniform sampler2D uSrc; uniform vec2 uSrcSize; uniform vec2 uDstSize; uniform float uWeight;
+void main(){
+  vec2 uv = gl_FragCoord.xy / uDstSize; vec2 h = 0.5/uSrcSize;
+  vec3 s = texture(uSrc, uv + vec2(-h.x*2.0, 0.0)).rgb + texture(uSrc, uv + vec2(h.x*2.0, 0.0)).rgb
+         + texture(uSrc, uv + vec2(0.0, h.y*2.0)).rgb + texture(uSrc, uv + vec2(0.0, -h.y*2.0)).rgb;
+  s += (texture(uSrc, uv + vec2(-h.x, h.y)).rgb + texture(uSrc, uv + vec2(h.x, h.y)).rgb
+      + texture(uSrc, uv + vec2(h.x, -h.y)).rgb + texture(uSrc, uv + vec2(-h.x, -h.y)).rgb) * 2.0;
+  o = vec4(s/12.0*uWeight, 1.0);
+}`;
+const FS_COMP = HEAD + SCENE + `
+uniform sampler2D uBloom; uniform float uBloomStr; uniform float uTime;
+vec3 aces(vec3 x){ return clamp((x*(2.51*x + 0.03)) / (x*(2.43*x + 0.59) + 0.14), 0.0, 1.0); }
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec3 sc = sceneAt(gl_FragCoord.xy, true);
+  vec3 bl = texture(uBloom, uv).rgb;
+  vec2 q = uv - 0.5; q.x *= uRes.x/uRes.y;
+  vec3 bg = vec3(0.007, 0.009, 0.026) * (1.0 - 0.7*dot(q, q));
+  vec3 col = aces(bg + sc + bl*uBloomStr);
+  col *= 1.0 - 0.35*smoothstep(0.35, 1.15, length(q));
+  col += (hash(gl_FragCoord.xy + uTime) - 0.5) / 255.0;
+  o = vec4(col, 1.0);
+}`;
+
+// ------------------------------------------------------------------ Patterns
+const RLE = {
+  'Gosper glider gun': '24bo$22bobo$12b2o6b2o12b2o$11bo3bo4b2o12b2o$2o8bo5bo3b2o$2o8bo3bob2o4bobo$10bo5bo7bo$11bo3bo$12b2o!',
+  'Simkin glider gun': '2o5b2o$2o5b2o2$4b2o$4b2o5$22b2ob2o$21bo5bo$21bo6bo2b2o$21b3o3bo3b2o$26bo4$20b2o$20bo$21b3o$23bo!',
+  'Pulsar': '2b3o3b3o2$o4bobo4bo$o4bobo4bo$o4bobo4bo$2b3o3b3o2$2b3o3b3o$o4bobo4bo$o4bobo4bo$o4bobo4bo2$2b3o3b3o!',
+  'R-pentomino': 'b2o$2o$bo!',
+  'Acorn': 'bo$3bo$2o2b3o!',
+  'Diehard': '6bo$2o$bo3b3o!',
+  'B-heptomino': 'ob2o$3o$bo!',
+  'Pentadecathlon': '2bo4bo$2ob4ob2o$2bo4bo!',
+  'Glider': 'bo$2bo$3o!',
+  'LWSS': 'bo2bo$o$o3bo$4o!',
+};
+function parseRLE(s){
+  const cells = []; let x = 0, y = 0, num = '', w = 0;
+  for (const ch of s) {
+    if (ch >= '0' && ch <= '9') { num += ch; continue; }
+    const n = num ? parseInt(num, 10) : 1; num = '';
+    if (ch === 'b') x += n;
+    else if (ch === 'o') { for (let i = 0; i < n; i++) cells.push([x + i, y]); x += n; }
+    else if (ch === '$') { y += n; x = 0; }
+    else if (ch === '!') break;
+    w = Math.max(w, x);
+  }
+  return { cells, w, h: y + 1 };
+}
+const PAT = {}; for (const k in RLE) PAT[k] = parseRLE(RLE[k]);
+
+const stamp = new Uint8Array(N * N);
+const wrap = v => ((v % N) + N) % N;
+const idx = (x, y) => wrap(y) * N + wrap(x);
+const rnd = n => (Math.random() * n) | 0;
+function stampPattern(p, px, py, margin = 3){
+  const rot = rnd(4), flip = Math.random() < 0.5;
+  const bw = rot & 1 ? p.h : p.w, bh = rot & 1 ? p.w : p.h;
+  for (let y = -margin; y < bh + margin; y++) for (let x = -margin; x < bw + margin; x++) {
+    const i = idx(px + x, py + y); if (stamp[i] === 0) stamp[i] = 128;
+  }
+  for (let [x, y] of p.cells) {
+    if (flip) x = p.w - 1 - x;
+    let tx, ty;
+    switch (rot) { case 0: tx = x; ty = y; break; case 1: tx = p.h - 1 - y; ty = x; break;
+                   case 2: tx = p.w - 1 - x; ty = p.h - 1 - y; break; default: tx = y; ty = p.w - 1 - x; }
+    stamp[idx(px + tx, py + ty)] = 255;
+  }
+}
+function stampSoup(cx, cy, r, d){
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+    const q = (x*x + y*y) / (r*r); if (q > 1) continue;
+    const i = idx(cx + x, cy + y);
+    stamp[i] = Math.random() < d * (1 - 0.5*q*q) ? 255 : (stamp[i] === 255 ? 255 : 128);
+  }
+}
+
+// ------------------------------------------------------------------ GL setup
+let gl = null, R = null, halfFloat = false;
+let W = 1, H = 1, dpr = 1;
+const view = { cx: N/2, cy: N/2, zoom: 1, cover: 1, get scale(){ return this.cover * this.zoom; } };
+const speeds = [5, 10, 20, 30, 60, 120, 240];
+const sim = { cur: 0, gen: 0, paused: false, auto: true, speed: 3, acc: 0 };
+const stats = { pop: 0, chg: 0, fps: 0, frames: 0, fpsT: 0 };
+const hist = []; let lastSeed = 0, lastPaint = -1e9, lastFallback = 0;
+const paintQ = []; let pendingStamp = false, pendingClear = false, dirty = true, colorAge = 0;
+
+function compile(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src.split('\n').slice(0, 4).join('\n'));
+  return s;
+}
+function program(fs, samplers){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); u[info.name] = gl.getUniformLocation(p, info.name); }
+  gl.useProgram(p); samplers.forEach((s, i) => u[s] && gl.uniform1i(u[s], i));
+  return { p, u };
+}
+function tex(w, h, ifmt, fmt, type, filter, wrapMode, levels = 1){
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texStorage2D(gl.TEXTURE_2D, levels, ifmt, w, h);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, levels > 1 ? gl.LINEAR_MIPMAP_LINEAR : filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrapMode);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrapMode);
+  return t;
+}
+function fbo(t){
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  return ok ? f : null;
+}
+
+function initGL(){
+  gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance' });
+  if (!gl) throw new Error('WebGL2 is not available in this browser.');
+  halfFloat = !!gl.getExtension('EXT_color_buffer_float');
+  R = {};
+  R.vao = gl.createVertexArray(); gl.bindVertexArray(R.vao);
+  R.sim = program(FS_SIM, ['uState']);
+  R.paint = program(FS_PAINT, ['uState']);
+  R.merge = program(FS_MERGE, ['uState', 'uStamp']);
+  R.reduce = program(FS_REDUCE, ['uState']);
+  R.color = program(FS_COLOR, ['uState']);
+  R.pre = program(FS_PRE, ['uColor']);
+  R.down = program(FS_DOWN, ['uSrc']);
+  R.up = program(FS_UP, ['uSrc']);
+  R.comp = program(FS_COMP, ['uColor', 'uBloom']);
+  R.state = [0, 1].map(() => tex(N, N, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.NEAREST, gl.REPEAT));
+  R.stateF = R.state.map(fbo);
+  R.stamp = tex(N, N, gl.R8, gl.RED, gl.UNSIGNED_BYTE, gl.NEAREST, gl.REPEAT);
+  R.color = Object.assign(R.color, {});
+  R.colorTex = tex(N, N, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR, gl.REPEAT, 11);
+  R.colorF = fbo(R.colorTex);
+  R.redTex = tex(64, 64, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.NEAREST, gl.CLAMP_TO_EDGE);
+  R.redF = fbo(R.redTex);
+  R.pbo = gl.createBuffer(); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, R.pbo);
+  gl.bufferData(gl.PIXEL_PACK_BUFFER, 64*64*4, gl.STREAM_READ); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  R.rbData = new Uint8Array(64*64*4); R.fence = null;
+  for (const f of R.stateF) { gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); }
+  R.bloom = [];
+  sim.cur = 0;
+  resize(true);
+}
+
+function buildBloom(){
+  for (const l of R.bloom) { gl.deleteTexture(l.t); gl.deleteFramebuffer(l.f); }
+  R.bloom = [];
+  let w = Math.max(1, W >> 1), h = Math.max(1, H >> 1);
+  for (let i = 0; i < 7 && w >= 4 && h >= 4; i++) {
+    let t = halfFloat ? tex(w, h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR, gl.CLAMP_TO_EDGE) : null;
+    let f = t ? fbo(t) : null;
+    if (!f) { if (t) gl.deleteTexture(t); halfFloat = false; t = tex(w, h, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR, gl.CLAMP_TO_EDGE); f = fbo(t); }
+    R.bloom.push({ t, f, w, h });
+    w = Math.max(1, w >> 1); h = Math.max(1, h >> 1);
+  }
+}
+
+function resize(force){
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.floor(innerWidth * dpr)), h = Math.max(1, Math.floor(innerHeight * dpr));
+  if (!force && w === W && h === H) return;
+  W = canvas.width = w; H = canvas.height = h;
+  view.cover = Math.max(W, H) / N;
+  clampZoom();
+  if (gl && R) buildBloom();
+}
+function clampZoom(){
+  const minZ = (Math.min(W, H) / N) / view.cover, maxZ = (48 * dpr) / view.cover;
+  view.zoom = Math.min(maxZ, Math.max(minZ, view.zoom));
+}
+
+// ------------------------------------------------------------------ passes
+function draw(prog, fb, w, h, uni, texs){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, w, h);
+  gl.useProgram(prog.p);
+  texs.forEach((t, i) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t); });
+  for (const k in uni) {
+    const loc = prog.u[k]; if (!loc) continue; const v = uni[k];
+    if (typeof v === 'number') gl.uniform1f(loc, v); else gl.uniform2f(loc, v[0], v[1]);
+  }
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+function swapPass(prog, uni, extra = []){
+  const src = sim.cur, dst = 1 - src;
+  draw(prog, R.stateF[dst], N, N, uni, [R.state[src], ...extra]);
+  sim.cur = dst; dirty = true;
+}
+function stepLife(){
+  swapPass(R.sim, { uAgeStep: 2/255, uDecay: 0.95 });
+  sim.gen++;
+  if (sim.gen % 60 === 0 || sim.gen === 2) issueReadback();
+}
+function issueReadback(){
+  if (R.fence) return;
+  draw(R.reduce, R.redF, 64, 64, {}, [R.state[sim.cur]]);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, R.pbo);
+  gl.bufferData(gl.PIXEL_PACK_BUFFER, 64*64*4, gl.STREAM_READ); // orphan: keeps Chrome's readback shadow copy valid
+  gl.readPixels(0, 0, 64, 64, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  R.fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  gl.flush();
+}
+function pollReadback(){
+  if (!R.fence) return;
+  const s = gl.clientWaitSync(R.fence, 0, 0);
+  if (s === gl.TIMEOUT_EXPIRED) return;
+  gl.deleteSync(R.fence); R.fence = null;
+  if (s === gl.WAIT_FAILED) return;
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, R.pbo);
+  gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, R.rbData);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  let a = 0, c = 0; const d = R.rbData;
+  for (let i = 0; i < d.length; i += 4) { a += d[i]; c += d[i + 1]; }
+  onStats(Math.round(a * 256 / 255), Math.round(c * 256 / 255));
+}
+
+function onStats(pop, chg){
+  stats.pop = pop; stats.chg = chg;
+  const now = performance.now();
+  if (!sim.auto || sim.paused) { hist.length = 0; return; }
+  if (now - lastSeed < 6000 || now - lastPaint < 6000) { hist.length = 0; return; }
+  hist.push([pop, chg]); if (hist.length > 6) hist.shift();
+  let reason = null;
+  if (pop < 2500) reason = 'population collapse';
+  else if (chg < 600) reason = 'activity dropped';
+  else if (hist.length >= 6) {
+    const cs = hist.map(h => h[1]), ps = hist.map(h => h[0]);
+    const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+    const cr = (Math.max(...cs) - Math.min(...cs)) / Math.max(1, mean(cs));
+    const pr = (Math.max(...ps) - Math.min(...ps)) / Math.max(1, mean(ps));
+    if (cr < 0.02 && pr < 0.01) reason = 'only oscillators left';
+  }
+  if (reason) reseed(reason);
+}
+
+// ------------------------------------------------------------------ seeding
+function visiblePos(){
+  const s = view.scale, hw = W / 2 / s, hh = H / 2 / s;
+  if (Math.random() < 0.6) return [Math.round(view.cx + (Math.random()*2 - 1) * hw * 0.85), Math.round(view.cy + (Math.random()*2 - 1) * hh * 0.85)];
+  return [rnd(N), rnd(N)];
+}
+function reseed(reason){
+  stamp.fill(0);
+  const made = [];
+  const add = (name, count) => {
+    for (let i = 0; i < count; i++) { const [x, y] = visiblePos(); stampPattern(PAT[name], x, y); }
+    if (count) made.push(count > 1 ? `${name} ×${count}` : name);
+  };
+  if (reason === 'init') {
+    for (let i = 0; i < 14; i++) { const [x, y] = [rnd(N), rnd(N)]; stampSoup(x, y, 30 + rnd(70), 0.38); }
+    made.push('soup ×14');
+    add('Gosper glider gun', 3); add('Simkin glider gun', 1); add('Pulsar', 6); add('R-pentomino', 8);
+    add('Acorn', 3); add('Diehard', 2); add('B-heptomino', 3); add('Pentadecathlon', 3); add('LWSS', 4);
+  } else {
+    add('Gosper glider gun', 1 + rnd(2)); add('Simkin glider gun', rnd(2)); add('Pulsar', 2 + rnd(3));
+    add('R-pentomino', 3 + rnd(4)); add('Acorn', 1 + rnd(2)); add('Diehard', rnd(3)); add('B-heptomino', rnd(3));
+    add('Pentadecathlon', rnd(2)); add('LWSS', rnd(3)); add('Glider', rnd(4));
+    const soups = 1 + rnd(2);
+    for (let i = 0; i < soups; i++) { const [x, y] = visiblePos(); stampSoup(x, y, 18 + rnd(30), 0.37); }
+    made.push(soups > 1 ? `soup ×${soups}` : 'soup');
+  }
+  pendingStamp = true;
+  lastSeed = performance.now(); hist.length = 0;
+  if (reason !== 'init') toast(`${reason === 'manual' ? 'RESEED' : 'AUTO-RESEED · ' + reason} — ${made.join(' · ')}`);
+}
+function applyStamp(){
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.stamp);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, N, N, gl.RED, gl.UNSIGNED_BYTE, stamp);
+  swapPass(R.merge, {}, [R.stamp]);
+}
+let toastT = 0;
+function toast(msg){
+  toastEl.textContent = msg; toastEl.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 4200);
+}
+
+// ------------------------------------------------------------------ input
+function toCell(clientX, clientY){
+  const rect = canvas.getBoundingClientRect();
+  const dx = (clientX - rect.left) * (W / rect.width), dy = (clientY - rect.top) * (H / rect.height);
+  const s = view.scale;
+  return [(dx - W/2) / s + view.cx, ((H - dy) - H/2) / s + view.cy];
+}
+const pts = new Map(); let mode = null, last = null, pinch = null;
+function brushR(){ return Math.max(0.7, 9 * dpr / view.scale); }
+function queuePaint(a, b, erase){
+  let dx = b[0] - a[0], dy = b[1] - a[1];
+  dx = ((dx + N/2) % N + N) % N - N/2; dy = ((dy + N/2) % N + N) % N - N/2;
+  const ax = wrap(a[0]), ay = wrap(a[1]);
+  paintQ.push({ a: [ax, ay], b: [ax + dx, ay + dy], r: brushR(), erase });
+  lastPaint = performance.now();
+}
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  wake();
+  if (pts.size === 2) {
+    const [p1, p2] = [...pts.values()];
+    const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+    pinch = { d: Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1, zoom: view.zoom, cell: toCell(mx, my) };
+    mode = 'pinch'; return;
+  }
+  if (pts.size > 2) return;
+  if (e.button === 1 || e.button === 2) { mode = 'pan'; last = [e.clientX, e.clientY]; return; }
+  last = toCell(e.clientX, e.clientY);
+  if (e.pointerType === 'touch') { mode = 'pending'; pendingDown = { t: performance.now(), x: e.clientX, y: e.clientY }; return; }
+  mode = (e.shiftKey || e.altKey) ? 'erase' : 'draw';
+  queuePaint(last, last, mode === 'erase');
+});
+let pendingDown = null;
+function commitPending(){ if (mode !== 'pending') return; mode = 'draw'; queuePaint(last, last, false); }
+canvas.addEventListener('pointermove', e => {
+  wake();
+  if (!pts.has(e.pointerId)) return;
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (mode === 'pinch' && pts.size >= 2) {
+    const [p1, p2] = [...pts.values()];
+    const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+    view.zoom = pinch.zoom * (Math.hypot(p1.x - p2.x, p1.y - p2.y) / pinch.d); clampZoom();
+    const c = toCell(mx, my);
+    view.cx = wrap(view.cx + pinch.cell[0] - c[0]); view.cy = wrap(view.cy + pinch.cell[1] - c[1]);
+  } else if (mode === 'pan') {
+    const k = (W / canvas.getBoundingClientRect().width) / view.scale;
+    view.cx = wrap(view.cx - (e.clientX - last[0]) * k); view.cy = wrap(view.cy + (e.clientY - last[1]) * k);
+    last = [e.clientX, e.clientY];
+  } else if (mode === 'pending') {
+    if (performance.now() - pendingDown.t > 90 || Math.hypot(e.clientX - pendingDown.x, e.clientY - pendingDown.y) > 8) {
+      commitPending(); const c = toCell(e.clientX, e.clientY); queuePaint(last, c, false); last = c;
+    }
+  } else if (mode === 'draw' || mode === 'erase') {
+    const c = toCell(e.clientX, e.clientY); queuePaint(last, c, mode === 'erase'); last = c;
+  }
+});
+const endPtr = e => { if (mode === 'pending' && e.type === 'pointerup') commitPending(); pts.delete(e.pointerId); if (pts.size === 0) { mode = null; pinch = null; } else if (mode === 'pinch' && pts.size < 2) mode = null; };
+canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
+canvas.addEventListener('wheel', e => {
+  e.preventDefault(); wake();
+  const before = toCell(e.clientX, e.clientY);
+  view.zoom *= Math.exp(-e.deltaY * 0.0015); clampZoom();
+  const after = toCell(e.clientX, e.clientY);
+  view.cx = wrap(view.cx + before[0] - after[0]); view.cy = wrap(view.cy + before[1] - after[1]);
+}, { passive: false });
+addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey) return;
+  if (command(e.key.toLowerCase())) e.preventDefault();
+});
+document.querySelectorAll('#btns button').forEach(b => b.addEventListener('click', () => {
+  command(b.dataset.k);
+  if (b.dataset.k === ' ') b.textContent = sim.paused ? '▶' : '❚❚';
+}));
+function command(k){
+  wake();
+  if (k === ' ') { sim.paused = !sim.paused; toast(sim.paused ? 'PAUSED' : 'RUNNING'); }
+  else if (k === 'r') reseed('manual');
+  else if (k === 'c') { pendingClear = true; lastPaint = performance.now(); toast('CLEARED — draw something (auto-reseed kicks in if it stays empty)'); }
+  else if (k === 'a') { sim.auto = !sim.auto; toast('auto-reseed ' + (sim.auto ? 'on' : 'off')); }
+  else if (k === '[' || k === '-') { sim.speed = Math.max(0, sim.speed - 1); toast(speeds[sim.speed] + ' gen/s'); }
+  else if (k === ']' || k === '=' || k === '+') { sim.speed = Math.min(speeds.length - 1, sim.speed + 1); toast(speeds[sim.speed] + ' gen/s'); }
+  else if (k === '0') { view.zoom = 1; view.cx = N/2; view.cy = N/2; clampZoom(); }
+  else if (k === 'h') { hud.dataset.hidden = hud.dataset.hidden ? '' : '1'; }
+  else if (k === 's' && sim.paused) stepLife();
+  else return false;
+  return true;
+}
+let idleT = performance.now();
+function wake(){ idleT = performance.now(); }
+addEventListener('resize', () => resize(false));
+
+// ------------------------------------------------------------------ frame
+let lastT = performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  try {
+    if (!gl || gl.isContextLost()) return;
+    resize(false);
+    const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+    pollReadback();
+
+    if (pendingClear) { for (const f of R.stateF) { gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); } pendingClear = false; dirty = true; }
+    if (pendingStamp) { applyStamp(); pendingStamp = false; }
+    let n = 0;
+    while (paintQ.length && n < 24) {
+      const s = paintQ.shift(); n++;
+      swapPass(R.paint, { uA: s.a, uB: s.b, uR: s.r, uErase: s.erase ? 1 : 0, uSeed: Math.random() * 1000 });
+    }
+    if (!sim.paused) {
+      sim.acc += dt * speeds[sim.speed];
+      let steps = 0;
+      while (sim.acc >= 1 && steps < 8) { stepLife(); sim.acc -= 1; steps++; }
+      if (steps === 8) sim.acc = 0;
+    }
+    // fallback if readback is unavailable for some reason
+    if (sim.auto && !sim.paused && now - lastSeed > 90000 && now - lastPaint > 90000 && stats.pop === 0 && now - lastFallback > 90000) { lastFallback = now; reseed('fallback timer'); }
+
+    // color + mipmaps
+    // colour pass + mipmaps only when the grid changed (or every ~0.5 s for the slow hue drift)
+    if (dirty || ++colorAge > 30) {
+      const hue = Math.sin((now / 1000 % 31415.9) * 0.02) * 0.6;
+      draw(R.color, R.colorF, N, N, { uHue: hue }, [R.state[sim.cur]]);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.colorTex); gl.generateMipmap(gl.TEXTURE_2D);
+      dirty = false; colorAge = 0;
+    }
+
+    const exposure = 1.35 * (view.scale < 1 ? Math.pow(1 / view.scale, 0.35) : 1);
+    const sceneU = { uRes: [W, H], uCenter: [view.cx, view.cy], uScale: view.scale, uExposure: exposure };
+    // bloom
+    const L = R.bloom;
+    draw(R.pre, L[0].f, L[0].w, L[0].h, Object.assign({ uLvl: [L[0].w, L[0].h], uThr: 0.12, uKnee: 0.3 }, sceneU), [R.colorTex]);
+    for (let i = 1; i < L.length; i++)
+      draw(R.down, L[i].f, L[i].w, L[i].h, { uSrcSize: [L[i-1].w, L[i-1].h], uDstSize: [L[i].w, L[i].h] }, [L[i-1].t]);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    for (let i = L.length - 2; i >= 0; i--)
+      draw(R.up, L[i].f, L[i].w, L[i].h, { uSrcSize: [L[i+1].w, L[i+1].h], uDstSize: [L[i].w, L[i].h], uWeight: 1.0 }, [L[i+1].t]);
+    gl.disable(gl.BLEND);
+    draw(R.comp, null, W, H, Object.assign({ uBloomStr: 0.42, uTime: (now / 1000) % 100 }, sceneU), [R.colorTex, L[0].t]);
+
+    // HUD
+    stats.frames++;
+    if (now - stats.fpsT > 500) {
+      stats.fps = stats.frames * 1000 / (now - stats.fpsT); stats.frames = 0; stats.fpsT = now;
+      $('sGen').textContent = sim.gen.toLocaleString('en');
+      $('sPop').textContent = stats.pop.toLocaleString('en');
+      $('sChg').textContent = stats.chg.toLocaleString('en');
+      $('sRate').textContent = sim.paused ? 'paused' : speeds[sim.speed];
+      $('sFps').textContent = stats.fps.toFixed(0);
+      $('sAuto').textContent = sim.auto ? 'on' : 'off';
+    }
+    const op = hud.dataset.hidden ? 0 : (now - idleT > 7000 ? 0.28 : 1);
+    if (op !== hudOp) { hudOp = op; hud.style.opacity = op; btns.style.opacity = hud.dataset.hidden ? 0.15 : Math.max(op, 0.5); }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); R = null; }, false);
+canvas.addEventListener('webglcontextrestored', () => { try { initGL(); reseed('init'); lastT = performance.now(); } catch (err) { fail(err); } }, false);
+function fail(err){ const el = $('err'); el.style.display = 'flex'; el.textContent = 'Neon Life could not start: ' + err.message; }
+
+try {
+  initGL();
+  reseed('init');
+  requestAnimationFrame(frame);
+} catch (err) { console.error(err); fail(err); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Infinite Mandelbrot Zoom — Seahorse Valley</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #hud {
+    position: fixed; left: 16px; bottom: 14px; color: rgba(255,255,255,.78);
+    font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: .04em; text-shadow: 0 1px 3px rgba(0,0,0,.9); pointer-events: none;
+    user-select: none; white-space: pre;
+  }
+  #err { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    color: #ccc; font: 15px system-ui, sans-serif; text-align: center; padding: 24px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="err"></div>
+<script>
+(() => {
+'use strict';
+
+const canvas = document.getElementById('c');
+const hud = document.getElementById('hud');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false,
+  powerPreference: 'high-performance', preserveDrawingBuffer: false });
+if (!gl) {
+  const e = document.getElementById('err');
+  e.style.display = 'flex'; e.textContent = 'WebGL2 is required for this demo.';
+  return;
+}
+
+// ---------------------------------------------------------------------------
+// Shaders
+// ---------------------------------------------------------------------------
+const VS = `#version 300 es
+out vec2 vUv;
+void main(){
+  vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+  vUv = p;
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+const FS_MANDEL = `#version 300 es
+precision highp float;
+precision highp int;
+out vec4 outColor;
+
+uniform vec2  uRes;
+uniform float uOne;     // == 1.0, defeats compiler re-association of error-free transforms
+uniform float uMix;     // crossfade A -> B
+uniform float uTime;
+
+uniform vec4  uCenA;    // x.hi, x.lo, y.hi, y.lo
+uniform float uPixA;    // complex units per pixel
+uniform vec2  uRotA;    // cos, sin
+uniform int   uItA;
+uniform vec3  uPA[4];
+uniform float uPhA;
+
+uniform vec4  uCenB;
+uniform float uPixB;
+uniform vec2  uRotB;
+uniform int   uItB;
+uniform vec3  uPB[4];
+uniform float uPhB;
+
+const int   MAXI = 4000;
+const float B2   = 65536.0;   // bailout radius^2 (256^2), large for smooth colouring
+
+// ---------------- double-float (df64) arithmetic -----------------
+vec2 twoSum(float a, float b){
+  float s = a + b;
+  float v = s * uOne - a;
+  float e = (a - (s - v) * uOne) + (b - v);
+  return vec2(s, e);
+}
+vec2 quickTwoSum(float a, float b){
+  float s = a + b;
+  float e = b - (s * uOne - a);
+  return vec2(s, e);
+}
+vec2 splitF(float a){
+  float t  = a * 4097.0 * uOne;
+  float hi = t - (t - a) * uOne;
+  return vec2(hi, a - hi);
+}
+vec2 twoProd(float a, float b){
+  float p = a * b;
+  vec2 A = splitF(a), B = splitF(b);
+  float err = ((A.x * B.x - p) + A.x * B.y + A.y * B.x) + A.y * B.y;
+  return vec2(p, err);
+}
+vec2 dsAdd(vec2 a, vec2 b){
+  vec2 s = twoSum(a.x, b.x);
+  vec2 t = twoSum(a.y, b.y);
+  s.y += t.x;
+  s = quickTwoSum(s.x, s.y);
+  s.y += t.y;
+  return quickTwoSum(s.x, s.y);
+}
+vec2 dsMul(vec2 a, vec2 b){
+  vec2 p = twoProd(a.x, b.x);
+  p.y += a.x * b.y + a.y * b.x;
+  return quickTwoSum(p.x, p.y);
+}
+
+// ---------------- iteration kernels -----------------
+float smoothMu(int i, float r2){
+  return float(i) - log2(0.5 * log(r2)) + 4.0;
+}
+
+float mandelF(vec2 c, int maxIt){
+  // main cardioid / period-2 bulb rejection (only safe at shallow zoom)
+  float xq = c.x - 0.25;
+  float q = xq * xq + c.y * c.y;
+  if (q * (q + xq) < 0.25 * c.y * c.y) return -1.0;
+  if ((c.x + 1.0) * (c.x + 1.0) + c.y * c.y < 0.0625) return -1.0;
+  vec2 z = vec2(0.0);
+  for (int i = 0; i < MAXI; i++) {
+    if (i >= maxIt) break;
+    float x2 = z.x * z.x, y2 = z.y * z.y;
+    float r2 = x2 + y2;
+    if (r2 > B2) return smoothMu(i, r2);
+    z = vec2(x2 - y2 + c.x, 2.0 * z.x * z.y + c.y);
+  }
+  return -1.0;
+}
+
+float mandelD(vec2 cx, vec2 cy, int maxIt){
+  vec2 zx = vec2(0.0), zy = vec2(0.0);
+  for (int i = 0; i < MAXI; i++) {
+    if (i >= maxIt) break;
+    vec2 x2 = dsMul(zx, zx);
+    vec2 y2 = dsMul(zy, zy);
+    float r2 = x2.x + y2.x;
+    if (r2 > B2) return smoothMu(i, r2);
+    vec2 xy = dsMul(zx, zy);
+    zx = dsAdd(dsAdd(x2, -y2), cx);
+    zy = dsAdd(xy * 2.0, cy);
+  }
+  return -1.0;
+}
+
+vec3 palette(float t, vec3 a, vec3 b, vec3 c, vec3 d){
+  return a + b * cos(6.28318530718 * (c * t + d));
+}
+
+vec3 shade(vec2 p, vec4 C, float pix, vec2 rot, int maxIt,
+           vec3 a, vec3 b, vec3 c, vec3 d, float phase){
+  vec2 o = vec2(rot.x * p.x - rot.y * p.y, rot.y * p.x + rot.x * p.y) * pix;
+  float mu;
+  if (pix > 1.0e-6) {
+    mu = mandelF(vec2(C.x + C.y + o.x, C.z + C.w + o.y), maxIt);
+  } else {
+    vec2 cx = dsAdd(C.xy, vec2(o.x, 0.0));
+    vec2 cy = dsAdd(C.zw, vec2(o.y, 0.0));
+    mu = mandelD(cx, cy, maxIt);
+  }
+  if (mu < 0.0) return vec3(0.006, 0.006, 0.014);
+  float t = mu / 52.0 + phase + uTime * 0.015;
+  vec3 col = palette(t, a, b, c, d);
+  // gentle depth glow: near-boundary pixels (high mu relative to budget) brighter
+  float rel = clamp(mu / float(maxIt), 0.0, 1.0);
+  col *= 0.82 + 0.35 * sqrt(rel);
+  // soften the very first escape bands
+  col *= smoothstep(0.0, 6.0, mu);
+  return col;
+}
+
+void main(){
+  vec2 p = gl_FragCoord.xy - 0.5 * uRes;
+  vec3 colA = vec3(0.0), colB = vec3(0.0);
+  if (uMix < 0.999) colA = shade(p, uCenA, uPixA, uRotA, uItA, uPA[0], uPA[1], uPA[2], uPA[3], uPhA);
+  if (uMix > 0.001) colB = shade(p, uCenB, uPixB, uRotB, uItB, uPB[0], uPB[1], uPB[2], uPB[3], uPhB);
+  float m = smoothstep(0.0, 1.0, uMix);
+  outColor = vec4(mix(colA, colB, m), 1.0);
+}`;
+
+const FS_BLIT = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 outColor;
+uniform sampler2D uTex;
+uniform vec2 uRes;
+void main(){
+  vec3 c = texture(uTex, vUv).rgb;
+  vec2 q = vUv - 0.5;
+  q.x *= uRes.x / uRes.y;
+  c *= 1.0 - 0.35 * dot(q, q);          // vignette
+  c = pow(max(c, 0.0), vec3(0.95));
+  outColor = vec4(c, 1.0);
+}`;
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i);
+    const name = info.name.replace(/\[0\]$/, '');
+    u[name] = gl.getUniformLocation(p, info.name);
+  }
+  return { p, u };
+}
+
+const progM = program(VS, FS_MANDEL);
+const progB = program(VS, FS_BLIT);
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+
+// ---------------------------------------------------------------------------
+// Offscreen target (dynamic resolution)
+// ---------------------------------------------------------------------------
+let fbo = gl.createFramebuffer(), tex = gl.createTexture(), fbW = 0, fbH = 0;
+function ensureFBO(w, h) {
+  if (w === fbW && h === fbH) return;
+  fbW = w; fbH = h;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+let dpr = 1, W = 0, H = 0;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(1, Math.round(canvas.clientWidth * dpr));
+  H = Math.max(1, Math.round(canvas.clientHeight * dpr));
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------------------------------------------------------------------------
+// Zoom targets & palettes
+// ---------------------------------------------------------------------------
+const TARGETS = [
+  [-0.743643887037158704752191506114774, 0.131825904205311970493132056385139],
+  [-0.74364990, 0.13188204],
+  [-0.7453, 0.1127],
+  [-0.745428, 0.113009],
+  [-0.7436447860, 0.1318252536],
+  [-0.743643887037158704752191506114774, -0.131825904205311970493132056385139],
+  [-0.74529, 0.113075],
+  [-0.7435669, 0.1314023],
+  [-0.748, 0.1],
+  [-0.7445, 0.1212],
+];
+
+const PALETTES = [
+  [[.5,.5,.5],[.5,.5,.5],[1,1,1],[0,.33,.67]],
+  [[.5,.5,.5],[.5,.5,.5],[1,1,1],[0,.10,.20]],
+  [[.5,.5,.5],[.5,.5,.5],[1,1,1],[.30,.20,.20]],
+  [[.5,.5,.5],[.5,.5,.5],[1,1,.5],[.80,.90,.30]],
+  [[.5,.5,.5],[.5,.5,.5],[1,.7,.4],[0,.15,.20]],
+  [[.5,.5,.5],[.5,.5,.5],[2,1,0],[.50,.20,.25]],
+  [[.8,.5,.4],[.2,.4,.2],[2,1,1],[0,.25,.25]],
+];
+
+const ZOOM_RATE  = 0.36;     // e-folds per second
+const H_LIMIT    = 2.0e-11;  // half-height where df64 precision runs out
+const FADE_TIME  = 3.2;      // seconds
+const PROBE_N    = 9;
+
+function splitD(x) { const hi = Math.fround(x); return [hi, Math.fround(x - hi)]; }
+
+function muAt(cx, cy, maxIt) {
+  let x = 0, y = 0;
+  for (let i = 0; i < maxIt; i++) {
+    const x2 = x * x, y2 = y * y, r2 = x2 + y2;
+    if (r2 > 65536) return i - Math.log2(0.5 * Math.log(r2)) + 4;
+    y = 2 * x * y + cy;
+    x = x2 - y2 + cx;
+  }
+  return -1;
+}
+
+let targetIdx = 0, paletteIdx = 0;
+
+class Zoom {
+  constructor(first) {
+    const t = TARGETS[targetIdx % TARGETS.length];
+    targetIdx++;
+    this.cx = t[0]; this.cy = t[1];
+    this.ax = this.cx; this.ay = this.cy;          // steering aim
+    this.h = first ? 1.5 : 0.02 * (0.6 + Math.random() * 0.8);
+    this.rot = Math.random() * Math.PI * 2;
+    this.rotSpeed = (Math.random() < 0.5 ? -1 : 1) * (0.025 + Math.random() * 0.03);
+    this.pal = PALETTES[paletteIdx % PALETTES.length];
+    paletteIdx += 1 + ((Math.random() * 2) | 0);
+    this.phase = Math.random();
+    this.probeT = 0;
+    this.boring = 0;
+  }
+  get maxIt() {
+    const z = Math.log2(1.5 / this.h);
+    return Math.max(160, Math.min(3600, Math.round(180 + 72 * Math.max(0, z))));
+  }
+  get done() { return this.h < H_LIMIT; }
+  update(dt) {
+    this.h *= Math.exp(-ZOOM_RATE * dt);
+    this.rot += this.rotSpeed * dt;
+    this.probeT -= dt;
+    if (this.probeT <= 0) { this.probeT = 0.3; this.probe(); }
+    const k = 1 - Math.exp(-1.6 * dt);
+    this.cx += (this.ax - this.cx) * k;
+    this.cy += (this.ay - this.cy) * k;
+  }
+  // CPU probe in double precision: keep the camera on the fractal boundary
+  probe() {
+    const it = this.maxIt, r = 0.55 * this.h;
+    let best = -1, bx = this.cx, by = this.cy, minMu = 1e9, maxMu = -1, inside = 0;
+    const muC = muAt(this.cx, this.cy, it);
+    for (let j = 0; j < PROBE_N; j++) for (let i = 0; i < PROBE_N; i++) {
+      const u = (i / (PROBE_N - 1)) * 2 - 1, v = (j / (PROBE_N - 1)) * 2 - 1;
+      const x = this.cx + u * r, y = this.cy + v * r;
+      const mu = muAt(x, y, it);
+      if (mu < 0) { inside++; continue; }
+      minMu = Math.min(minMu, mu); maxMu = Math.max(maxMu, mu);
+      const score = mu * (1 - 0.3 * Math.hypot(u, v) / Math.SQRT2);
+      if (score > best) { best = score; bx = x; by = y; }
+    }
+    const total = PROBE_N * PROBE_N;
+    if (best > 0 && (muC < 0 || muC < 0.6 * maxMu)) { this.ax = bx; this.ay = by; }
+    const flat = inside > total * 0.92 || (inside === 0 && maxMu - minMu < 1.5);
+    this.boring = flat ? this.boring + 0.3 : 0;
+  }
+}
+
+let A = new Zoom(true), B = null, fade = 0;
+
+// ---------------------------------------------------------------------------
+// Render loop
+// ---------------------------------------------------------------------------
+let renderScale = 1, last = performance.now(), dtAvg = 1 / 60, adjustT = 0, time = 0;
+let fpsAcc = 0, fpsN = 0, fpsShow = 60, hudT = 0;
+
+function setView(prefix, z, w, h) {
+  const u = progM.u;
+  const sx = splitD(z.cx), sy = splitD(z.cy);
+  gl.uniform4f(u['uCen' + prefix], sx[0], sx[1], sy[0], sy[1]);
+  gl.uniform1f(u['uPix' + prefix], (2 * z.h) / h);
+  gl.uniform2f(u['uRot' + prefix], Math.cos(z.rot), Math.sin(z.rot));
+  gl.uniform1i(u['uIt' + prefix], z.maxIt);
+  gl.uniform3fv(u['uP' + prefix], z.pal.flat());
+  gl.uniform1f(u['uPh' + prefix], z.phase);
+}
+
+function frame(now) {
+  let dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  time += dt;
+  dtAvg += (dt - dtAvg) * 0.08;
+
+  // dynamic resolution to hold ~60 FPS as iteration counts climb
+  adjustT += dt;
+  if (adjustT > 0.35) {
+    adjustT = 0;
+    if (dtAvg > 0.022) renderScale = Math.max(0.3, renderScale * 0.9);
+    else if (dtAvg < 0.0175) renderScale = Math.min(1, renderScale * 1.04);
+  }
+
+  A.update(dt);
+  if (B) B.update(dt);
+
+  if (!B && (A.done || A.boring > 4)) { B = new Zoom(false); fade = 0; }
+  if (B) {
+    fade += dt / FADE_TIME;
+    if (fade >= 1) { A = B; B = null; fade = 0; }
+  }
+
+  const rw = Math.max(1, Math.round(W * renderScale));
+  const rh = Math.max(1, Math.round(H * renderScale));
+  ensureFBO(rw, rh);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.viewport(0, 0, rw, rh);
+  gl.useProgram(progM.p);
+  gl.uniform2f(progM.u.uRes, rw, rh);
+  gl.uniform1f(progM.u.uOne, 1.0);
+  gl.uniform1f(progM.u.uTime, time);
+  gl.uniform1f(progM.u.uMix, B ? fade : 0);
+  setView('A', A, rw, rh);
+  setView('B', B || A, rw, rh);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(progB.p);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform1i(progB.u.uTex, 0);
+  gl.uniform2f(progB.u.uRes, W, H);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // HUD
+  fpsAcc += dt; fpsN++;
+  hudT += dt;
+  if (hudT > 0.25) {
+    fpsShow = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; hudT = 0;
+    const z = B && fade > 0.5 ? B : A;
+    const mag = 1.5 / z.h;
+    hud.textContent =
+      `SEAHORSE VALLEY  ${z.cx.toFixed(14)} ${z.cy >= 0 ? '+' : '-'} ${Math.abs(z.cy).toFixed(14)}i\n` +
+      `zoom ${mag.toExponential(2)}   iter ${z.maxIt}   ${z.h > 5e-4 ? 'f32' : 'df64'}   ` +
+      `res ${(renderScale * 100) | 0}%   ${fpsShow.toFixed(0)} fps`;
+  }
+
+  requestAnimationFrame(frame);
+}
+
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); }, false);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Gray-Scott Reaction–Diffusion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #05060a; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; cursor: crosshair; }
+  #hud {
+    position: fixed; left: 18px; bottom: 18px; color: #cfe3ff;
+    font: 12px/1.5 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: rgba(8,10,18,0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(160,190,255,0.15); border-radius: 12px; padding: 10px 14px;
+    user-select: none; -webkit-user-select: none; max-width: calc(100vw - 64px);
+  }
+  #hud b { color: #fff; font-weight: 600; letter-spacing: 0.04em; }
+  #hud .row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  #hud button {
+    font: inherit; color: #cfe3ff; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(160,190,255,0.2); border-radius: 6px; padding: 3px 8px; cursor: pointer;
+  }
+  #hud button:hover { background: rgba(255,255,255,0.14); }
+  #hud button.on { background: rgba(120,170,255,0.35); color: #fff; }
+  #hud .dim { opacity: 0.6; }
+  #bar { height: 2px; margin-top: 6px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+  #bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #7aa8ff, #ffd0a0); }
+  #hide { position: absolute; top: 6px; right: 8px; padding: 0 6px !important; border: none !important; background: none !important; opacity: .6; }
+  #hud.min > :not(#hide):not(:first-child) { display: none; }
+  #hud.min { padding-right: 34px; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; color: #f88; font: 14px monospace; padding: 20px; text-align: center; }
+  @media (max-width: 600px) {
+    #hud { left: 10px; right: 10px; bottom: 10px; max-width: none; font-size: 11px; padding: 8px 10px; }
+    #hud button { padding: 5px 8px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div><b>GRAY–SCOTT</b> <span class="dim">reaction · diffusion</span></div>
+  <button id="hide" title="collapse">–</button>
+  <div id="state">morphing…</div>
+  <div id="bar"><i></i></div>
+  <div class="dim" id="fk">F 0.0000 · k 0.0000</div>
+  <div class="row" id="presets"></div>
+  <div class="row">
+    <button id="auto" class="on">auto-morph</button>
+    <button id="reset">reseed</button>
+    <button id="clear">clear</button>
+  </div>
+  <div class="dim" style="margin-top:6px">drag to paint chemical B</div>
+</div>
+<div id="err"></div>
+<script>
+(() => {
+'use strict';
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+const errBox = document.getElementById('err');
+function fail(msg) { errBox.style.display = 'grid'; errBox.textContent = msg; throw new Error(msg); }
+if (!gl) fail('WebGL2 is not available in this browser.');
+
+// --- float render target support ---
+const extCBF = gl.getExtension('EXT_color_buffer_float');
+const extCBHF = gl.getExtension('EXT_color_buffer_half_float');
+gl.getExtension('OES_texture_float_linear');
+let texInternal, texType;
+if (extCBF || extCBHF) { texInternal = gl.RGBA16F; texType = gl.HALF_FLOAT; }
+else { texInternal = gl.RGBA8; texType = gl.UNSIGNED_BYTE; }
+
+// --- presets (F, k) + palettes ---
+const PRESETS = [
+  { name: 'coral',        F: 0.0545, k: 0.0620, pal: [[0.02,0.02,0.06],[0.50,0.06,0.16],[1.00,0.42,0.28],[1.00,0.93,0.80]] },
+  { name: 'mitosis',      F: 0.0367, k: 0.0649, pal: [[0.01,0.03,0.05],[0.04,0.30,0.38],[0.35,0.88,0.74],[0.94,1.00,0.92]] },
+  { name: 'fingerprints', F: 0.0370, k: 0.0600, pal: [[0.03,0.02,0.07],[0.26,0.09,0.52],[0.72,0.44,1.00],[1.00,0.90,1.00]] },
+  { name: 'worms',        F: 0.0780, k: 0.0610, pal: [[0.03,0.025,0.02],[0.34,0.20,0.04],[0.95,0.68,0.18],[1.00,0.97,0.84]] },
+];
+
+// --- shaders ---
+const VS = `#version 300 es
+in vec2 aPos;
+out vec2 vUv;
+void main(){ vUv = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0); }`;
+
+// Morph happens as a soft front that sweeps out from a random origin: each texel
+// gets its own blend factor, so both regimes coexist at the boundary.
+const MORPH_GLSL = `
+uniform vec4 uFK;        // F0,k0,F1,k1
+uniform float uMix;      // global morph 0..1
+uniform vec2 uOrigin;    // front origin (uv)
+uniform float uAspect;
+float localMix(vec2 uv){
+  vec2 d = uv - uOrigin; d.x *= uAspect;
+  float r = length(d) / (0.75*max(uAspect,1.0));
+  return smoothstep(0.0, 1.0, clamp(uMix*2.0 - r*0.8, 0.0, 1.0));
+}`;
+
+const SIM_FS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform sampler2D uState;
+uniform vec2 uTexel;
+uniform vec4 uMouse;      // prev.xy, cur.xy in uv
+uniform float uPaint;     // 1 if painting
+uniform float uBrush;     // radius (aspect-corrected uv units)
+uniform vec3 uDrop;       // random droplet: xy, active
+${MORPH_GLSL}
+out vec4 o;
+float segDist(vec2 p, vec2 a, vec2 b){
+  vec2 pa = p-a, ba = b-a;
+  float h = clamp(dot(pa,ba)/max(dot(ba,ba),1e-8), 0.0, 1.0);
+  return length(pa - ba*h);
+}
+void main(){
+  vec2 c = texture(uState, vUv).rg;
+  vec2 lap = -c;
+  lap += 0.2  * texture(uState, vUv + vec2( uTexel.x, 0.0)).rg;
+  lap += 0.2  * texture(uState, vUv + vec2(-uTexel.x, 0.0)).rg;
+  lap += 0.2  * texture(uState, vUv + vec2(0.0,  uTexel.y)).rg;
+  lap += 0.2  * texture(uState, vUv + vec2(0.0, -uTexel.y)).rg;
+  lap += 0.05 * texture(uState, vUv + vec2( uTexel.x,  uTexel.y)).rg;
+  lap += 0.05 * texture(uState, vUv + vec2(-uTexel.x,  uTexel.y)).rg;
+  lap += 0.05 * texture(uState, vUv + vec2( uTexel.x, -uTexel.y)).rg;
+  lap += 0.05 * texture(uState, vUv + vec2(-uTexel.x, -uTexel.y)).rg;
+  float a = c.r, b = c.g;
+  float m = localMix(vUv);
+  float F = mix(uFK.x, uFK.z, m), K = mix(uFK.y, uFK.w, m);
+  float abb = a*b*b;
+  float na = a + (1.0*lap.r - abb + F*(1.0-a));
+  float nb = b + (0.5*lap.g + abb - (K+F)*b);
+  vec2 asp = vec2(uAspect, 1.0);
+  if (uPaint > 0.5) {
+    float r = segDist(vUv*asp, uMouse.xy*asp, uMouse.zw*asp);
+    float s = smoothstep(uBrush, uBrush*0.35, r);
+    nb = mix(nb, 0.9, s*0.5);
+    na = mix(na, 0.25, s*0.25);
+  }
+  if (uDrop.z > 0.5) {
+    float r = length((vUv - uDrop.xy)*asp);
+    float s = smoothstep(0.018, 0.008, r);
+    nb = max(nb, s*0.8);
+  }
+  o = vec4(clamp(na,0.0,1.0), clamp(nb,0.0,1.0), m, 1.0);
+}`;
+
+const INIT_FS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform float uSeed;
+uniform float uAspect;
+out vec4 o;
+float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)) + uSeed*13.37) * 43758.5453); }
+void main(){
+  float b = 0.0;
+  for (int i=0;i<48;i++){
+    vec2 c = vec2(h(vec2(float(i),1.0)), h(vec2(float(i),2.0)));
+    float r = 0.008 + 0.028*h(vec2(float(i),3.0));
+    vec2 d = vUv - c; d.x *= uAspect;
+    b = max(b, smoothstep(r, r*0.6, length(d)));
+  }
+  float n = h(floor(gl_FragCoord.xy));
+  if (n > 0.998) b = 1.0;
+  o = vec4(1.0, b*0.9, 0.0, 1.0);
+}`;
+
+const COPY_FS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform sampler2D uSrc;
+out vec4 o;
+void main(){ o = texture(uSrc, vUv); }`;
+
+const RENDER_FS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform sampler2D uState;
+uniform vec2 uTexel;
+uniform vec3 uPalA[4];
+uniform vec3 uPalB[4];
+uniform float uTime;
+uniform vec2 uRes;
+${MORPH_GLSL}
+out vec4 o;
+vec3 pal(int i, float m){ return mix(uPalA[i], uPalB[i], m); }
+vec3 cmap(float t, float m){
+  t = clamp(t,0.0,1.0);
+  if (t < 0.33) return mix(pal(0,m), pal(1,m), smoothstep(0.0,0.33,t));
+  if (t < 0.66) return mix(pal(1,m), pal(2,m), smoothstep(0.33,0.66,t));
+  return mix(pal(2,m), pal(3,m), smoothstep(0.66,1.0,t));
+}
+float B(vec2 uv){ return texture(uState, uv).g; }
+// fake studio environment for the wet reflection
+vec3 env(vec3 r, vec3 tint){
+  float sky = smoothstep(-0.2, 1.0, r.y);
+  vec3 c = mix(vec3(0.02,0.025,0.04), vec3(0.35,0.42,0.55), sky);
+  c += vec3(1.0,0.95,0.88) * pow(max(dot(r, normalize(vec3(-0.5,0.6,0.62))),0.0), 40.0) * 1.6;
+  c += vec3(0.6,0.75,1.0)  * pow(max(dot(r, normalize(vec3(0.7,-0.3,0.65))),0.0), 24.0) * 0.6;
+  return c * mix(vec3(1.0), tint, 0.6);
+}
+void main(){
+  vec2 e = uTexel;
+  // Sobel gradient for smoother normals
+  float tl = B(vUv+vec2(-e.x, e.y)), t = B(vUv+vec2(0.0,e.y)), tr = B(vUv+vec2(e.x,e.y));
+  float l  = B(vUv+vec2(-e.x,0.0)),  c = B(vUv),               r  = B(vUv+vec2(e.x,0.0));
+  float bl = B(vUv+vec2(-e.x,-e.y)), bm = B(vUv+vec2(0.0,-e.y)), br = B(vUv+vec2(e.x,-e.y));
+  float gx = (tr + 2.0*r + br) - (tl + 2.0*l + bl);
+  float gy = (tl + 2.0*t + tr) - (bl + 2.0*bm + br);
+  float blur = (tl+t+tr+l+c+r+bl+bm+br)/9.0;
+  float height = 2.2;
+  vec3 n = normalize(vec3(-gx*height, -gy*height, 1.0));
+
+  float m = localMix(vUv);
+  float tt = smoothstep(0.06, 0.42, c);
+  vec3 base = cmap(tt, m);
+  vec3 hi = pal(3, m);
+
+  vec3 V = vec3(0.0,0.0,1.0);
+  vec3 L = normalize(vec3(cos(uTime*0.13)*0.65, sin(uTime*0.13)*0.5 + 0.35, 0.75));
+  vec3 H = normalize(L+V);
+  float diff = clamp(dot(n,L),0.0,1.0);
+  float wrap = clamp(dot(n,L)*0.5+0.5,0.0,1.0);
+  float spec = pow(clamp(dot(n,H),0.0,1.0), 120.0);
+  float specW = pow(clamp(dot(n,H),0.0,1.0), 18.0);
+  float fres = 0.04 + 0.96*pow(1.0 - clamp(n.z,0.0,1.0), 5.0);
+  // cavity: darker in valleys between ridges
+  float cav = clamp(0.6 + (c - blur)*6.0, 0.3, 1.2);
+
+  vec3 col = base * (0.32 + 0.6*diff + 0.25*wrap) * cav;
+  float lum = dot(col, vec3(0.299,0.587,0.114));
+  col = max(mix(vec3(lum), col, 1.25), 0.0);          // a touch more saturation
+  col += base * smoothstep(0.25, 0.5, c) * 0.25;   // subsurface-ish glow on thick B
+  vec3 R = reflect(-V, n);
+  float wet = 0.35 + 0.65*tt;                       // wetter on top of the B ridges
+  col += env(R, hi) * fres * wet * 1.0;
+  col += spec * mix(vec3(1.0,0.97,0.92), hi, 0.25) * 1.2 * wet;
+  col += specW * hi * 0.12 * wet;
+
+  vec2 q = gl_FragCoord.xy / uRes - 0.5;
+  col *= 1.0 - dot(q,q)*0.7;
+  col = col / (1.0 + col*0.6) * 1.25;               // soft tonemap
+  col = pow(col, vec3(0.92));
+  col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233)))*43758.5453) - 0.5)/255.0; // dither
+  o = vec4(col, 1.0);
+}`;
+
+function sh(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail('Shader: ' + gl.getShaderInfoLog(s));
+  return s;
+}
+function prog(fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, VS));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.bindAttribLocation(p, 0, 'aPos');
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail('Link: ' + gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i);
+    u[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, info.name);
+  }
+  return { p, u };
+}
+const simP = prog(SIM_FS), initP = prog(INIT_FS), copyP = prog(COPY_FS), renP = prog(RENDER_FS);
+
+// fullscreen triangle
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+function makeTarget(w, h) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, texInternal, w, h, 0, gl.RGBA, texType, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+    gl.deleteTexture(tex); gl.deleteFramebuffer(fb);
+    if (texInternal !== gl.RGBA8) { texInternal = gl.RGBA8; texType = gl.UNSIGNED_BYTE; return makeTarget(w, h); }
+    fail('Framebuffer incomplete');
+  }
+  return { tex, fb, w, h };
+}
+
+let simW = 0, simH = 0, ping = null, pong = null;
+// sim texels per CSS px — slightly denser on small screens so patterns stay visible
+function simScale() { return Math.min(window.innerWidth, window.innerHeight) < 600 ? 0.6 : 0.5; }
+function draw(p) { gl.useProgram(p.p); gl.bindVertexArray(vao); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+function seed() {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, ping.fb);
+  gl.viewport(0, 0, simW, simH);
+  gl.useProgram(initP.p);
+  gl.uniform1f(initP.u.uSeed, Math.random() * 100);
+  gl.uniform1f(initP.u.uAspect, simW / simH);
+  draw(initP);
+}
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cw = Math.max(1, Math.floor(window.innerWidth * dpr));
+  const ch = Math.max(1, Math.floor(window.innerHeight * dpr));
+  if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+  const sc = simScale();
+  const nw = Math.max(64, Math.min(1024, Math.floor(window.innerWidth * sc)));
+  const nh = Math.max(64, Math.min(1024, Math.floor(window.innerHeight * sc)));
+  if (nw === simW && nh === simH) return;
+  const nPing = makeTarget(nw, nh), nPong = makeTarget(nw, nh);
+  if (ping) {
+    // carry the pattern across the resize
+    gl.bindFramebuffer(gl.FRAMEBUFFER, nPing.fb);
+    gl.viewport(0, 0, nw, nh);
+    gl.useProgram(copyP.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, ping.tex);
+    gl.uniform1i(copyP.u.uSrc, 0);
+    draw(copyP);
+    for (const t of [ping, pong]) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); }
+    ping = nPing; pong = nPong; simW = nw; simH = nh;
+  } else {
+    ping = nPing; pong = nPong; simW = nw; simH = nh;
+    seed();
+  }
+}
+let resizeRaf = 0;
+window.addEventListener('resize', () => { cancelAnimationFrame(resizeRaf); resizeRaf = requestAnimationFrame(resize); });
+resize();
+
+// --- input ---
+const mouse = { px: 0.5, py: 0.5, x: 0.5, y: 0.5, down: false };
+function setMouse(e) {
+  const r = canvas.getBoundingClientRect();
+  mouse.x = (e.clientX - r.left) / r.width;
+  mouse.y = 1 - (e.clientY - r.top) / r.height;
+}
+canvas.addEventListener('pointerdown', e => {
+  mouse.down = true; setMouse(e); mouse.px = mouse.x; mouse.py = mouse.y;
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+});
+canvas.addEventListener('pointermove', e => { setMouse(e); });
+window.addEventListener('pointerup', () => { mouse.down = false; });
+window.addEventListener('pointercancel', () => { mouse.down = false; });
+window.addEventListener('blur', () => { mouse.down = false; });
+
+// --- morph state ---
+const HOLD = 16, MORPH = 12; // seconds per preset hold & transition
+const N = PRESETS.length;
+let morphT = 0;
+const lerp = (a, b, t) => a + (b - a) * t;
+const mod = (a, n) => ((a % n) + n) % n;
+let manFrom = 0, manTo = 0, manT = 1;   // manual switches also travel as a front
+let origin = [0.5, 0.5];
+let lastPairKey = '';
+
+// --- HUD ---
+let auto = true, manualIdx = 0;
+const presetsEl = document.getElementById('presets');
+const autoBtn = document.getElementById('auto');
+const buttons = PRESETS.map((p, i) => {
+  const b = document.createElement('button');
+  b.textContent = p.name;
+  b.onclick = () => { auto = false; manualIdx = i; autoBtn.classList.remove('on'); refreshButtons(); };
+  presetsEl.appendChild(b);
+  return b;
+});
+autoBtn.onclick = () => {
+  auto = !auto; autoBtn.classList.toggle('on', auto);
+  if (auto) morphT = manTo * (HOLD + MORPH); // resume the cycle from the current preset
+  refreshButtons();
+};
+document.getElementById('reset').onclick = () => seed();
+document.getElementById('clear').onclick = () => {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, ping.fb); gl.viewport(0, 0, simW, simH);
+  gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+};
+const hud = document.getElementById('hud');
+document.getElementById('hide').onclick = (e) => {
+  hud.classList.toggle('min'); e.currentTarget.textContent = hud.classList.contains('min') ? '+' : '–';
+};
+function refreshButtons() { buttons.forEach((b, i) => b.classList.toggle('on', !auto && i === manualIdx)); }
+const stateEl = document.getElementById('state'), fkEl = document.getElementById('fk');
+const barEl = document.querySelector('#bar i');
+
+function currentPair(dt) {
+  let A, Bp, t;
+  if (auto) {
+    morphT += dt;
+    const period = HOLD + MORPH;
+    const cyc = mod(morphT, period * N);
+    const i = Math.min(N - 1, Math.floor(cyc / period));
+    const local = cyc - i * period;
+    t = local < HOLD ? 0 : (local - HOLD) / MORPH;
+    A = PRESETS[i]; Bp = PRESETS[(i + 1) % N];
+    stateEl.textContent = t === 0 ? `▸ ${A.name}` : `${A.name} → ${Bp.name}`;
+    barEl.style.width = (t === 0 ? local / HOLD : t) * 100 + '%';
+    manFrom = manTo = t > 0.5 ? (i + 1) % N : i; manT = 1;
+  } else {
+    if (manualIdx !== manTo) { manFrom = manTo; manTo = manualIdx; manT = 0; }
+    manT = Math.min(1, manT + dt / 6);
+    A = PRESETS[manFrom]; Bp = PRESETS[manTo]; t = manFrom === manTo ? 1 : manT;
+    stateEl.textContent = t >= 1 ? `● ${Bp.name}` : `${A.name} → ${Bp.name}`;
+    barEl.style.width = t * 100 + '%';
+  }
+  const key = A.name + '>' + Bp.name;
+  if (key !== lastPairKey) { // new transition: fresh origin for the sweeping front
+    lastPairKey = key;
+    origin = [0.2 + Math.random() * 0.6, 0.2 + Math.random() * 0.6];
+  }
+  return { A, B: Bp, t };
+}
+
+// --- loop ---
+let steps = 12;              // adapts to keep the framerate up
+let last = -1, time = 0, fkTimer = 0, dropTimer = 0;
+let slowFrames = 0, fastFrames = 0;
+const palA = new Float32Array(12), palB = new Float32Array(12);
+
+function setMorphUniforms(P, A, B, t) {
+  gl.uniform4f(P.u.uFK, A.F, A.k, B.F, B.k);
+  gl.uniform1f(P.u.uMix, t);
+  gl.uniform2f(P.u.uOrigin, origin[0], origin[1]);
+  gl.uniform1f(P.u.uAspect, simW / simH);
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (last < 0) last = now;
+  const rawDt = (now - last) / 1000; last = now;
+  const dt = Math.min(0.05, Math.max(0, rawDt));
+  time += dt;
+
+  // adaptive sim steps (keep it smooth on weak GPUs)
+  if (rawDt > 0.024) { slowFrames++; fastFrames = 0; } else if (rawDt > 0 && rawDt < 0.0185) { fastFrames++; slowFrames = 0; }
+  if (slowFrames > (rawDt > 0.05 ? 3 : 20) && steps > 4) { steps -= 2; slowFrames = 0; }
+  if (fastFrames > 120 && steps < 16) { steps += 1; fastFrames = 0; }
+
+  const { A, B, t } = currentPair(dt);
+  fkTimer += dt;
+  if (fkTimer > 0.2) {
+    fkTimer = 0;
+    fkEl.textContent = `F ${lerp(A.F, B.F, t).toFixed(4)} · k ${lerp(A.k, B.k, t).toFixed(4)} · ${steps} it/frame`;
+  }
+  for (let j = 0; j < 4; j++) for (let m = 0; m < 3; m++) { palA[j*3+m] = A.pal[j][m]; palB[j*3+m] = B.pal[j][m]; }
+
+  // occasional random droplet keeps sparse regimes (mitosis) from dying out
+  dropTimer += dt;
+  let drop = null;
+  if (dropTimer > 2.5) { dropTimer = 0; drop = [Math.random(), Math.random()]; }
+
+  // simulate
+  gl.viewport(0, 0, simW, simH);
+  gl.useProgram(simP.p);
+  gl.bindVertexArray(vao);
+  gl.uniform2f(simP.u.uTexel, 1 / simW, 1 / simH);
+  setMorphUniforms(simP, A, B, t);
+  gl.uniform4f(simP.u.uMouse, mouse.px, mouse.py, mouse.x, mouse.y);
+  gl.uniform1f(simP.u.uPaint, mouse.down ? 1 : 0);
+  gl.uniform1f(simP.u.uBrush, window.innerWidth < 600 ? 0.04 : 0.022);
+  gl.uniform1i(simP.u.uState, 0);
+  gl.activeTexture(gl.TEXTURE0);
+  for (let i = 0; i < steps; i++) {
+    gl.uniform3f(simP.u.uDrop, drop ? drop[0] : 0, drop ? drop[1] : 0, drop && i === 0 ? 1 : 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pong.fb);
+    gl.bindTexture(gl.TEXTURE_2D, ping.tex);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const tmp = ping; ping = pong; pong = tmp;
+  }
+  mouse.px = mouse.x; mouse.py = mouse.y;
+
+  // render
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.useProgram(renP.p);
+  gl.bindTexture(gl.TEXTURE_2D, ping.tex);
+  gl.uniform1i(renP.u.uState, 0);
+  gl.uniform2f(renP.u.uTexel, 1 / simW, 1 / simH);
+  gl.uniform1f(renP.u.uTime, time);
+  gl.uniform2f(renP.u.uRes, canvas.width, canvas.height);
+  setMorphUniforms(renP, A, B, t);
+  gl.uniform3fv(renP.u.uPalA, palA);
+  gl.uniform3fv(renP.u.uPalB, palB);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+refreshButtons();
+
+// warm-up: run the sim before the first frame so it never opens on a blank screen
+(function warm() {
+  const P = PRESETS[0];
+  gl.viewport(0, 0, simW, simH);
+  gl.useProgram(simP.p); gl.bindVertexArray(vao);
+  gl.uniform2f(simP.u.uTexel, 1 / simW, 1 / simH);
+  setMorphUniforms(simP, P, P, 0);
+  gl.uniform1f(simP.u.uPaint, 0);
+  gl.uniform3f(simP.u.uDrop, 0, 0, 0);
+  gl.uniform1i(simP.u.uState, 0);
+  gl.activeTexture(gl.TEXTURE0);
+  for (let i = 0; i < 160; i++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pong.fb);
+    gl.bindTexture(gl.TEXTURE_2D, ping.tex);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const tmp = ping; ping = pong; pong = tmp;
+  }
+})();
+
+document.addEventListener('visibilitychange', () => { last = -1; });
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

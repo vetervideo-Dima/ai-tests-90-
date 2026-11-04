@@ -1,0 +1,9 @@
+node_modules/
+**/node_modules/
+__pycache__/
+*.pyc
+.venv/
+**/media/partial_movie_files/
+**/media/Tex/
+**/media/texts/
+.DS_Store

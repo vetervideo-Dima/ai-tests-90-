@@ -4,8 +4,10 @@
 Источники: tools/catalog.json (список тестов из gen_prompts.py), tests/*/PROMPT.md, README.md, meta.json.
 Запуск: python3 tools/build.py
 """
-import html, json
+import html, json, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cost import estimate
 
 ROOT = Path(__file__).resolve().parent.parent
 CFG = json.loads((ROOT / "site.config.json").read_text(encoding="utf-8"))
@@ -65,7 +67,7 @@ def collect():
             "model": (meta or {}).get("model") or CFG.get("model"),
             "tokens": usage.get("total_tokens"),
             "minutes": usage.get("total_minutes"),
-            "usd": round(usage["total_tokens"] / 1e6 * CFG["blended_usd_per_mtok"], 2) if usage.get("total_tokens") else None,
+            "usd": round(sum(estimate(r, CFG)[0] for r in usage.get("runs", [])), 2) if usage.get("runs") else None,
             "runs": usage.get("runs", []),
             "files": sorted(str(p.relative_to(d)) for p in d.rglob("*")
                             if p.is_file() and "node_modules" not in p.parts and p != d / "index.html"),

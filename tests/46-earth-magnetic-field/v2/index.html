@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Earth's Magnetic Field — Interactive Dipole</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --panel-w: 360px; --accent: #7fe3ff; --aur: #6dffb0; --sun: #ffc66e; --text: #dce6f5; --muted: #8ea3c4; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #02040a; color: var(--text);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #panel { position: fixed; top: 16px; right: 16px; bottom: 16px; width: var(--panel-w); overflow-y: auto;
+    padding: 22px 22px 18px; background: rgba(8, 14, 28, 0.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(120, 170, 255, 0.16); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    scrollbar-width: thin; scrollbar-color: rgba(127,227,255,.25) transparent; }
+  .eyebrow { font: 600 10.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent); opacity: .85; }
+  h1 { font-size: 21px; font-weight: 700; margin: 8px 0 16px; letter-spacing: -.01em; }
+  .ctl { display: block; margin-bottom: 14px; }
+  .row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--sun); }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; margin-top: 6px; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px;
+    background: linear-gradient(90deg, #3a6cff, #ffc66e 60%, #ff6a4d); }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, #3a6cff, #ffc66e 60%, #ff6a4d); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -7px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 0 4px rgba(255,198,110,.25), 0 0 14px rgba(255,198,110,.8); }
+  input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: #fff;
+    box-shadow: 0 0 0 4px rgba(255,198,110,.25), 0 0 14px rgba(255,198,110,.8); }
+  .switch { position: relative; width: 44px; height: 24px; border-radius: 24px; border: 1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.08); cursor: pointer; transition: background .25s; }
+  .switch span { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #cfd8e6; transition: transform .25s, background .25s; }
+  .switch.on { background: rgba(255,90,110,.35); border-color: rgba(255,120,140,.5); }
+  .switch.on span { transform: translateX(20px); background: #fff; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 18px; }
+  .stats div { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 8px 9px; }
+  .stats b { display: block; font: 600 16px/1.1 "JetBrains Mono", ui-monospace, monospace; color: #fff; }
+  .stats small { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; line-height: 1.25; }
+  .text p { font-size: 13px; line-height: 1.55; color: #c3d0e4; margin-bottom: 11px; }
+  .text p b { color: #fff; font-weight: 600; }
+  .text code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; color: var(--accent); white-space: nowrap; }
+  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-top: 6px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
+  .legend div { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
+  .legend i { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+  .dim { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 6px; }
+  .switch.snd.on { background: rgba(109,255,176,.28); border-color: rgba(109,255,176,.5); }
+  .lbl { position: fixed; left: 0; top: 0; pointer-events: none; font: 600 10.5px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .12em; text-transform: uppercase; color: rgba(160,200,255,.75); white-space: nowrap; transition: opacity .3s;
+    margin: -6px 0 0 8px; text-shadow: 0 0 8px rgba(0,0,0,.9); will-change: transform; }
+  .lbl::before { content: ""; position: absolute; left: -8px; top: 3px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+  .lbl.sun { color: rgba(255,198,110,.85); }
+  .lbl.aur { color: rgba(109,255,176,.9); }
+  #hint { position: fixed; left: 18px; bottom: 16px; font: 500 11px/1 "JetBrains Mono", ui-monospace, monospace; color: rgba(200,215,240,.55); pointer-events: none; }
+  @media (max-width: 819px) {
+    #panel { top: auto; left: 10px; right: 10px; bottom: 10px; width: auto; max-height: 46vh; padding-bottom: calc(12px + env(safe-area-inset-bottom)); padding: 16px 16px 12px; border-radius: 14px; }
+    h1 { font-size: 18px; margin: 6px 0 12px; }
+    #hint { top: 14px; bottom: auto; left: 14px; font-size: 10px; }
+    .lbl { font-size: 9px; letter-spacing: .08em; }
+    .text p { font-size: 12.5px; }
+    .stats b { font-size: 14px; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "../../../vendor/three/build/three.module.js",
+  "three/addons/": "../../../vendor/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<aside id="panel">
+  <div class="eyebrow">Interactive · dipole model</div>
+  <h1>Earth's Magnetic Field</h1>
+  <label class="ctl">
+    <div class="row"><span>Solar wind</span><span id="windVal" class="mono">—</span></div>
+    <input id="wind" type="range" min="0" max="100" value="40" aria-label="Solar wind strength">
+  </label>
+  <div class="row ctl"><span>11° magnetic pole tilt</span><button id="tilt" class="switch on" aria-pressed="true" aria-label="Toggle 11 degree pole tilt"><span></span></button></div>
+  <div class="row ctl"><span>Sound <small class="dim">wind hiss · aurora chimes</small></span><button id="sound" class="switch snd" aria-pressed="false" aria-label="Toggle sound"><span></span></button></div>
+  <div class="stats">
+    <div><b id="sStand">—</b><small>R<sub>E</sub> to magnetopause</small></div>
+    <div><b id="sKp">—</b><small>Kp-like activity</small></div>
+    <div><b id="sCap">0</b><small>particles/s into aurora</small></div>
+  </div>
+  <section class="text">
+    <p><b>A planet-sized magnet.</b> Convection of molten iron in Earth's outer core, 3,000 km below us, drives a self-sustaining dynamo. From space its field looks almost exactly like a bar magnet's — a dipole — about 25–65 μT at the surface.</p>
+    <p><b>Lines from one formula.</b> Every blue line is traced numerically from the dipole equation <code>B = μ₀/4π · [3(m·r̂)r̂ − m] / r³</code>. Strength falls as 1/r³ and each line obeys <code>r = L·sin²θ</code>: a line leaving latitude λ crests at L = 1/cos²λ Earth radii.</p>
+    <p><b>The solar wind pushes back.</b> The Sun sheds plasma at 300–800 km/s. Its pressure squashes the dayside field to ~10 R<sub>E</sub> (the faint magnetopause shell) and drags the nightside into a long magnetotail. Raise the slider to watch the shield compress.</p>
+    <p><b>Aurora ovals.</b> Particles that leak in gyrate around field lines; as the field strengthens near the poles their spiral tightens and some mirror back. Those reaching 100–300 km excite oxygen (green 557.7 nm, red 630 nm) in rings around the <i>magnetic</i> poles — tilted ~11° from the geographic ones.</p>
+  </section>
+  <section class="legend">
+    <div><i style="background:#62c8ff"></i>Dipole field lines</div>
+    <div><i style="background:#ffc66e"></i>Solar-wind particles</div>
+    <div><i style="background:#8dffc4"></i>Trapped, spiraling</div>
+    <div><i style="background:linear-gradient(90deg,#4dff9a,#ff4f7a)"></i>Aurora ovals</div>
+    <div><i style="background:#ff5a6e"></i>Magnetic axis</div>
+    <div><i style="background:#ffffff"></i>Rotation axis</div>
+  </section>
+</aside>
+<div id="hint">Drag to orbit · scroll / pinch to zoom</div>
+<div class="lbl sun">Solar wind →</div>
+<div class="lbl">Magnetopause</div>
+<div class="lbl">Magnetotail</div>
+<div class="lbl aur">Aurora oval</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------------------------------------------------------------- setup
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setClearColor(0x02040a, 1);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 3000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.dampingFactor = 0.06;
+controls.enablePan = false; controls.minDistance = 2.5; controls.maxDistance = 120;
+controls.rotateSpeed = 0.6;
+
+const SUN = new THREE.Vector3(1, 0, 0);           // sunlight & solar wind come from +x
+const DEG = Math.PI / 180;
+const hyp3 = (x, y, z) => Math.sqrt(x * x + y * y + z * z);
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+// ---------------------------------------------------------------- GLSL noise
+const NOISE = /* glsl */`
+vec3 mod289(vec3 x){return x - floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x - floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz);
+  vec3 l = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+  i = mod289(i);
+  vec4 p = permute(permute(permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 0.142857142857;
+  vec3 ns = n_ * D.wyz - D.xzx;
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+  vec4 x_ = floor(j * ns.z);
+  vec4 y_ = floor(j - 7.0 * x_);
+  vec4 x = x_ * ns.x + ns.yyyy;
+  vec4 y = y_ * ns.x + ns.yyyy;
+  vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0)*2.0 + 1.0;
+  vec4 s1 = floor(b1)*2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+  vec3 p0 = vec3(a0.xy, h.x);
+  vec3 p1 = vec3(a0.zw, h.y);
+  vec3 p2 = vec3(a1.xy, h.z);
+  vec3 p3 = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a*snoise(p); p *= 2.03; a *= 0.5; } return s; }
+float hash21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(hash21(i), hash21(i+vec2(1,0)), f.x), mix(hash21(i+vec2(0,1)), hash21(i+vec2(1,1)), f.x), f.y); }
+`;
+
+// ---------------------------------------------------------------- Earth (procedural surface baked once into textures)
+const earth = new THREE.Group();
+scene.add(earth);
+// SphereGeometry uv → unit direction (matches three's sphere parameterisation exactly)
+const UV2DIR = /* glsl */`
+  vec3 uvDir(vec2 uv){ float ph = uv.x*6.28318530718, th = (1.0-uv.y)*3.14159265359;
+    return vec3(-cos(ph)*sin(th), cos(th), sin(ph)*sin(th)); }`;
+function bake(fragBody, w, h) {
+  const rt = new THREE.WebGLRenderTarget(w, h, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+  rt.texture.wrapS = THREE.RepeatWrapping;
+  rt.texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: NOISE + UV2DIR + `varying vec2 vUv; void main(){ vec3 p = uvDir(vUv); ${fragBody} }`,
+    depthTest: false, depthWrite: false,
+  });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+  const sc = new THREE.Scene(); sc.add(quad);
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  renderer.setRenderTarget(rt); renderer.render(sc, cam); renderer.setRenderTarget(null);
+  mat.dispose(); quad.geometry.dispose();
+  return rt.texture;
+}
+const SURFACE = /* glsl */`
+  float e = fbm(p*1.25 + vec3(1.7, 4.2, 0.3)) + 0.45*fbm(p*3.6 + 7.1) + 0.12*snoise(p*14.0) - 0.06;
+  float land = smoothstep(0.0, 0.025, e);
+  float lat = abs(p.y);
+  float ice = clamp(smoothstep(0.925, 0.95, lat + 0.04*snoise(p*6.0)) + smoothstep(0.6, 0.7, e)*0.7, 0.0, 1.0);`;
+const albedoTex = bake(SURFACE + /* glsl */`
+  float moist = fbm(p*2.4 + 11.0);
+  vec3 deep = vec3(0.006, 0.03, 0.11), shallow = vec3(0.02, 0.16, 0.30);
+  vec3 ocean = mix(deep, shallow, smoothstep(-0.28, 0.0, e));
+  vec3 green = vec3(0.07, 0.20, 0.07), dry = vec3(0.45, 0.36, 0.20), rock = vec3(0.28, 0.24, 0.20), tundra = vec3(0.30, 0.32, 0.26);
+  float desert = smoothstep(0.05, 0.25, moist) * (1.0 - smoothstep(0.15, 0.45, abs(lat-0.38)));
+  vec3 lc = mix(green, dry, desert);
+  lc = mix(lc, tundra, smoothstep(0.72, 0.85, lat));
+  lc = mix(lc, rock, smoothstep(0.32, 0.5, e));
+  lc *= 0.85 + 0.3*snoise(p*30.0)*0.5 + 0.15;
+  vec3 col = mix(mix(ocean, lc, land), vec3(0.88, 0.92, 0.98), ice);
+  gl_FragColor = vec4(col, (1.0 - land) * (1.0 - ice));`, 2048, 1024);
+const lightsTex = bake(SURFACE + /* glsl */`
+  float city = smoothstep(0.5, 0.78, fbm(p*26.0 + 3.0)) * smoothstep(0.0, 0.05, e) * (1.0 - ice) * (1.0 - smoothstep(0.75, 0.85, lat));
+  city *= 0.6 + 0.8*smoothstep(0.3, 0.8, snoise(p*90.0)*0.5 + 0.5);
+  float c = fbm(p*2.2) + 0.5*fbm(p*6.6 + 2.0);
+  gl_FragColor = vec4(city, smoothstep(0.12, 0.55, c), 0.0, 1.0);`, 2048, 1024);
+
+const earthMat = new THREE.ShaderMaterial({
+  uniforms: { uSun: { value: SUN }, uAlb: { value: albedoTex }, uLights: { value: lightsTex }, uCloudRot: { value: 0 } },
+  vertexShader: /* glsl */`
+    varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+    void main(){
+      vUv = uv;
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vN = normalize(mat3(modelMatrix) * normal);
+      vV = normalize(cameraPosition - wp.xyz);
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader: /* glsl */`
+    uniform vec3 uSun; uniform sampler2D uAlb; uniform sampler2D uLights; uniform float uCloudRot;
+    varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+    void main(){
+      vec4 A = texture2D(uAlb, vUv);
+      vec2 L = texture2D(uLights, vUv).rg;
+      float cloudShadow = texture2D(uLights, vUv + vec2(uCloudRot + 0.002, 0.0)).g;
+      vec3 N = normalize(vN), V = normalize(vV);
+      float ndl = dot(N, uSun);
+      float diff = max(ndl, 0.0);
+      float day = smoothstep(-0.12, 0.22, ndl);
+      vec3 H = normalize(uSun + V);
+      float spec = pow(max(dot(N, H), 0.0), 70.0) * 0.6 * A.a * day;
+      vec3 lights = vec3(1.0, 0.66, 0.30) * L.r * (1.0 - day) * 1.5 * (1.0 - 0.7*cloudShadow);
+      float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+      vec3 rim = vec3(0.30, 0.55, 1.0) * fres * (0.12 + 0.88*day);
+      vec3 c = A.rgb * (0.03 + 1.15*diff) * (1.0 - 0.45*cloudShadow*day) + vec3(1.0, 0.95, 0.85)*spec + lights + rim*0.9;
+      gl_FragColor = vec4(c, 1.0);
+    }`
+});
+const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 96), earthMat);
+earth.add(earthMesh);
+
+const cloudMat = new THREE.ShaderMaterial({
+  uniforms: { uSun: { value: SUN }, uLights: { value: lightsTex } },
+  transparent: true, depthWrite: false,
+  vertexShader: /* glsl */`
+    varying vec2 vUv; varying vec3 vN;
+    void main(){ vUv = uv; vN = normalize(mat3(modelMatrix)*normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform vec3 uSun; uniform sampler2D uLights; varying vec2 vUv; varying vec3 vN;
+    void main(){
+      float a = texture2D(uLights, vUv).g * 0.78;
+      float ndl = dot(normalize(vN), uSun);
+      gl_FragColor = vec4(vec3(1.0) * (0.03 + max(ndl, 0.0)), a * (0.2 + 0.8*smoothstep(-0.2, 0.3, ndl)));
+    }`
+});
+const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.012, 96, 64), cloudMat);
+earth.add(clouds);
+
+const atmoMat = new THREE.ShaderMaterial({
+  uniforms: { uSun: { value: SUN } },
+  side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: /* glsl */`
+    varying vec3 vNv; varying vec3 vNw;
+    void main(){ vNv = normalize(normalMatrix*normal); vNw = normalize(mat3(modelMatrix)*normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform vec3 uSun; varying vec3 vNv; varying vec3 vNw;
+    void main(){
+      float i = pow(clamp(0.58 - dot(vNv, vec3(0,0,1)), 0.0, 1.0), 4.0);
+      float lit = 0.2 + 0.8*smoothstep(-0.45, 0.5, dot(vNw, uSun));
+      gl_FragColor = vec4(vec3(0.32, 0.6, 1.0) * i * lit * 1.6, 1.0);
+    }`
+});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.13, 64, 48), atmoMat));
+
+// rotation axis (geographic)
+{
+  const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -1.55, 0), new THREE.Vector3(0, 1.55, 0)]);
+  scene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 })));
+}
+
+// ---------------------------------------------------------------- stars + sun
+{
+  const N = 3500, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, r = 600 + Math.random() * 400;
+    const s = Math.sqrt(1 - u * u);
+    pos.set([r * s * Math.cos(th), r * u, r * s * Math.sin(th)], i * 3);
+    const t = Math.random(), b = 0.35 + Math.random() * 0.65;
+    col.set([b * (0.8 + 0.2 * t), b * 0.85, b * (1.0 - 0.25 * t)], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false })));
+
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d');
+  const gr = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, 'rgba(255,255,240,1)'); gr.addColorStop(0.08, 'rgba(255,240,200,1)');
+  gr.addColorStop(0.2, 'rgba(255,190,90,0.5)'); gr.addColorStop(0.5, 'rgba(255,140,40,0.12)'); gr.addColorStop(1, 'rgba(255,120,30,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  sun.position.copy(SUN).multiplyScalar(400); sun.scale.setScalar(140);
+  scene.add(sun);
+}
+
+// ---------------------------------------------------------------- magnetic frame
+const magGroup = new THREE.Group();       // holds things that don't deform (aurora, magnetic axis)
+scene.add(magGroup);
+const qEarth = new THREE.Quaternion(), qTilt = new THREE.Quaternion(), qMag = new THREE.Quaternion();
+const magMat = new THREE.Matrix4();
+const TILT_AXIS = new THREE.Vector3(Math.cos(-72 * DEG + Math.PI / 2), 0, Math.sin(-72 * DEG + Math.PI / 2)).normalize();
+
+{ // magnetic axis
+  const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -1.75, 0), new THREE.Vector3(0, 1.75, 0)]);
+  magGroup.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xff5a6e, transparent: true, opacity: 0.9 })));
+  const n = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff5a6e }));
+  n.position.y = 1.75; magGroup.add(n);
+  const s = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ color: 0x5a8cff }));
+  s.position.y = -1.75; magGroup.add(s);
+}
+
+// ---------------------------------------------------------------- dipole field lines (RK4 on the dipole formula)
+const LATS = [45, 52, 58, 63, 67, 70, 73];
+const AURORA_LATS = [3, 4, 5, 6];
+const NLON = 12, NP = 200;
+const NL = LATS.length * NLON;
+const baseLine = new Float32Array(NL * NP * 3);  // magnetic-frame positions
+const lineB = new Float32Array(NL * NP);         // |B| (units of equatorial surface field)
+const lineLen = new Float32Array(NL);
+
+// B(r) = (3(m·r̂)r̂ − m)/r³ with m = (0,-1,0)  (dipole moment points to geographic south)
+function dipoleDir(x, y, z, out) {
+  const r = hyp3(x, y, z), ix = x / r, iy = y / r, iz = z / r;
+  const mdr = -iy, r3 = r * r * r;
+  let bx = 3 * mdr * ix / r3, by = (3 * mdr * iy + 1) / r3, bz = 3 * mdr * iz / r3;
+  const bl = hyp3(bx, by, bz);
+  out[0] = -bx / bl; out[1] = -by / bl; out[2] = -bz / bl;   // follow −B (outward from north footpoint)
+}
+function traceLine(latDeg, lon, li) {
+  const lat = latDeg * DEG;
+  let x = Math.cos(lat) * Math.cos(lon), y = Math.sin(lat), z = Math.cos(lat) * Math.sin(lon);
+  const raw = [x, y, z];
+  const k1 = [0, 0, 0], k2 = [0, 0, 0], k3 = [0, 0, 0], k4 = [0, 0, 0];
+  for (let step = 0; step < 40000; step++) {
+    const r = hyp3(x, y, z);
+    const ds = 0.006 * Math.max(1, r);
+    dipoleDir(x, y, z, k1);
+    dipoleDir(x + k1[0] * ds / 2, y + k1[1] * ds / 2, z + k1[2] * ds / 2, k2);
+    dipoleDir(x + k2[0] * ds / 2, y + k2[1] * ds / 2, z + k2[2] * ds / 2, k3);
+    dipoleDir(x + k3[0] * ds, y + k3[1] * ds, z + k3[2] * ds, k4);
+    x += ds / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
+    y += ds / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
+    z += ds / 6 * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]);
+    const rn = hyp3(x, y, z);
+    if (rn < 1 && step > 10) { raw.push(x / rn, y / rn, z / rn); break; }
+    raw.push(x, y, z);
+  }
+  // resample by arc length
+  const n = raw.length / 3, cum = new Float32Array(n);
+  for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + hyp3(raw[i * 3] - raw[i * 3 - 3], raw[i * 3 + 1] - raw[i * 3 - 2], raw[i * 3 + 2] - raw[i * 3 - 1]);
+  const L = cum[n - 1]; lineLen[li] = L;
+  let j = 0;
+  for (let k = 0; k < NP; k++) {
+    const s = (k / (NP - 1)) * L;
+    while (j < n - 2 && cum[j + 1] < s) j++;
+    const a = (s - cum[j]) / Math.max(1e-9, cum[j + 1] - cum[j]);
+    const o = (li * NP + k) * 3;
+    for (let c = 0; c < 3; c++) baseLine[o + c] = raw[j * 3 + c] + (raw[(j + 1) * 3 + c] - raw[j * 3 + c]) * Math.min(1, Math.max(0, a));
+    const px = baseLine[o], py = baseLine[o + 1], pz = baseLine[o + 2];
+    const r = hyp3(px, py, pz), ct = py / r;
+    lineB[li * NP + k] = Math.sqrt(1 + 3 * ct * ct) / (r * r * r);
+  }
+}
+for (let a = 0; a < LATS.length; a++) for (let b = 0; b < NLON; b++) traceLine(LATS[a], b / NLON * Math.PI * 2, a * NLON + b);
+
+const linePos = new Float32Array(NL * NP * 3);
+const lineAlpha = new Float32Array(NL * NP);
+const lineGeo = new THREE.BufferGeometry();
+{
+  const aS = new Float32Array(NL * NP), aB = new Float32Array(NL * NP), aSeed = new Float32Array(NL * NP);
+  const idx = [];
+  for (let l = 0; l < NL; l++) {
+    const seed = Math.random();
+    for (let k = 0; k < NP; k++) {
+      const i = l * NP + k;
+      aS[i] = (k / (NP - 1)) * lineLen[l];
+      aB[i] = Math.min(1, Math.max(0, (Math.log10(lineB[i]) + 3.2) / 3.5));
+      aSeed[i] = seed;
+      if (k < NP - 1) idx.push(i, i + 1);
+    }
+  }
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3).setUsage(THREE.DynamicDrawUsage));
+  lineGeo.setAttribute('aAlpha', new THREE.BufferAttribute(lineAlpha, 1).setUsage(THREE.DynamicDrawUsage));
+  lineGeo.setAttribute('aS', new THREE.BufferAttribute(aS, 1));
+  lineGeo.setAttribute('aB', new THREE.BufferAttribute(aB, 1));
+  lineGeo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
+  lineGeo.setIndex(idx);
+}
+const lineMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 } },
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: /* glsl */`
+    attribute float aAlpha; attribute float aS; attribute float aB; attribute float aSeed;
+    varying float vA; varying float vS; varying float vB; varying float vSeed;
+    void main(){ vA = aAlpha * (0.3 + 0.7*smoothstep(1.02, 1.45, length(position))); vS = aS; vB = aB; vSeed = aSeed;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform float uTime; varying float vA; varying float vS; varying float vB; varying float vSeed;
+    void main(){
+      float ph = fract(vS*0.32 + uTime*0.35 + vSeed);
+      float pulse = pow(ph, 12.0) + 0.35*pow(ph, 3.0);
+      vec3 c = mix(vec3(0.24, 0.32, 1.0), vec3(0.42, 0.9, 1.0), vB);
+      c = mix(c, vec3(0.85, 0.97, 1.0), pow(ph, 16.0));
+      float a = (0.24 + 0.14*vB + 0.85*pulse) * vA;
+      gl_FragColor = vec4(c, a);
+    }`
+});
+const fieldLines = new THREE.LineSegments(lineGeo, lineMat);
+fieldLines.frustumCulled = false;
+scene.add(fieldLines);
+
+// ---------------------------------------------------------------- magnetopause (Shue-type surface)
+const standoff = (w) => 11.5 - 5.5 * w;
+const SHUE_A = 0.6;
+const shueR = (r0, ct) => r0 * Math.pow(2 / Math.max(1 + ct, 0.02), SHUE_A);
+const MP_T = 48, MP_P = 72;
+const mpGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array((MP_T + 1) * (MP_P + 1) * 3), v = new Float32Array((MP_T + 1) * (MP_P + 1));
+  const idx = [];
+  for (let i = 0; i <= MP_T; i++) for (let j = 0; j <= MP_P; j++) {
+    v[i * (MP_P + 1) + j] = i / MP_T;
+    if (i < MP_T && j < MP_P) { const a = i * (MP_P + 1) + j, b = a + MP_P + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+  }
+  mpGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  mpGeo.setAttribute('aV', new THREE.BufferAttribute(v, 1));
+  mpGeo.setIndex(idx);
+}
+function updateMagnetopause(r0) {
+  const pos = mpGeo.attributes.position.array;
+  for (let i = 0; i <= MP_T; i++) {
+    const th = (i / MP_T) * 128 * DEG, r = shueR(r0, Math.cos(th));
+    for (let j = 0; j <= MP_P; j++) {
+      const ph = (j / MP_P) * Math.PI * 2, o = (i * (MP_P + 1) + j) * 3;
+      pos[o] = r * Math.cos(th); pos[o + 1] = r * Math.sin(th) * Math.cos(ph); pos[o + 2] = r * Math.sin(th) * Math.sin(ph);
+    }
+  }
+  mpGeo.attributes.position.needsUpdate = true;
+  mpGeo.computeVertexNormals();
+}
+const mpMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 }, uW: { value: 0 } },
+  transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+  vertexShader: /* glsl */`
+    attribute float aV; varying float vV; varying vec3 vN; varying vec3 vView;
+    void main(){ vV = aV; vec4 wp = modelMatrix*vec4(position,1.0); vN = normalize(mat3(modelMatrix)*normal);
+      vView = normalize(cameraPosition - wp.xyz); gl_Position = projectionMatrix*viewMatrix*wp; }`,
+  fragmentShader: /* glsl */`
+    uniform float uTime; uniform float uW; varying float vV; varying vec3 vN; varying vec3 vView;
+    void main(){
+      float f = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.5);
+      float flow = 0.65 + 0.35*sin(vV*60.0 - uTime*3.0*(1.0+uW));
+      float a = (0.015 + 0.22*f) * flow * (1.0 - smoothstep(0.55, 1.0, vV)) * (0.6 + 0.6*uW);
+      gl_FragColor = vec4(mix(vec3(0.35,0.6,1.0), vec3(1.0,0.75,0.45), uW*0.5), a);
+    }`
+});
+const magnetopause = new THREE.Mesh(mpGeo, mpMat);
+magnetopause.frustumCulled = false;
+scene.add(magnetopause);
+
+// ---------------------------------------------------------------- aurora ovals
+const BINS = 128;
+const binVal = [new Float32Array(BINS), new Float32Array(BINS)];
+const binData = new Uint8Array(BINS * 2 * 4);
+const binTex = new THREE.DataTexture(binData, BINS, 2, THREE.RGBAFormat);
+binTex.magFilter = binTex.minFilter = THREE.LinearFilter; binTex.wrapS = THREE.RepeatWrapping; binTex.needsUpdate = true;
+
+function ovalLat(ph) { return 66.0 + 1.3 * Math.sin(2 * ph + 0.7) + 0.7 * Math.sin(5 * ph + 2.1); }
+function buildAurora(kind) {
+  const S = 256, pos = [], uv = [], hemi = [], idx = [];
+  for (let h = 0; h < 2; h++) {
+    const sg = h === 0 ? 1 : -1, base = pos.length / 3;
+    for (let s = 0; s <= S; s++) {
+      const ph = (s / S) * Math.PI * 2;
+      if (kind === 'curtain') {
+        const lat = ovalLat(ph) * DEG;
+        const dx = Math.cos(lat) * Math.cos(ph), dy = sg * Math.sin(lat), dz = Math.cos(lat) * Math.sin(ph);
+        pos.push(dx * 1.012, dy * 1.012, dz * 1.012, dx * 1.1, dy * 1.1, dz * 1.1);
+      } else {
+        const l0 = (ovalLat(ph) - 8) * DEG, l1 = (ovalLat(ph) + 8) * DEG;
+        for (const l of [l0, l1]) pos.push(Math.cos(l) * Math.cos(ph) * 1.004, sg * Math.sin(l) * 1.004, Math.cos(l) * Math.sin(ph) * 1.004);
+      }
+      uv.push(s / S, 0, s / S, 1); hemi.push(h, h);
+      if (s < S) { const a = base + s * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('aHemi', new THREE.Float32BufferAttribute(hemi, 1));
+  g.setIndex(idx);
+  return g;
+}
+const auroraUniforms = { uTime: { value: 0 }, uBase: { value: 0.3 }, uBins: { value: binTex }, uSun: { value: SUN } };
+const auroraVS = /* glsl */`
+  attribute float aHemi; varying vec2 vUv; varying float vHemi; varying float vDay;
+  uniform vec3 uSun;
+  void main(){ vUv = uv; vHemi = aHemi; vec4 wp = modelMatrix*vec4(position,1.0);
+    vDay = dot(normalize(wp.xyz), uSun); gl_Position = projectionMatrix*viewMatrix*wp; }`;
+const curtainMat = new THREE.ShaderMaterial({
+  uniforms: auroraUniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+  vertexShader: auroraVS,
+  fragmentShader: NOISE + /* glsl */`
+    uniform sampler2D uBins; uniform float uTime; uniform float uBase;
+    varying vec2 vUv; varying float vHemi; varying float vDay;
+    void main(){
+      float bin = texture2D(uBins, vec2(vUv.x, vHemi*0.5 + 0.25)).r;
+      float x = vUv.x;
+      float rays = 0.35 + 0.65*vnoise(vec2(x*420.0 + sin(x*40.0 + uTime*0.6)*6.0, uTime*0.8));
+      float fold = 0.5 + 0.5*vnoise(vec2(x*36.0 - uTime*0.15, uTime*0.2 + vHemi*7.0));
+      float h = vUv.y;
+      float vert = smoothstep(0.0, 0.07, h) * pow(1.0 - h, 1.7);
+      vec3 green = vec3(0.25, 1.0, 0.55), red = vec3(1.0, 0.22, 0.42), violet = vec3(0.55, 0.4, 1.0);
+      vec3 col = mix(green, red, smoothstep(0.38, 0.95, h));
+      col = mix(violet, col, smoothstep(0.0, 0.08, h));
+      float I = (uBase*(0.45 + 1.0*fold) + bin*2.4) * rays * vert * 1.7;
+      I *= mix(1.0, 0.45, smoothstep(-0.1, 0.5, vDay));
+      gl_FragColor = vec4(col, clamp(I, 0.0, 1.0));
+    }`
+});
+const bandMat = new THREE.ShaderMaterial({
+  uniforms: auroraUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: auroraVS,
+  fragmentShader: NOISE + /* glsl */`
+    uniform sampler2D uBins; uniform float uTime; uniform float uBase;
+    varying vec2 vUv; varying float vHemi; varying float vDay;
+    void main(){
+      float bin = texture2D(uBins, vec2(vUv.x, vHemi*0.5 + 0.25)).r;
+      float d = (vUv.y - 0.5) * 2.0;
+      float prof = exp(-d*d*5.0);
+      float n = 0.6 + 0.4*vnoise(vec2(vUv.x*80.0 + uTime*0.3, vUv.y*3.0));
+      float I = (uBase*0.9 + bin*1.6) * prof * n * 1.1;
+      I *= mix(1.0, 0.3, smoothstep(-0.1, 0.5, vDay));
+      gl_FragColor = vec4(vec3(0.3, 1.0, 0.6), clamp(I, 0.0, 1.0));
+    }`
+});
+{ // draw after clouds/atmosphere so the ovals are never veiled
+  const band = new THREE.Mesh(buildAurora('band'), bandMat), curtain = new THREE.Mesh(buildAurora('curtain'), curtainMat);
+  band.renderOrder = 5; curtain.renderOrder = 6;
+  magGroup.add(band, curtain);
+}
+
+// ---------------------------------------------------------------- solar-wind particles
+const NW = 2200, K = 7;                     // particles, trail history length
+const P = new Float32Array(NW * 3), V = new Float32Array(NW * 3), S0 = new Float32Array(NW * 3);
+const HIST = new Float32Array(NW * K * 3);
+const mode = new Uint8Array(NW);           // 0 wind, 1 entering a line, 2 spiraling, 3 idle
+const lineId = new Int16Array(NW), tt = new Float32Array(NW), dirA = new Int8Array(NW), bnc = new Uint8Array(NW);
+const phase = new Float32Array(NW), timer = new Float32Array(NW);
+const pCol = new Float32Array(NW * 3), pAlpha = new Float32Array(NW), pSize = new Float32Array(NW);
+const SEG = (K - 1) * 2;
+const trPos = new Float32Array(NW * SEG * 3), trCol = new Float32Array(NW * SEG * 3), trA = new Float32Array(NW * SEG);
+
+const headGeo = new THREE.BufferGeometry();
+headGeo.setAttribute('position', new THREE.BufferAttribute(P, 3).setUsage(THREE.DynamicDrawUsage));
+headGeo.setAttribute('aColor', new THREE.BufferAttribute(pCol, 3).setUsage(THREE.DynamicDrawUsage));
+headGeo.setAttribute('aAlpha', new THREE.BufferAttribute(pAlpha, 1).setUsage(THREE.DynamicDrawUsage));
+headGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1).setUsage(THREE.DynamicDrawUsage));
+const headMat = new THREE.ShaderMaterial({
+  uniforms: { uPx: { value: 1 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: /* glsl */`
+    attribute vec3 aColor; attribute float aAlpha; attribute float aSize; uniform float uPx;
+    varying vec3 vC; varying float vA;
+    void main(){ vC = aColor; vA = aAlpha; vec4 mv = modelViewMatrix*vec4(position,1.0);
+      gl_Position = projectionMatrix*mv; gl_PointSize = clamp(aSize*uPx*(24.0 / -mv.z), 1.0, 40.0); }`,
+  fragmentShader: /* glsl */`
+    varying vec3 vC; varying float vA;
+    void main(){ float r = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.0, r); a *= a;
+      gl_FragColor = vec4(vC + a*a*0.5, a*vA); }`
+});
+const heads = new THREE.Points(headGeo, headMat); heads.frustumCulled = false; scene.add(heads);
+
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trPos, 3).setUsage(THREE.DynamicDrawUsage));
+trailGeo.setAttribute('aColor', new THREE.BufferAttribute(trCol, 3).setUsage(THREE.DynamicDrawUsage));
+trailGeo.setAttribute('aAlpha', new THREE.BufferAttribute(trA, 1).setUsage(THREE.DynamicDrawUsage));
+const trailMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: /* glsl */`
+    attribute vec3 aColor; attribute float aAlpha; varying vec3 vC; varying float vA;
+    void main(){ vC = aColor; vA = aAlpha; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: /* glsl */`varying vec3 vC; varying float vA; void main(){ gl_FragColor = vec4(vC, vA); }`
+});
+const trails = new THREE.LineSegments(trailGeo, trailMat); trails.frustumCulled = false; scene.add(trails);
+
+function resetHist(i) {
+  const o = i * 3, hb = i * K * 3;
+  for (let j = 0; j < K; j++) { HIST[hb + j * 3] = P[o]; HIST[hb + j * 3 + 1] = P[o + 1]; HIST[hb + j * 3 + 2] = P[o + 2]; }
+}
+function hideTrail(i) { trA.fill(0, i * SEG, (i + 1) * SEG); }
+
+function spawnWind(i, initial) {
+  const o = i * 3;
+  const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * 16;
+  P[o] = initial ? 6 + Math.random() * 42 : 38 + Math.random() * 12;
+  P[o + 1] = rr * Math.cos(a); P[o + 2] = rr * Math.sin(a);
+  if (initial) { const r = hyp3(P[o], P[o + 1], P[o + 2]); if (r < shueR(standoff(wS), P[o] / r) * 1.3) P[o] = 40 + Math.random() * 8; }
+  V[o] = -1; V[o + 1] = (Math.random() - 0.5) * 0.04; V[o + 2] = (Math.random() - 0.5) * 0.04;
+  resetHist(i);
+  mode[i] = 0; timer[i] = 0;
+}
+
+// sample a point on (deformed, world-space) line li at t, offset by a gyration helix
+const hOut = [0, 0, 0];
+function helix(li, t, ph) {
+  const f = Math.min(Math.max(t, 0), 1) * (NP - 1);
+  let i0 = Math.floor(f); if (i0 > NP - 2) i0 = NP - 2;
+  const a = f - i0, b = li * NP, k0 = (b + i0) * 3, k1 = k0 + 3;
+  const px = linePos[k0] + (linePos[k1] - linePos[k0]) * a;
+  const py = linePos[k0 + 1] + (linePos[k1 + 1] - linePos[k0 + 1]) * a;
+  const pz = linePos[k0 + 2] + (linePos[k1 + 2] - linePos[k0 + 2]) * a;
+  let tx = linePos[k1] - linePos[k0], ty = linePos[k1 + 1] - linePos[k0 + 1], tz = linePos[k1 + 2] - linePos[k0 + 2];
+  const tl = hyp3(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+  // perpendicular frame from the line's (fixed) azimuthal direction → no frame flips along the line
+  const az = li % NLON / NLON * Math.PI * 2, e = magMat.elements;
+  const lx = -Math.sin(az), lz = Math.cos(az);              // magnetic east, in the magnetic frame
+  let nx = e[0] * lx + e[8] * lz, ny = e[1] * lx + e[9] * lz, nz = e[2] * lx + e[10] * lz;
+  const d = nx * tx + ny * ty + nz * tz; nx -= d * tx; ny -= d * ty; nz -= d * tz;
+  const nl = hyp3(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+  const bx = ty * nz - tz * ny, by = tz * nx - tx * nz, bz = tx * ny - ty * nx;
+  const B = lineB[b + i0] + (lineB[b + i0 + 1] - lineB[b + i0]) * a;
+  const rho = Math.min(0.5, 0.024 / Math.sqrt(B));
+  const c = Math.cos(ph), s = Math.sin(ph);
+  hOut[0] = px + rho * (c * nx + s * bx); hOut[1] = py + rho * (c * ny + s * by); hOut[2] = pz + rho * (c * nz + s * bz);
+  return B;
+}
+
+function capture(i) {
+  const o = i * 3, x = P[o], y = P[o + 1], z = P[o + 2];
+  const e = magMat.elements;
+  const xm = e[0] * x + e[1] * y + e[2] * z, zm = e[8] * x + e[9] * y + e[10] * z;
+  let az = Math.atan2(zm, xm); if (az < 0) az += Math.PI * 2;
+  const lonIdx = Math.round(az / (Math.PI * 2) * NLON) % NLON;
+  const nearest = (li) => {
+    let best = 1e9, bk = NP / 2;
+    for (let k = 4; k < NP - 4; k += 2) {
+      const q = (li * NP + k) * 3;
+      const d = (linePos[q] - x) ** 2 + (linePos[q + 1] - y) ** 2 + (linePos[q + 2] - z) ** 2;
+      if (d < best) { best = d; bk = k; }
+    }
+    return [best, bk];
+  };
+  let li = AURORA_LATS[Math.floor(Math.random() * AURORA_LATS.length)] * NLON + lonIdx;
+  let [best, bk] = nearest(li);
+  if (best > 6) {
+    for (const la of AURORA_LATS) { const c = la * NLON + lonIdx, r = nearest(c); if (r[0] < best) { best = r[0]; bk = r[1]; li = c; } }
+    if (best > 9) return false;                 // no field line close enough: keep flowing past
+  }
+  lineId[i] = li; tt[i] = bk / (NP - 1);
+  dirA[i] = bk < NP / 2 ? -1 : 1;              // head for the nearer footpoint
+  bnc[i] = Math.random() < 0.45 ? 1 + (Math.random() < 0.4 ? 1 : 0) : 0;
+  phase[i] = Math.random() * Math.PI * 2; timer[i] = 0; mode[i] = 1;
+  S0[o] = x; S0[o + 1] = y; S0[o + 2] = z;
+  return true;
+}
+
+const hitTimes = [];
+let simTime = 0;
+function auroraHit(li, hemi) {
+  const lonIdx = li % NLON, c = lonIdx / NLON * BINS;
+  const arr = binVal[hemi];
+  for (let d = -7; d <= 7; d++) { const k = ((Math.round(c) + d) % BINS + BINS) % BINS; arr[k] = Math.min(1.6, arr[k] + 0.2 * Math.exp(-d * d / 8)); }
+  hitTimes.push(simTime);
+  audioPing(hemi);
+}
+
+// ---------------------------------------------------------------- optional sound
+let actx = null, master = null, windGain = null, windFilter = null, soundOn = false, lastPing = 0;
+const PENTA = [0, 2, 4, 7, 9, 12, 14, 16];
+function initAudio() {
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  master = actx.createGain(); master.gain.value = 0; master.connect(actx.destination);
+  const buf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate), d = buf.getChannelData(0);
+  let b = 0; for (let i = 0; i < d.length; i++) { b = 0.97 * b + 0.03 * (Math.random() * 2 - 1); d[i] = b * 4; }
+  const src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
+  windFilter = actx.createBiquadFilter(); windFilter.type = 'bandpass'; windFilter.Q.value = 0.8;
+  windGain = actx.createGain(); windGain.gain.value = 0.1;
+  src.connect(windFilter).connect(windGain).connect(master); src.start();
+  for (const f of [55, 82.4, 110.2]) {
+    const o = actx.createOscillator(), g = actx.createGain(), lfo = actx.createOscillator(), lg = actx.createGain();
+    o.frequency.value = f; o.type = 'sine'; g.gain.value = 0.018;
+    lfo.frequency.value = 0.05 + Math.random() * 0.08; lg.gain.value = 0.012; lfo.connect(lg).connect(g.gain);
+    o.connect(g).connect(master); o.start(); lfo.start();
+  }
+  const delay = actx.createDelay(1); delay.delayTime.value = 0.33;
+  const fb = actx.createGain(); fb.gain.value = 0.45; delay.connect(fb).connect(delay);
+  actx.pingBus = actx.createGain(); actx.pingBus.connect(master); actx.pingBus.connect(delay); delay.connect(master);
+}
+function audioPing(hemi) {
+  if (!soundOn || !actx) return;
+  const now = actx.currentTime;
+  if (now - lastPing < 0.12) return;
+  lastPing = now;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine';
+  o.frequency.value = 523.25 * Math.pow(2, PENTA[Math.floor(Math.random() * PENTA.length)] / 12) * (hemi ? 0.5 : 1);
+  g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.035, now + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+  o.connect(g).connect(actx.pingBus); o.start(now); o.stop(now + 1);
+}
+function updateAudio() {
+  if (!actx) return;
+  const t = actx.currentTime;
+  master.gain.setTargetAtTime(soundOn ? 0.9 : 0, t, 0.3);
+  windFilter.frequency.setTargetAtTime(300 + 1100 * wS, t, 0.2);
+  windGain.gain.setTargetAtTime(0.05 + 0.22 * wS, t, 0.2);
+}
+
+// ---------------------------------------------------------------- state & UI
+let wTarget = 0.4, wS = 0.4, tiltTarget = 1, tiltAmt = 1, earthAngle = 0, lastR0 = -1;
+const windEl = document.getElementById('wind'), windVal = document.getElementById('windVal');
+const tiltEl = document.getElementById('tilt'), soundEl = document.getElementById('sound');
+const sStand = document.getElementById('sStand'), sKp = document.getElementById('sKp'), sCap = document.getElementById('sCap');
+function onWind() { wTarget = windEl.value / 100; windVal.textContent = `${Math.round(300 + 500 * wTarget)} km/s`; }
+windEl.addEventListener('input', onWind); onWind();
+tiltEl.addEventListener('click', () => {
+  tiltTarget = tiltTarget ? 0 : 1;
+  tiltEl.classList.toggle('on', !!tiltTarget); tiltEl.setAttribute('aria-pressed', String(!!tiltTarget));
+});
+soundEl.addEventListener('click', () => {
+  soundOn = !soundOn;
+  if (soundOn && !actx) initAudio();
+  if (actx && actx.state === 'suspended') actx.resume();
+  soundEl.classList.toggle('on', soundOn); soundEl.setAttribute('aria-pressed', String(soundOn));
+});
+
+for (let i = 0; i < NW; i++) { spawnWind(i, true); pSize[i] = 2.0; }
+
+// ---------------------------------------------------------------- per-frame updates
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+function updateFrame() {
+  qEarth.setFromAxisAngle(Y_AXIS, earthAngle);
+  qTilt.setFromAxisAngle(TILT_AXIS, 11 * DEG * tiltAmt);
+  qMag.copy(qEarth).multiply(qTilt);
+  magGroup.quaternion.copy(qMag);
+  magMat.makeRotationFromQuaternion(qMag);
+}
+
+function updateLines() {
+  const e = magMat.elements, r0 = standoff(wS), R = 0.93 * r0;
+  const stretch = 0.25 + 1.5 * wS, flat = 0.15 + 0.3 * wS;
+  const n = NL * NP;
+  for (let k = 0; k < n; k++) {
+    const i3 = k * 3, x0 = baseLine[i3], y0 = baseLine[i3 + 1], z0 = baseLine[i3 + 2];
+    let x = e[0] * x0 + e[4] * y0 + e[8] * z0, y = e[1] * x0 + e[5] * y0 + e[9] * z0, z = e[2] * x0 + e[6] * y0 + e[10] * z0;
+    const r = hyp3(x, y, z);
+    if (r > 1.05) {
+      const c = x / r;
+      if (c > 0) {          // dayside: compress toward the magnetopause
+        const rc = R * Math.tanh(r / R), f = Math.pow(c, 1.3), s = (r + (rc - r) * f) / r;
+        x *= s; y *= s; z *= s;
+      } else {              // nightside: stretch into the magnetotail
+        const st = smooth(1.6, 7, r) * Math.pow(-c, 1.2);
+        x *= 1 + stretch * st * (r / 7);
+        y *= 1 - flat * st;
+      }
+    }
+    linePos[i3] = x; linePos[i3 + 1] = y; linePos[i3 + 2] = z;
+    const rr = hyp3(x, y, z), rm = shueR(r0, x / rr);
+    lineAlpha[k] = 1 - 0.88 * smooth(rm * 0.96, rm * 1.04, rr);
+  }
+  lineGeo.attributes.position.needsUpdate = true;
+  lineGeo.attributes.aAlpha.needsUpdate = true;
+}
+
+function updateParticles(dt) {
+  const r0 = standoff(wS);
+  const speed = 7 + 15 * wS;
+  const active = Math.floor(NW * (0.3 + 0.7 * wS));
+  const capRate = 0.15 + 1.2 * wS;
+  const e = magMat.elements, ax = e[4], ay = e[5], az = e[6];
+  const trK = Math.min(1, (1 / 60) / Math.max(dt, 1e-4));    // keep trails ~0.1 s long at any frame rate
+  for (let i = 0; i < NW; i++) {
+    const o = i * 3;
+    let m = mode[i];
+    if (m === 3) { if (i < active) { spawnWind(i, false); m = 0; } else { pAlpha[i] = 0; hideTrail(i); continue; } }
+    if (m === 0) {
+      let vx = V[o], vy = V[o + 1], vz = V[o + 2];
+      let x = P[o] + vx * speed * dt, y = P[o + 1] + vy * speed * dt, z = P[o + 2] + vz * speed * dt;
+      const r = hyp3(x, y, z), ct = x / r, rm = shueR(r0, ct);
+      const q = r / rm;
+      if (q < 1.3) {
+        const nx = x / r, ny = y / r, nz = z / r, vn = vx * nx + vy * ny + vz * nz;
+        if (vn < 0) {
+          const f = q < 1 ? 1 : Math.min(1, (1.3 - q) / 0.3 * dt * 9);
+          vx -= nx * vn * f; vy -= ny * vn * f; vz -= nz * vn * f;
+          const vl = hyp3(vx, vy, vz) || 1; vx /= vl; vy /= vl; vz /= vl;
+        }
+        if (q < 1) { x = nx * rm; y = ny * rm; z = nz * rm; }
+        if (q < 1.12) {
+          const cusp = Math.abs(nx * ax + ny * ay + nz * az);
+          if (Math.random() < capRate * dt * (0.3 + 1.6 * cusp * cusp)) {
+            P[o] = x; P[o + 1] = y; P[o + 2] = z; if (capture(i)) m = 1;
+          }
+        }
+      }
+      if (m === 0) {
+        V[o] = vx; V[o + 1] = vy; V[o + 2] = vz;
+        P[o] = x; P[o + 1] = y; P[o + 2] = z;
+        if (x < -40 || r > 70) { if (i < active) spawnWind(i, false); else { mode[i] = 3; pAlpha[i] = 0; hideTrail(i); continue; } }
+        pCol[o] = 1.0; pCol[o + 1] = 0.74; pCol[o + 2] = 0.40;
+        pAlpha[i] = 0.55 * smooth(52, 40, P[o]) * smooth(-40, -28, P[o]);
+        pSize[i] = 1.8;
+      }
+    }
+    if (m === 1 || m === 2) {
+      const li = lineId[i];
+      const B = lineB[li * NP + Math.round(tt[i] * (NP - 1))];
+      phase[i] += dt * Math.min(26, 4 + 22 * Math.sqrt(B));
+      const vAlong = 2.4 + 3.2 * wS;
+      if (m === 1) {
+        timer[i] += dt;
+        const u = Math.min(1, timer[i] / 0.7), eu = u * u * (3 - 2 * u);
+        helix(li, tt[i], phase[i]);
+        P[o] = S0[o] + (hOut[0] - S0[o]) * eu; P[o + 1] = S0[o + 1] + (hOut[1] - S0[o + 1]) * eu; P[o + 2] = S0[o + 2] + (hOut[2] - S0[o + 2]) * eu;
+        if (u >= 1) mode[i] = 2;
+      } else {
+        tt[i] += dirA[i] * vAlong * dt / lineLen[li];
+        const tm = 0.035 + 0.02 * ((i * 7) % 5) / 5;
+        if (bnc[i] > 0 && ((dirA[i] < 0 && tt[i] < tm) || (dirA[i] > 0 && tt[i] > 1 - tm))) { dirA[i] = -dirA[i]; bnc[i]--; }
+        if (tt[i] <= 0 || tt[i] >= 1) {
+          auroraHit(li, tt[i] <= 0 ? 0 : 1);
+          if (i < active) spawnWind(i, false); else { mode[i] = 3; }
+          pAlpha[i] = 0; hideTrail(i);
+          continue;
+        }
+        helix(li, tt[i], phase[i]);
+        P[o] = hOut[0]; P[o + 1] = hOut[1]; P[o + 2] = hOut[2];
+      }
+      const g = mode[i] === 2 ? 1 : Math.min(1, timer[i] / 0.7);
+      pCol[o] = 1.0 + (0.45 - 1.0) * g; pCol[o + 1] = 0.74 + (1.0 - 0.74) * g; pCol[o + 2] = 0.40 + (0.78 - 0.40) * g;
+      pAlpha[i] = 1.0; pSize[i] = 2.6 + 0.8 * Math.min(1, Math.sqrt(B));
+    }
+    // trail history (memmove one slot, newest first)
+    const hb = i * K * 3;
+    HIST.copyWithin(hb + 3, hb, hb + (K - 1) * 3);
+    HIST[hb] = P[o]; HIST[hb + 1] = P[o + 1]; HIST[hb + 2] = P[o + 2];
+    const sb = i * SEG, ta = pAlpha[i] * (mode[i] === 0 ? 0.45 : 0.85);
+    const px = P[o], py = P[o + 1], pz = P[o + 2];
+    for (let j = 0; j < K - 1; j++) {
+      const v0 = sb + j * 2, p0 = v0 * 3, h0 = hb + j * 3;
+      trPos[p0] = px + (HIST[h0] - px) * trK; trPos[p0 + 1] = py + (HIST[h0 + 1] - py) * trK; trPos[p0 + 2] = pz + (HIST[h0 + 2] - pz) * trK;
+      trPos[p0 + 3] = px + (HIST[h0 + 3] - px) * trK; trPos[p0 + 4] = py + (HIST[h0 + 4] - py) * trK; trPos[p0 + 5] = pz + (HIST[h0 + 5] - pz) * trK;
+      trCol[p0] = trCol[p0 + 3] = pCol[o]; trCol[p0 + 1] = trCol[p0 + 4] = pCol[o + 1]; trCol[p0 + 2] = trCol[p0 + 5] = pCol[o + 2];
+      trA[v0] = ta * (1 - j / (K - 1)); trA[v0 + 1] = ta * (1 - (j + 1) / (K - 1));
+    }
+  }
+  headGeo.attributes.position.needsUpdate = true;
+  headGeo.attributes.aColor.needsUpdate = true;
+  headGeo.attributes.aAlpha.needsUpdate = true;
+  headGeo.attributes.aSize.needsUpdate = true;
+  trailGeo.attributes.position.needsUpdate = true;
+  trailGeo.attributes.aColor.needsUpdate = true;
+  trailGeo.attributes.aAlpha.needsUpdate = true;
+}
+
+function updateAurora(dt) {
+  const decay = Math.exp(-dt * 0.7);
+  for (let h = 0; h < 2; h++) {
+    const arr = binVal[h];
+    for (let k = 0; k < BINS; k++) {
+      arr[k] *= decay;
+      const o = (h * BINS + k) * 4;
+      binData[o] = Math.min(255, arr[k] * 160);
+      binData[o + 1] = binData[o + 2] = 0; binData[o + 3] = 255;
+    }
+  }
+  binTex.needsUpdate = true;
+  auroraUniforms.uBase.value = 0.3 + 0.9 * wS;
+}
+
+// ---------------------------------------------------------------- labels
+const labels = [...document.querySelectorAll('.lbl')].map(el => ({ el, p: new THREE.Vector3() }));
+const tmpV = new THREE.Vector3();
+const panelEl = document.getElementById('panel');
+function updateLabels(r0) {
+  const W = innerWidth, H = innerHeight, pr = panelEl.getBoundingClientRect();
+  const th = 58 * DEG, rm = shueR(r0, Math.cos(th));
+  labels[0].p.set(9.5, -6.8, 0);                                           // solar wind
+  labels[1].p.set(rm * Math.cos(th), rm * Math.sin(th), 0);            // magnetopause
+  labels[2].p.set(-11 - 4 * wS, 1.6, 0);                               // magnetotail
+  tmpV.set(0, 1.18, 0).applyQuaternion(qMag); labels[3].p.copy(tmpV);  // magnetic pole / aurora
+  for (const L of labels) {
+    tmpV.copy(L.p).project(camera);
+    const sx = (tmpV.x + 1) / 2 * W, sy = (1 - tmpV.y) / 2 * H;
+    const underPanel = sx > pr.left - 110 && sx < pr.right && sy > pr.top - 10 && sy < pr.bottom;
+    const vis = tmpV.z < 1 && sx > 4 && sx < W - 100 && sy > 30 && sy < H - 10 && !underPanel;
+    L.el.style.opacity = vis ? '' : '0';
+    if (vis) L.el.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
+  }
+}
+
+// ---------------------------------------------------------------- resize
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  const panel = document.getElementById('panel').getBoundingClientRect();
+  if (w >= 820) camera.setViewOffset(w, h, (panel.width + 16) / 2, 0, w, h);
+  else camera.setViewOffset(w, h, 0, panel.height * 0.5, w, h);
+  camera.updateProjectionMatrix();
+  headMat.uniforms.uPx.value = renderer.getPixelRatio();
+}
+addEventListener('resize', resize);
+resize();
+{
+  const dir = new THREE.Vector3(0.2, 0.42, -0.885).normalize();
+  const mobile = innerWidth < 820;
+  const dist = mobile ? 19 / Math.min(1, camera.aspect * 1.1) : 18.5 / Math.min(1, camera.aspect * 1.2);
+  camera.position.copy(dir.multiplyScalar(Math.min(dist, 60)));
+  controls.target.set(0, 0, 0); controls.update();
+}
+
+// ---------------------------------------------------------------- warm start: pre-run 6 s so the aurora is already lit
+for (let k = 0; k < 120; k++) {
+  const dt = 1 / 20;
+  simTime += dt; earthAngle += dt * 0.05;
+  updateFrame(); updateLines(); updateParticles(dt); updateAurora(dt);
+}
+hitTimes.length = 0;
+
+// ---------------------------------------------------------------- loop
+let lastNow = performance.now(), statT = 0;
+function frame(now) {
+  const dt = Math.min(Math.max((now - lastNow) / 1000, 0), 1 / 20);
+  lastNow = now;
+  simTime += dt;
+  const t = simTime;
+  wS += (wTarget - wS) * (1 - Math.exp(-dt * 3));
+  tiltAmt += (tiltTarget - tiltAmt) * (1 - Math.exp(-dt * 2.5));
+  earthAngle += dt * 0.05;
+  earth.rotation.y = earthAngle;
+  clouds.rotation.y += dt * 0.006;
+  earthMat.uniforms.uCloudRot.value = -clouds.rotation.y / (Math.PI * 2);
+
+  updateFrame();
+  updateLines();
+  updateParticles(dt);
+  updateAurora(dt);
+  const r0 = standoff(wS);
+  if (Math.abs(r0 - lastR0) > 0.01) { updateMagnetopause(r0); lastR0 = r0; }
+
+  lineMat.uniforms.uTime.value = t; mpMat.uniforms.uTime.value = t; mpMat.uniforms.uW.value = wS;
+  auroraUniforms.uTime.value = t;
+
+  statT += dt;
+  if (statT > 0.25) {
+    statT = 0;
+    while (hitTimes.length && hitTimes[0] < t - 2) hitTimes.shift();
+    sStand.textContent = r0.toFixed(1);
+    sKp.textContent = Math.round(1 + 7.5 * Math.pow(wS, 1.2));
+    sCap.textContent = Math.round(hitTimes.length / 2);
+    updateAudio();
+  }
+
+  controls.update();
+  updateLabels(r0);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

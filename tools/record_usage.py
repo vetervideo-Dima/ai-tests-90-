@@ -4,15 +4,6 @@
 python3 tools/record_usage.py NN <subagent_tokens> <tool_uses> <duration_ms> [--stage v1+v2]
 
 Стоимость — оценка (API-эквивалент), модель расчёта — tools/cost.py.
-"""Записывает расход субагента в tests/NN-*/meta.json и строку в COSTS.md.
-
-python3 tools/record_usage.py NN <subagent_tokens> <tool_uses> <duration_ms> [--stage v1+v2]
-
-Система сообщает только ОБЩЕЕ число токенов субагента (вход + выход + кэш, суммарно по всем его запросам) —
-без разбивки. Поэтому стоимость — оценка (API-эквивалент) по смешанной ставке BLENDED_USD_PER_MTOK.
-Ставка выведена из цен Opus 5.5 ($4 вход / $20 выход / $0.20 чтение кэша / ~$5 запись кэша) и типичной
-структуры агентной сессии (~85% чтение кэша, ~8% запись кэша, ~2% новый вход, ~5% выход) ≈ $1.65/MTok.
-Калибруется после сверки с реальным расходом: поменяйте BLENDED_USD_PER_MTOK в site.config.json.
 """
 import json, sys, datetime
 from pathlib import Path

@@ -17,12 +17,12 @@
   },
   "summary": {
    "total": 76,
-   "done": 13,
-   "ok": 13,
-   "v1_ok": 8,
-   "tokens": 1844886,
-   "usd": 28.31,
-   "minutes": 258.0
+   "done": 19,
+   "ok": 19,
+   "v1_ok": 13,
+   "tokens": 2542291,
+   "usd": 37.69,
+   "minutes": 344.4
   },
   "waves": {
    "1": "Флагманы 3D",
@@ -815,21 +815,34 @@
    "kind": "html",
    "wave": 2,
    "wave_name": "Генеративка и шейдеры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-04",
+   "v1_worked": true,
+   "notes": "HTML-генератор A2 SVG-постера: многомасштабные плитки Трюше (Carlson) на квадродереве, сид, 5 палитр, слайдеры, Regenerate и Download SVG — всё работает, консоль чистая, скачивание проверено.",
+   "v1_issues": "Круги-крылья против часовой стрелки при квадратах по часовой в одном path → дыры при nonzero (светлые пятна); на стыках масштабов углы-«пакманы»; тонкие AA-щели; сетка обрезалась floor-ом, под подписью большая пустая полоса; на мобильном лист с тёмными полями из-за height:100%.",
+   "v2_changes": "Единая ориентация контуров; балансировка квадродерева 2:1 и принудительная угловая дуга у мелких плиток на внешнем углу (бесшовные стыки); 4 варианта T-плиток; обводка в цвет заливки против щелей; сетка заполняет всю рамку с симметричной обрезкой; JS-подгонка листа 420:594 под любой экран и resize.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 110226,
+   "minutes": 7.9,
+   "usd": 1.5,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 110226,
+     "tool_uses": 36,
+     "duration_ms": 474474
+    }
+   ]
   },
   {
    "n": 30,
@@ -918,23 +931,34 @@
    "kind": "html",
    "wave": 2,
    "wave_name": "Генеративка и шейдеры",
-   "status": "pending",
-   "entries": {},
-   "shots": {
-    "v1": "v1/screenshot.png"
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
    },
-   "shot": "v1/screenshot.png",
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-04",
+   "v1_worked": true,
+   "notes": "WebGL2, df64 до ~1e-11 (зум ~6e10), кроссфейд на новую цель при исчерпании точности, бесконечный цикл по 8 точкам Seahorse Valley, динамическое разрешение. Консоль чистая.",
+   "v1_issues": "Ошибок нет, но CPU-автопилот включался сразу и уводил первый зум из Seahorse Valley (в -0.698-0.290i); высокочастотный цветовой шум у границы на глубине; HUD писал f32/df64 по другому порогу, чем шейдер.",
+   "v2_changes": "Автопилот только глубже 2e-3 и только когда центр «плоский»; детектор поглощения минибротом (>85%) -> досрочный кроссфейд; distance estimation (свечение нитей, затемнение пустот); логарифмическая палитра; проверка периодичности в df64; масштаб по короткой стороне (портрет), перенос HUD на мобильных; клик/пробел — следующая цель, H — HUD, ?seek= для перемотки; дизеринг.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 134430,
+   "minutes": 30.9,
+   "usd": 2.08,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 134430,
+     "tool_uses": 43,
+     "duration_ms": 1856452
+    }
+   ]
   },
   {
    "n": 33,
@@ -946,23 +970,34 @@
    "kind": "html",
    "wave": 2,
    "wave_name": "Генеративка и шейдеры",
-   "status": "pending",
-   "entries": {},
-   "shots": {
-    "v1": "v1/screenshot.png"
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
    },
-   "shot": "v1/screenshot.png",
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-04",
+   "v1_worked": false,
+   "notes": "Gray-Scott на WebGL2 (ping-pong, RGBA16F): 4 пресета, рисование B мышью или пальцем, мокрый блик по градиенту, бесконечный морфинг пресетов. Ошибок в консоли нет, мобильная версия проверена.",
+   "v1_issues": "Исключение на первом кадре: временная метка rAF меньше performance.now(), dt < 0, morphT < 0, индекс пресета -1, PRESETS[-1].name падает. Цикл останавливается, экран чёрный.",
+   "v2_changes": "dt ограничен снизу нулём, модуль всегда положительный. Морфинг идёт волной (F/k и палитра своя в каждом пикселе). Блик: нормали по Собелю, env-отражение по Френелю, затемнение впадин, тонмаппинг, дизеринг. Мазок рисуется отрезком, а не точками. Шаги подстраиваются под FPS. Прогрев симуляции, капли-затравки, чтобы mitosis не вымирал. Компактный HUD на мобильных, debounce resize.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 103053,
+   "minutes": 9.1,
+   "usd": 1.1,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 103053,
+     "tool_uses": 19,
+     "duration_ms": 546375
+    }
+   ]
   },
   {
    "n": 34,
@@ -974,21 +1009,34 @@
    "kind": "html",
    "wave": 2,
    "wave_name": "Генеративка и шейдеры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-04",
+   "v1_worked": true,
+   "notes": "Three.js murmuration: 8000 boids (до 12000), spatial hash (counting sort в хеш-таблицу), ястреб-хищник, инстансированные птицы с взмахами крыльев в шейдере, небо-заката шейдером, кинокамера, слайдеры правил. Ошибок консоли нет.",
+   "v1_issues": "Ошибок не было. Визуально: стая — равномерное рыхлое облако без плотности и формы, птицы бледнели от тумана, солнце почти не попадало в кадр, предупреждение об устаревшем THREE.Clock, FPS в статистике считался по обрезанному dt.",
+   "v2_changes": "Плотная стая (меньше радиус разделения, ~топологические 12 соседей, сильнее выравнивание/сцепление), распространение испуга от ястреба по соседям (волны), уклонение поперёк курса ястреба, крен птиц по боковому ускорению, чередование взмахов и планирования, минимальный размер птицы в пикселях, камера-маятник вокруг направления на солнце, ярче диск солнца, виньетка, таймер на rAF вместо Clock, честный FPS, портретная раскладка камеры для мобильных.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 111933,
+   "minutes": 12.1,
+   "usd": 1.45,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 111933,
+     "tool_uses": 31,
+     "duration_ms": 726737
+    }
+   ]
   },
   {
    "n": 35,
@@ -1039,21 +1087,34 @@
    "kind": "html",
    "wave": 2,
    "wave_name": "Генеративка и шейдеры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-04",
+   "v1_worked": true,
+   "notes": "GLSL mainImage (shader.glsl) + WebGL2-просмотрщик со встроенной копией шейдера. Рельеф, река с отражениями и бликами, снег, тени, aerial perspective, dolly-камера работают; ошибок консоли нет. В SwiftShader ~3 fps, скриншоты в низком разрешении.",
+   "v1_issues": "Ошибок нет, но сцена сильно затянута дымкой, стены долины — гладкие однообразные склоны, тяжёлый рендер (первый кадр в песочнице ~2 мин, 3 fps), на портретном экране узкий FOV.",
+   "v2_changes": "Шире долина с отдельными пиками и ridged-гребнями, хвойный лес, луга, мягче и голубее воздушная перспектива, тёплый свет + отражённый, LOD октав по дальности, облегчённые тени/отражения/нормали, затухание ряби вдали, FOV для портретных экранов, быстрее адаптивное разрешение, подсказки в HUD.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 106967,
+   "minutes": 11.9,
+   "usd": 1.37,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 106967,
+     "tool_uses": 32,
+     "duration_ms": 715524
+    }
+   ]
   },
   {
    "n": 37,
@@ -1065,21 +1126,34 @@
    "kind": "html",
    "wave": 2,
    "wave_name": "Генеративка и шейдеры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-04",
+   "v1_worked": true,
+   "notes": "WebGL2 Game of Life 1024x1024 на торе, возрастные цвета, шлейфы, bloom, авто-подсев знаменитых паттернов по GPU-метрике активности, рисование мышью/тачем, зум/панорама. Ошибок консоли нет; проверено рисование, clear → авто-подсев, мобильный вид.",
+   "v1_issues": "Работал без ошибок, но палитра почти белая (молодые клетки белые, старение медленное), шлейфы еле видны; на мобильном только клавиатурная подсказка, касание двумя пальцами оставляло пятно; цвет+мипмапы пересчитывались каждый кадр; первый показ Δ/pop пустой; PBO readback давал performance warning в Chrome.",
+   "v2_changes": "Насыщенная неоновая палитра и шлейфы с дрейфом оттенка, более быстрое старение, подстройка bloom/экспозиции; мобильный HUD с подложкой и кнопками (пауза/seed/clear/fit), отложенное рисование при касании (щипок не рисует); цветовой проход и mipmap только при изменении сетки; ранний readback статистики; orphaning PBO против предупреждения Chrome.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 130796,
+   "minutes": 14.5,
+   "usd": 1.88,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 130796,
+     "tool_uses": 36,
+     "duration_ms": 869050
+    }
+   ]
   },
   {
    "n": 38,

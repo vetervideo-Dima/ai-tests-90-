@@ -7,7 +7,7 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#9cc4e4;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#fff;user-select:none;-webkit-user-select:none}
   canvas{display:block}
-  #gl{position:fixed;inset:0;width:100%;height:100%}
+  #gl{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
   #hud{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
   #intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(10,25,45,.55),rgba(5,10,20,.85));z-index:10;cursor:pointer;transition:opacity .5s}
   #intro.hide{opacity:0;pointer-events:none}
@@ -21,6 +21,18 @@
   @keyframes pulse{50%{opacity:.4}}
   #help{position:fixed;top:12px;left:12px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;background:rgba(0,0,0,.35);padding:8px 10px;border-radius:8px;pointer-events:none;opacity:.85}
   #help.hide{display:none}
+  #touch{position:fixed;inset:0;pointer-events:none;z-index:5}
+  #touch.hide{display:none}
+  #stick{position:absolute;left:22px;bottom:26px;width:150px;height:150px;border-radius:50%;background:rgba(10,20,32,.35);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
+  #knob{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  #thr{position:absolute;right:22px;bottom:26px;width:58px;height:190px;border-radius:16px;background:rgba(10,20,32,.35);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none;overflow:hidden}
+  #thrFill{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(to top,#4ade80,#facc15 70%,#f97316)}
+  #thr span{position:absolute;left:0;right:0;top:6px;text-align:center;font:700 11px ui-monospace,Menlo,monospace;text-shadow:0 1px 2px #000}
+  #tbtns{position:absolute;right:92px;bottom:26px;display:grid;grid-template-columns:repeat(2,52px);gap:8px;pointer-events:auto}
+  #tbtns button{height:44px;border-radius:12px;border:2px solid rgba(255,255,255,.35);background:rgba(10,20,32,.45);color:#fff;font:700 12px ui-monospace,Menlo,monospace;touch-action:none}
+  #tbtns button.on{background:rgba(255,210,63,.55)}
+  #pad{position:absolute;left:0;top:0;right:0;height:55%;pointer-events:none}
+  @media (max-width:600px){.card{margin:16px;padding:22px 20px}.card h1{font-size:30px}.keys{font-size:12.5px}}
 </style>
 </head>
 <body>
@@ -29,7 +41,13 @@
 <div id="help" class="hide">
   ↑/↓ pitch · ←/→ roll · A/D rudder<br>
   W/S throttle · B brakes · C camera<br>
-  R reset · P pause · M mute · H hide
+  X smoke · T air start · R reset<br>
+  P pause · M mute · H hide
+</div>
+<div id="touch" class="hide">
+  <div id="stick"><div id="knob"></div></div>
+  <div id="thr"><div id="thrFill"></div><span>THR</span></div>
+  <div id="tbtns"><button data-b="cam">CAM</button><button data-b="brk">BRK</button><button data-b="smk">SMOKE</button><button data-b="rst">RESET</button><button data-b="air">AIR</button></div>
 </div>
 <div id="intro">
   <div class="card">
@@ -42,7 +60,15 @@
       <b>A / D</b><span>Yaw (rudder) / steer on ground</span>
       <b>B</b><span>Wheel brakes / air brake</span>
       <b>C</b><span>Chase / cockpit camera · drag mouse to look</span>
+      <b>X</b><span>Airshow smoke on / off</span>
+      <b>T</b><span>Air start (skip the take-off)</span>
       <b>R · P · M</b><span>Reset · Pause · Mute</span>
+    </div>
+    <div class="keys touchkeys" style="display:none">
+      <b>Left stick</b><span>Pitch &amp; roll — pull down to climb</span>
+      <b>Right slider</b><span>Throttle</span>
+      <b>Buttons</b><span>Camera · brakes · smoke · reset</span>
+      <b>Drag sky</b><span>Look around</span>
     </div>
     <div class="go">Click or press any key to start</div>
   </div>
@@ -505,7 +531,7 @@ const parts = {};
   const prop = new THREE.Group(); prop.position.z = -3.75; plane.add(prop);
   const blades = new THREE.Group(); prop.add(blades);
   for (let k = 0; k < 2; k++) { const b = add(new THREE.BoxGeometry(0.18, 1.55, 0.05).translate(0, 0.78, 0), dark, 0, 0, 0, blades); b.rotation.z = k * Math.PI; b.rotation.y = 0.25; }
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.6, 32), new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.6, 32), new THREE.MeshBasicMaterial({ color: 0x9aa0a6, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
   prop.add(disc);
   parts.prop = prop; parts.blades = blades; parts.disc = disc;
   // wings
@@ -537,6 +563,70 @@ const parts = {};
   parts.strobe = strobe;
 }
 scene.add(plane);
+
+// =====================================================================
+//  Trails: wing-tip vapour at high G + airshow smoke (X)
+// =====================================================================
+class Trail {
+  constructor(n, color, w0, grow, life, spacing) {
+    this.n = n; this.w0 = w0; this.grow = grow; this.life = life; this.spacing = spacing; this.pts = [];
+    const geo = new THREE.BufferGeometry();
+    this.pos = new Float32Array(n * 2 * 3); this.col = new Float32Array(n * 2 * 4);
+    const c = new THREE.Color(color);
+    for (let i = 0; i < n * 2; i++) { this.col[i * 4] = c.r; this.col[i * 4 + 1] = c.g; this.col[i * 4 + 2] = c.b; }
+    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('color', new THREE.BufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage));
+    const idx = [];
+    for (let i = 0; i < n - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3); }
+    geo.setIndex(idx);
+    this.mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true }));
+    this.mesh.frustumCulled = false; this.mesh.renderOrder = 2;
+    scene.add(this.mesh);
+  }
+  emit(p, a) {
+    const h = this.pts[0];
+    if (h && h.p.distanceToSquared(p) < this.spacing * this.spacing) { h.p.copy(p); h.a = Math.max(h.a, a); return; }
+    const q = this.pts.length >= this.n ? this.pts.pop() : { p: new V3(), a: 0, t: 0 };
+    q.p.copy(p); q.a = a; q.t = 0;
+    this.pts.unshift(q);
+  }
+  clear() { this.pts.length = 0; }
+  update(dt, camPos) {
+    const P = this.pts, n = Math.min(P.length, this.n);
+    for (let i = n - 1; i >= 0; i--) { P[i].t += dt; if (P[i].t > this.life) P.length = Math.min(P.length, i); }
+    const m = P.length;
+    for (let i = 0; i < this.n; i++) {
+      const o = i * 6, co = i * 8;
+      if (i >= m || m < 2) { this.col[co + 3] = this.col[co + 7] = 0; if (i > 0) { for (let k = 0; k < 6; k++) this.pos[o + k] = this.pos[o - 6 + k]; } continue; }
+      const a = P[i].p, b = P[Math.min(i + 1, m - 1)].p, pa = P[Math.max(i - 1, 0)].p;
+      _tr1.subVectors(pa, b); if (_tr1.lengthSq() < 1e-6) _tr1.set(0, 0, 1);
+      _tr2.subVectors(camPos, a);
+      _tr3.crossVectors(_tr1, _tr2).normalize();
+      const w = this.w0 + P[i].t * this.grow;
+      this.pos[o] = a.x + _tr3.x * w; this.pos[o + 1] = a.y + _tr3.y * w; this.pos[o + 2] = a.z + _tr3.z * w;
+      this.pos[o + 3] = a.x - _tr3.x * w; this.pos[o + 4] = a.y - _tr3.y * w; this.pos[o + 5] = a.z - _tr3.z * w;
+      const al = P[i].a * (1 - P[i].t / this.life) * Math.min(1, i / 2);
+      this.col[co + 3] = this.col[co + 7] = al;
+    }
+    this.mesh.geometry.attributes.position.needsUpdate = true;
+    this.mesh.geometry.attributes.color.needsUpdate = true;
+  }
+}
+const _tr1 = new V3(), _tr2 = new V3(), _tr3 = new V3(), _tipL = new V3(), _tipR = new V3(), _tail = new V3();
+const vapL = new Trail(70, 0xffffff, 0.12, 0.25, 1.4, 2.5), vapR = new Trail(70, 0xffffff, 0.12, 0.25, 1.4, 2.5);
+const smoke = new Trail(220, 0xf4f4f4, 0.6, 1.1, 14, 5);
+let smokeOn = false;
+function updateTrails(dt) {
+  if (!S.crashed) {
+    plane.updateMatrixWorld();
+    const vap = clamp((Math.abs(S.g) - 2.0) * 0.45, 0, 0.75) + (S.stall ? 0.25 : 0);
+    _tipL.set(-5.6, -0.3, -0.2).applyMatrix4(plane.matrixWorld);
+    _tipR.set(5.6, -0.3, -0.2).applyMatrix4(plane.matrixWorld);
+    vapL.emit(_tipL, vap); vapR.emit(_tipR, vap);
+    if (smokeOn) { _tail.set(0, 0, 4.3).applyMatrix4(plane.matrixWorld); smoke.emit(_tail, 0.75); }
+  }
+  vapL.update(dt, camera.position); vapR.update(dt, camera.position); smoke.update(dt, camera.position);
+}
 
 // =====================================================================
 //  Rings (the "game")
@@ -586,9 +676,14 @@ function resetPlane() {
   S.pos.set(0, RUNWAY_H + GEAR_H, 690); S.vel.set(0, 0, 0); S.q.identity();
   S.throttle = 0; S.rpm = 0; S.onGround = true; S.crashed = false; S.stall = false; S.airTime = 0;
   plane.visible = true; score = 0; resetRings();
+  if (typeof vapL !== 'undefined') { vapL.clear(); vapR.clear(); smoke.clear(); }
   camQ.copy(S.q);
 }
 const camQ = new THREE.Quaternion();
+function airStart() {
+  resetPlane();
+  S.pos.set(0, RUNWAY_H + 140, -300); S.vel.set(0, 0, -62); S.throttle = 0.6; S.rpm = 0.6; S.onGround = false; S.airTime = 5;
+}
 
 const _f = new V3(), _u = new V3(), _r = new V3(), _t = new V3(), _a = new V3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 const AX = new V3(1, 0, 0), AY = new V3(0, 1, 0), AZ = new V3(0, 0, 1);
@@ -621,7 +716,7 @@ function step(dt) {
     _a.addScaledVector(v, -cd * speed);
     _a.addScaledVector(_r, -vr * (0.6 + speed * 0.03));
   }
-  S.g = S.g + ((liftAcc * _t.dot(_u)) / G + _u.y * 0 - S.g) * Math.min(1, dt * 5);
+  S.g = S.g + ((S.onGround ? 1 : (liftAcc * _t.dot(_u)) / G) - S.g) * Math.min(1, dt * 5);
 
   // angular rates (body)
   const eff = clamp(vf / 32, 0, 1.25);
@@ -808,7 +903,7 @@ let camYawOff = 0, camPitchOff = 0, dragging = false, lastMX = 0, lastMY = 0;
 const intro = document.getElementById('intro'), help = document.getElementById('help');
 function start() {
   if (started) return;
-  started = true; intro.classList.add('hide'); help.classList.remove('hide');
+  started = true; intro.classList.add('hide'); if (!IS_TOUCH) help.classList.remove('hide');
   initAudio();
 }
 addEventListener('keydown', (e) => {
@@ -820,10 +915,12 @@ addEventListener('keydown', (e) => {
   switch (e.code) {
     case 'KeyC': camMode = (camMode + 1) % 2; camera.near = camMode === 1 ? 0.1 : 0.5; camera.updateProjectionMatrix(); break;
     case 'KeyR': resetPlane(); break;
+    case 'KeyT': airStart(); break;
     case 'Space': if (S.crashed) resetPlane(); break;
     case 'KeyP': paused = !paused; break;
     case 'KeyM': muted = !muted; break;
     case 'KeyH': help.classList.toggle('hide'); break;
+    case 'KeyX': smokeOn = !smokeOn; break;
   }
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -838,17 +935,61 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerup', () => { dragging = false; });
 
+
+// ---- touch controls ----
+const touchIn = { pitch: 0, roll: 0, active: false, brake: false };
+if (IS_TOUCH) {
+  document.getElementById('touch').classList.remove('hide');
+  document.querySelector('.keys').style.display = 'none';
+  document.querySelector('.touchkeys').style.display = 'grid';
+  document.querySelector('.go').textContent = 'Tap to start';
+  const stick = document.getElementById('stick'), knob = document.getElementById('knob');
+  const setStick = (e) => {
+    const r = stick.getBoundingClientRect(), R = r.width / 2;
+    let dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R;
+    const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; }
+    touchIn.roll = dx; touchIn.pitch = dy; touchIn.active = true;
+    knob.style.transform = `translate(${dx * R * 0.6}px,${dy * R * 0.6}px)`;
+  };
+  stick.addEventListener('pointerdown', (e) => { stick.setPointerCapture(e.pointerId); setStick(e); e.preventDefault(); });
+  stick.addEventListener('pointermove', (e) => { if (touchIn.active) setStick(e); });
+  const endStick = () => { touchIn.active = false; touchIn.pitch = touchIn.roll = 0; knob.style.transform = ''; };
+  stick.addEventListener('pointerup', endStick); stick.addEventListener('pointercancel', endStick);
+  const thr = document.getElementById('thr');
+  let thrDown = false;
+  const setThr = (e) => { const r = thr.getBoundingClientRect(); S.throttle = clamp(1 - (e.clientY - r.top - 10) / (r.height - 20), 0, 1); };
+  thr.addEventListener('pointerdown', (e) => { thrDown = true; thr.setPointerCapture(e.pointerId); setThr(e); e.preventDefault(); });
+  thr.addEventListener('pointermove', (e) => { if (thrDown) setThr(e); });
+  thr.addEventListener('pointerup', () => { thrDown = false; });
+  thr.addEventListener('pointercancel', () => { thrDown = false; });
+  for (const b of document.querySelectorAll('#tbtns button')) {
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); initAudio();
+      const k = b.dataset.b;
+      if (k === 'cam') { camMode = (camMode + 1) % 2; camera.near = camMode === 1 ? 0.1 : 0.5; camera.updateProjectionMatrix(); }
+      if (k === 'brk') { touchIn.brake = true; b.classList.add('on'); }
+      if (k === 'smk') { smokeOn = !smokeOn; b.classList.toggle('on', smokeOn); }
+      if (k === 'rst') resetPlane();
+      if (k === 'air') airStart();
+    });
+    const up = () => { if (b.dataset.b === 'brk') { touchIn.brake = false; b.classList.remove('on'); } };
+    b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
+  }
+}
+const thrFill = document.getElementById('thrFill');
+
 function readInput(dt) {
   const k = (c) => keys.has(c) ? 1 : 0;
-  const tp = k('ArrowDown') - k('ArrowUp');
-  const tr = k('ArrowRight') - k('ArrowLeft');
+  const tp = clamp(k('ArrowDown') - k('ArrowUp') + touchIn.pitch, -1, 1);
+  const tr = clamp(k('ArrowRight') - k('ArrowLeft') + touchIn.roll, -1, 1);
   const ty = k('KeyD') - k('KeyA') + k('KeyE') - k('KeyQ');
   const rate = 1 - Math.exp(-dt * 7);
   S.in.pitch += (tp - S.in.pitch) * rate;
   S.in.roll += (tr - S.in.roll) * rate;
   S.in.yaw += (clamp(ty, -1, 1) - S.in.yaw) * rate;
   S.throttle = clamp(S.throttle + (k('KeyW') + k('ShiftLeft') - k('KeyS') - k('ControlLeft') * 0) * dt * 0.5, 0, 1);
-  S.brake = keys.has('KeyB');
+  S.brake = keys.has('KeyB') || touchIn.brake;
+  if (IS_TOUCH) thrFill.style.height = (S.throttle * 100).toFixed(1) + '%';
 }
 
 // =====================================================================
@@ -890,15 +1031,16 @@ function drawHUD(dt) {
   const gh = Math.max(terrainHeight(S.pos.x, S.pos.z), 0);
   const altFt = S.pos.y * 3.281, aglFt = (S.pos.y - GEAR_H - gh) * 3.281, vs = S.vel.y * 196.85;
 
+  const compact = IS_TOUCH || W < 700;
   // ---- heading tape ----
-  const tw = Math.min(420, W - 40), tx = W / 2 - tw / 2, ty = 14;
+  const narrow = W < 560, tw = narrow ? W - 120 : Math.min(420, W - 40), tx = narrow ? 10 : W / 2 - tw / 2, ty = 14, hc = tx + tw / 2;
   panel(tx, ty, tw, 34);
   c.save(); c.beginPath(); c.rect(tx, ty, tw, 34); c.clip();
   c.strokeStyle = HUD_GREEN; c.fillStyle = HUD_GREEN; c.lineWidth = 1.5; c.font = `600 12px ${MONO}`; c.textAlign = 'center';
   const ppd = 5;
   for (let d = Math.floor(hdg - 45); d <= hdg + 45; d++) {
     if (d % 5) continue;
-    const x = W / 2 + (d - hdg) * ppd, dd = ((d % 360) + 360) % 360;
+    const x = hc + (d - hdg) * ppd, dd = ((d % 360) + 360) % 360;
     c.beginPath(); c.moveTo(x, ty + 34); c.lineTo(x, ty + (d % 10 ? 28 : 24)); c.stroke();
     if (d % 10 === 0) {
       const lbl = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[dd] ?? String(dd / 10).padStart(2, '0');
@@ -906,11 +1048,14 @@ function drawHUD(dt) {
     }
   }
   c.restore();
-  c.fillStyle = '#ffd23f'; c.beginPath(); c.moveTo(W / 2, ty + 34); c.lineTo(W / 2 - 6, ty + 42); c.lineTo(W / 2 + 6, ty + 42); c.fill();
-  c.font = `700 13px ${MONO}`; c.fillText(String(Math.round(hdg) % 360).padStart(3, '0') + '°', W / 2, ty + 58);
+  c.fillStyle = '#ffd23f'; c.beginPath(); c.moveTo(hc, ty + 34); c.lineTo(hc - 6, ty + 42); c.lineTo(hc + 6, ty + 42); c.fill();
+  c.font = `700 13px ${MONO}`; c.fillText(String(Math.round(hdg) % 360).padStart(3, '0') + '°', hc, ty + 58);
 
   // ---- left instrument panel ----
-  const px = 14, py = H - 168;
+  const k = compact ? Math.min(0.78, W / 480) : 1;
+  c.save();
+  if (compact) { c.translate(10, 92); c.scale(k, k); } else c.translate(14, H - 168);
+  const px = 0, py = 0;
   panel(px, py, 228, 154);
   c.textAlign = 'left'; c.fillStyle = 'rgba(255,255,255,0.6)'; c.font = `600 11px ${MONO}`;
   const rows = [['SPEED', Math.round(kts) + ' kt'], ['ALT', Math.round(altFt) + ' ft'], ['AGL', Math.max(0, Math.round(aglFt)) + ' ft'], ['V/S', (vs >= 0 ? '+' : '') + Math.round(vs / 10) * 10 + ' fpm'], ['G', S.g.toFixed(1)]];
@@ -926,9 +1071,11 @@ function drawHUD(dt) {
   c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = `600 10px ${MONO}`; c.textAlign = 'center';
   c.fillText('THR', bx + 9, by + bh + 14); c.fillText(Math.round(S.throttle * 100) + '%', bx + 9, by + bh + 26);
   if (S.brake) { c.fillStyle = '#f87171'; c.fillText('BRK', bx - 18, by + bh + 26); }
+  if (smokeOn) { c.fillStyle = '#e5e7eb'; c.fillText('SMK', bx - 18, by + bh + 12); }
+  c.restore();
 
   // ---- attitude indicator ----
-  const R = Math.min(78, W * 0.12), ax = W - R - 22, ay = H - R - 22;
+  const R = compact ? Math.min(52, W * 0.13) : Math.min(78, W * 0.12), ax = W - R - (compact ? 12 : 22), ay = compact ? 92 + R : H - R - 22;
   c.save();
   c.beginPath(); c.arc(ax, ay, R, 0, Math.PI * 2); c.clip();
   c.translate(ax, ay); c.rotate(-roll);
@@ -988,8 +1135,11 @@ function drawHUD(dt) {
     if (S.stall && blink) { c.font = `800 30px ${MONO}`; c.fillStyle = '#ff4d4d'; c.fillText('STALL', W / 2, H * 0.3); }
     else if (!S.onGround && aglFt < 400 && vs < -1500 && blink) { c.font = `800 28px ${MONO}`; c.fillStyle = '#ff9f1a'; c.fillText('PULL UP', W / 2, H * 0.3); }
     if (S.onGround && spd < 1 && S.throttle < 0.05) {
-      c.font = `600 15px ${MONO}`; c.fillStyle = 'rgba(255,255,255,0.9)';
-      c.fillText('Press W to throttle up · ↓ arrow to rotate at ~75 kt', W / 2, H * 0.22);
+      c.font = `600 ${compact ? 13 : 15}px ${MONO}`; c.fillStyle = 'rgba(255,255,255,0.92)';
+      c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 4;
+      if (IS_TOUCH) { c.fillText('Slide THR up, then pull the', W / 2, H * 0.36); c.fillText('stick down at ~70 kt to take off', W / 2, H * 0.36 + 18); }
+      else c.fillText('Press W to throttle up · hold ↓ to rotate at ~70 kt · T = air start', W / 2, H * 0.22);
+      c.shadowBlur = 0;
     }
   }
   if (toastT > 0) {
@@ -1025,7 +1175,7 @@ function updateCamera(dt) {
   camQ.slerp(S.q, 1 - Math.exp(-dt * 3.2));
   if (camMode === 0) {
     _camE.set(camPitchOff, camYawOff, 0);
-    _off.set(0, 3.6, 15.5).applyEuler(_camE).applyQuaternion(camQ);
+    _off.set(0, 3.6, camera.aspect < 1 ? 21 : 15.5).applyEuler(_camE).applyQuaternion(camQ);
     camera.position.copy(S.pos).add(_off);
     const g = Math.max(terrainHeight(camera.position.x, camera.position.z), 0) + 1.5;
     if (camera.position.y < g) camera.position.y = g;
@@ -1040,20 +1190,20 @@ function updateCamera(dt) {
     _q.setFromEuler(_camE.set(camPitchOff * 0.8, camYawOff, 0));
     camera.quaternion.multiply(_q);
   }
-  const targetFov = (camMode === 0 ? 60 : 72) + clamp(S.vel.length() - 40, 0, 70) * 0.15;
+  const targetFov = (camMode === 0 ? 60 : 72) + (camera.aspect < 1 ? 14 : 0) + clamp(S.vel.length() - 40, 0, 70) * 0.15;
   if (Math.abs(camera.fov - targetFov) > 0.05) { camera.fov += (targetFov - camera.fov) * (1 - Math.exp(-dt * 2)); camera.updateProjectionMatrix(); }
 }
 
 // =====================================================================
 //  Main loop
 // =====================================================================
-resetPlane();
+if (location.hash === '#air') airStart(); else resetPlane();
 updateChunks(S.pos.x, S.pos.z, 999, 1);
 
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min((now - last) / 1000, 0.05); last = now;
+  const dt = clamp((now - last) / 1000, 0, 0.05); last = now;
   if (!paused) {
     readInput(dt);
     const sub = 4;
@@ -1083,6 +1233,8 @@ function frame(now) {
   sky.position.copy(camera.position);
   sun.position.copy(S.pos).addScaledVector(SUN_DIR, 300);
   sun.target.position.copy(S.pos); sun.target.updateMatrixWorld();
+  updateTrails(dt);
+  waterUniforms.uTime.value = now / 1000;
   updateAudio();
 
   renderer.render(scene, camera);

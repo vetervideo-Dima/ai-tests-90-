@@ -780,6 +780,7 @@ function updateBodies(dtDays,frameDt){
 
 // ───────────────────────────── Camera: fly-to / follow ─────────────────────────────
 let flight=null, follow=null, prevFollowPos=new THREE.Vector3(), prevFollowR=1;
+const portraitK=()=>Math.max(1,0.75/camera.aspect);
 const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
 function bodyPos(b,out){ return b.pivot.getWorldPosition(out); }
 
@@ -790,14 +791,14 @@ function focusBody(b){
   const side=new THREE.Vector3().crossVectors(up,toSun).normalize();
   const dir=b.isSun?camera.position.clone().sub(controls.target).normalize().lerp(new THREE.Vector3(0,0.35,1).normalize(),0.5).normalize()
                    :toSun.multiplyScalar(0.55).add(side.multiplyScalar(0.8)).add(up.multiplyScalar(0.28)).normalize();
-  flight={t:0,dur:2.2,fromPos:camera.position.clone(),fromTarget:controls.target.clone(),body:b,dirEnd:dir,distR:b.view};
+  flight={t:0,dur:2.2,fromPos:camera.position.clone(),fromTarget:controls.target.clone(),body:b,dirEnd:dir,distR:b.view*Math.sqrt(portraitK())};
   follow=null; controls.enabled=false; controls.minDistance=1e-6;
   showCard(b);
   setActive(b);
 }
 function goOverview(){
   const dir=new THREE.Vector3(0,0.48,1).normalize();
-  flight={t:0,dur:2.0,fromPos:camera.position.clone(),fromTarget:controls.target.clone(),body:null,dirEnd:dir,distR:1.55};
+  flight={t:0,dur:2.0,fromPos:camera.position.clone(),fromTarget:controls.target.clone(),body:null,dirEnd:dir,distR:1.55*portraitK()};
   follow=null; controls.enabled=false; controls.minDistance=1e-6;
   hideCard(); setActive(null);
 }
@@ -966,6 +967,7 @@ const loadBar=$('loadBar'), loadMsg=$('loadMsg');
 await buildPlanets((p,msg)=>{ loadBar.style.width=(p*100)+'%'; loadMsg.textContent=msg; });
 buildChips();
 onResize();
+camera.position.multiplyScalar(portraitK());
 const loader=$('loader'); loader.style.opacity=0; setTimeout(()=>loader.remove(),900);
 setTimeout(()=>{$('hint').style.opacity=0;},9000);
 

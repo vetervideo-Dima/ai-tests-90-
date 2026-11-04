@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Curl Flow Field</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #04050a; overflow: hidden; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; cursor: crosshair; }
+  #hud {
+    position: fixed; left: 18px; bottom: 16px; color: rgba(220,230,255,.75);
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .04em;
+    pointer-events: none; transition: opacity 1.2s ease; text-shadow: 0 0 6px #000;
+  }
+  #hud b { color: #fff; font-weight: 600; }
+  #hud.hide { opacity: 0; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"><b>S</b> save PNG &nbsp;·&nbsp; <b>Space</b> new seed &nbsp;·&nbsp; <b>F</b> fullscreen &nbsp;·&nbsp; <span id="info"></span></div>
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Seeded RNG ----------
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---------- 3D Simplex noise (Gustavson), seedable ----------
+  const grad3 = new Float32Array([1,1,0, -1,1,0, 1,-1,0, -1,-1,0, 1,0,1, -1,0,1, 1,0,-1, -1,0,-1, 0,1,1, 0,-1,1, 0,1,-1, 0,-1,-1]);
+  const perm = new Uint8Array(512), permMod12 = new Uint8Array(512);
+  function seedNoise(rand) {
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) { const j = (rand() * (i + 1)) | 0; const t = p[i]; p[i] = p[j]; p[j] = t; }
+    for (let i = 0; i < 512; i++) { perm[i] = p[i & 255]; permMod12[i] = perm[i] % 12; }
+  }
+  const F3 = 1 / 3, G3 = 1 / 6;
+  function noise3(xin, yin, zin) {
+    let n0, n1, n2, n3;
+    const s = (xin + yin + zin) * F3;
+    const i = Math.floor(xin + s), j = Math.floor(yin + s), k = Math.floor(zin + s);
+    const t = (i + j + k) * G3;
+    const x0 = xin - (i - t), y0 = yin - (j - t), z0 = zin - (k - t);
+    let i1, j1, k1, i2, j2, k2;
+    if (x0 >= y0) {
+      if (y0 >= z0) { i1=1; j1=0; k1=0; i2=1; j2=1; k2=0; }
+      else if (x0 >= z0) { i1=1; j1=0; k1=0; i2=1; j2=0; k2=1; }
+      else { i1=0; j1=0; k1=1; i2=1; j2=0; k2=1; }
+    } else {
+      if (y0 < z0) { i1=0; j1=0; k1=1; i2=0; j2=1; k2=1; }
+      else if (x0 < z0) { i1=0; j1=1; k1=0; i2=0; j2=1; k2=1; }
+      else { i1=0; j1=1; k1=0; i2=1; j2=1; k2=0; }
+    }
+    const x1 = x0 - i1 + G3, y1 = y0 - j1 + G3, z1 = z0 - k1 + G3;
+    const x2 = x0 - i2 + 2 * G3, y2 = y0 - j2 + 2 * G3, z2 = z0 - k2 + 2 * G3;
+    const x3 = x0 - 1 + 3 * G3, y3 = y0 - 1 + 3 * G3, z3 = z0 - 1 + 3 * G3;
+    const ii = i & 255, jj = j & 255, kk = k & 255;
+    let t0 = 0.6 - x0*x0 - y0*y0 - z0*z0;
+    if (t0 < 0) n0 = 0; else { const g = permMod12[ii + perm[jj + perm[kk]]] * 3; t0 *= t0; n0 = t0 * t0 * (grad3[g]*x0 + grad3[g+1]*y0 + grad3[g+2]*z0); }
+    let t1 = 0.6 - x1*x1 - y1*y1 - z1*z1;
+    if (t1 < 0) n1 = 0; else { const g = permMod12[ii + i1 + perm[jj + j1 + perm[kk + k1]]] * 3; t1 *= t1; n1 = t1 * t1 * (grad3[g]*x1 + grad3[g+1]*y1 + grad3[g+2]*z1); }
+    let t2 = 0.6 - x2*x2 - y2*y2 - z2*z2;
+    if (t2 < 0) n2 = 0; else { const g = permMod12[ii + i2 + perm[jj + j2 + perm[kk + k2]]] * 3; t2 *= t2; n2 = t2 * t2 * (grad3[g]*x2 + grad3[g+1]*y2 + grad3[g+2]*z2); }
+    let t3 = 0.6 - x3*x3 - y3*y3 - z3*z3;
+    if (t3 < 0) n3 = 0; else { const g = permMod12[ii + 1 + perm[jj + 1 + perm[kk + 1]]] * 3; t3 *= t3; n3 = t3 * t3 * (grad3[g]*x3 + grad3[g+1]*y3 + grad3[g+2]*z3); }
+    return 32 * (n0 + n1 + n2 + n3);
+  }
+
+  // ---------- Setup ----------
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  const hud = document.getElementById('hud');
+  const info = document.getElementById('info');
+
+  const N = 20000;
+  const BUCKETS = 24;
+  const CELL = 12;              // flow grid spacing in CSS px
+  const FREQ = 0.0016;          // base noise frequency (per CSS px)
+  const PALETTE_PERIOD = 30;    // seconds per palette
+
+  let W = 0, H = 0, DPR = 1;
+  let cols = 0, rows = 0, pot = null, vxg = null, vyg = null;
+
+  const px = new Float32Array(N), py = new Float32Array(N);
+  const ox = new Float32Array(N), oy = new Float32Array(N);
+  const life = new Float32Array(N), spd = new Float32Array(N);
+  const bucket = new Uint8Array(N);
+
+  let seed = 0, rand = Math.random;
+  let offX = 0, offY = 0;
+
+  // ---------- Palettes (HSL-based generative) ----------
+  function makePalette(r) {
+    const base = r() * 360;
+    const scheme = (r() * 4) | 0;
+    const hues = [];
+    for (let i = 0; i < 5; i++) {
+      let h;
+      if (scheme === 0) h = base + i * 18;                       // analogous
+      else if (scheme === 1) h = base + (i % 2 ? 180 : 0) + i * 8; // complementary
+      else if (scheme === 2) h = base + i * 120 * 0.5;           // triad-ish
+      else h = base + Math.sin(i * 1.7) * 60;                    // wander
+      hues.push(h);
+    }
+    return hues.map((h, i) => hsl2rgb(((h % 360) + 360) % 360, 0.65 + r() * 0.3, 0.45 + 0.2 * (i / 4)));
+  }
+  function hsl2rgb(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s, hp = h / 60, x = c * (1 - Math.abs((hp % 2) - 1));
+    let r = 0, g = 0, b = 0;
+    if (hp < 1) { r = c; g = x; } else if (hp < 2) { r = x; g = c; } else if (hp < 3) { g = c; b = x; }
+    else if (hp < 4) { g = x; b = c; } else if (hp < 5) { r = x; b = c; } else { r = c; b = x; }
+    const m = l - c / 2;
+    return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+  }
+  let palA, palB, palStart = 0;
+  const bucketColors = new Array(BUCKETS);
+
+  function samplePalette(pal, t) {
+    const f = t * (pal.length - 1), i = Math.min(pal.length - 2, Math.floor(f)), u = f - i;
+    const a = pal[i], b = pal[i + 1];
+    return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
+  }
+  function smooth(x) { return x * x * (3 - 2 * x); }
+  function updatePalette(t) {
+    let k = (t - palStart) / PALETTE_PERIOD;
+    if (k >= 1) { palA = palB; palB = makePalette(rand); palStart = t; k = 0; }
+    const m = smooth(Math.min(1, k));
+    for (let b = 0; b < BUCKETS; b++) {
+      const u = b / (BUCKETS - 1);
+      const ca = samplePalette(palA, u), cb = samplePalette(palB, u);
+      const r = ca[0] + (cb[0] - ca[0]) * m, g = ca[1] + (cb[1] - ca[1]) * m, bl = ca[2] + (cb[2] - ca[2]) * m;
+      bucketColors[b] = `rgba(${r | 0},${g | 0},${bl | 0},0.22)`;
+    }
+  }
+
+  // ---------- Field ----------
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = '#04050a'; ctx.fillRect(0, 0, W, H);
+    cols = Math.ceil(W / CELL) + 3; rows = Math.ceil(H / CELL) + 3;
+    pot = new Float32Array(cols * rows);
+    vxg = new Float32Array(cols * rows);
+    vyg = new Float32Array(cols * rows);
+    for (let i = 0; i < N; i++) if (px[i] > W || py[i] > H) spawn(i);
+  }
+
+  function computeField(t) {
+    const z = t * 0.045;
+    const z2 = t * 0.07 + 100;
+    for (let j = 0; j < rows; j++) {
+      const y = (j - 1) * CELL;
+      for (let i = 0; i < cols; i++) {
+        const x = (i - 1) * CELL;
+        const nx = (x + offX) * FREQ, ny = (y + offY) * FREQ;
+        pot[j * cols + i] = noise3(nx, ny, z) + 0.45 * noise3(nx * 2.3 + 31.7, ny * 2.3 - 11.3, z2);
+      }
+    }
+    const inv = 1 / (2 * CELL * FREQ);
+    for (let j = 1; j < rows - 1; j++) {
+      for (let i = 1; i < cols - 1; i++) {
+        const k = j * cols + i;
+        vxg[k] = (pot[k + cols] - pot[k - cols]) * inv;   //  dψ/dy
+        vyg[k] = -(pot[k + 1] - pot[k - 1]) * inv;        // -dψ/dx
+      }
+    }
+  }
+
+  function spawn(i) {
+    px[i] = ox[i] = rand() * W;
+    py[i] = oy[i] = rand() * H;
+    life[i] = 60 + rand() * 360;
+    spd[i] = 0.6 + rand() * 0.9;
+  }
+
+  function newSeed(s) {
+    seed = s >>> 0;
+    rand = mulberry32(seed);
+    seedNoise(rand);
+    offX = rand() * 10000; offY = rand() * 10000;
+    palA = makePalette(rand); palB = makePalette(rand);
+    palStart = performance.now() / 1000;
+    for (let i = 0; i < N; i++) { spawn(i); bucket[i] = (rand() * BUCKETS) | 0; }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#04050a'; ctx.fillRect(0, 0, W, H);
+    info.textContent = 'seed ' + seed.toString(16).padStart(8, '0');
+  }
+
+  // ---------- Loop ----------
+  const paths = [];
+  for (let b = 0; b < BUCKETS; b++) paths.push(null);
+
+  let last = performance.now();
+  let fpsAcc = 0, fpsN = 0, fpsShown = 0;
+
+  function frame(now) {
+    const dtMs = Math.min(50, now - last); last = now;
+    const dt = dtMs / 16.667;
+    const t = now / 1000;
+
+    fpsAcc += dtMs; fpsN++;
+    if (fpsAcc > 500) { fpsShown = Math.round(1000 * fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; info.textContent = 'seed ' + seed.toString(16).padStart(8, '0') + ' · ' + fpsShown + ' fps'; }
+
+    updatePalette(t);
+    computeField(t);
+
+    // fade trails
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(4,5,10,0.055)';
+    ctx.fillRect(0, 0, W, H);
+
+    for (let b = 0; b < BUCKETS; b++) paths[b] = new Path2D();
+
+    const step = 1.6 * dt;
+    for (let i = 0; i < N; i++) {
+      let x = px[i], y = py[i];
+      // bilinear sample of velocity grid
+      const gx = x / CELL + 1, gy = y / CELL + 1;
+      let ix = gx | 0, iy = gy | 0;
+      if (ix < 1) ix = 1; else if (ix > cols - 3) ix = cols - 3;
+      if (iy < 1) iy = 1; else if (iy > rows - 3) iy = rows - 3;
+      const fx = gx - ix, fy = gy - iy;
+      const k = iy * cols + ix;
+      const a = (1 - fx) * (1 - fy), bb = fx * (1 - fy), c = (1 - fx) * fy, d = fx * fy;
+      const vx = vxg[k] * a + vxg[k + 1] * bb + vxg[k + cols] * c + vxg[k + cols + 1] * d;
+      const vy = vyg[k] * a + vyg[k + 1] * bb + vyg[k + cols] * c + vyg[k + cols + 1] * d;
+
+      const s = step * spd[i];
+      const nx = x + vx * s, ny = y + vy * s;
+      life[i] -= dt;
+
+      if (life[i] <= 0 || nx < -2 || ny < -2 || nx > W + 2 || ny > H + 2) {
+        spawn(i);
+        continue;
+      }
+      const p = paths[bucket[i]];
+      p.moveTo(x, y); p.lineTo(nx, ny);
+      px[i] = nx; py[i] = ny;
+    }
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'round';
+    for (let b = 0; b < BUCKETS; b++) {
+      ctx.strokeStyle = bucketColors[b];
+      ctx.stroke(paths[b]);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Input ----------
+  function savePNG() {
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'flowfield-' + seed.toString(16).padStart(8, '0') + '-' + Date.now() + '.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }, 'image/png');
+  }
+  function toggleFS() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+    else document.exitFullscreen?.();
+  }
+  let hudTimer = 0;
+  function pokeHud() { hud.classList.remove('hide'); clearTimeout(hudTimer); hudTimer = setTimeout(() => hud.classList.add('hide'), 4000); }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyS') { e.preventDefault(); savePNG(); }
+    else if (e.code === 'Space') { e.preventDefault(); newSeed((Math.random() * 4294967296) >>> 0); }
+    else if (e.code === 'KeyF') toggleFS();
+    pokeHud();
+  });
+  canvas.addEventListener('dblclick', toggleFS);
+  window.addEventListener('mousemove', pokeHud, { passive: true });
+
+  let rzTimer = 0;
+  window.addEventListener('resize', () => { clearTimeout(rzTimer); rzTimer = setTimeout(resize, 120); });
+
+  resize();
+  newSeed((Math.random() * 4294967296) >>> 0);
+  pokeHud();
+  requestAnimationFrame((t) => { last = t; frame(t); });
+})();
+</script>
+</body>
+</html>

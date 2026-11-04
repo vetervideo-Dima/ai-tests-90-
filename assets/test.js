@@ -84,7 +84,7 @@ function renderStage() {
   } else if (['py', 'pov', 'tsx', 'ts', 'js', 'json'].includes(ext)) {
     stage.innerHTML = '<div class="mdview"><div class="md"><pre><code>…</code></pre></div></div>';
     fetch(entry).then((r) => r.text()).then((txt) => { stage.querySelector('code').textContent = txt; });
-  } else stage.innerHTML = `<iframe src="${entry}" allow="autoplay; microphone; fullscreen; clipboard-write" allowfullscreen></iframe>`;
+  } else stage.innerHTML = `<iframe src="${entry}" allow="autoplay; microphone; fullscreen; clipboard-write"></iframe>`;
 }
 
 function renderTab() {

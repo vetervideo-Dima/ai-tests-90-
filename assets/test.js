@@ -12,6 +12,7 @@ let tab = 'prompt';
 
 const kv = [
   ['статус', `<span class="badge s-${t.status}" style="position:static;display:inline-flex;background:none;padding:0">${STATUS[t.status]}</span>`],
+  t.v1_worked != null ? ['v1 one-shot', t.v1_worked ? '<span style="color:var(--ok)">работал сразу</span>' : '<span style="color:var(--broken)">был сломан</span>'] : null,
   ['формат', esc(t.fmt)],
   ['волна', t.wave ? `${t.wave} · ${esc(t.wave_name)}` : '—'],
   t.model ? ['модель', esc(t.model)] : null,

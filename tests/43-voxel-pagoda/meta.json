@@ -25,5 +25,6 @@
     "est_usd": 1.91,
     "note": "оценка: API-эквивалент по модели tools/cost.py, не реальное списание",
     "processed_tokens": 3009194
-  }
+  },
+  "v1_worked": true
 }

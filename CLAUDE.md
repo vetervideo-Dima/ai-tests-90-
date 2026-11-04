@@ -52,6 +52,7 @@ tests/NN-slug/
   "effort": "high",
   "date": "YYYY-MM-DD",
   "worked": true,
+  "v1_worked": true,
   "kind": "html | svg | video | text | python",
   "entry": { "v1": "v1/index.html", "v2": "v2/index.html" },
   "notes": "коротко: что работает, что нет",
@@ -59,7 +60,7 @@ tests/NN-slug/
   "v2_changes": "что сделано в v2"
 }
 ```
-`model` оставь `null` — модель указывается централизованно в `site.config.json`. Поле `usage` (токены, время, оценка
+`worked` — работает ли итоговый v2, `v1_worked` — работал ли v1 как есть. `model` оставь `null` — модель указывается централизованно в `site.config.json`. Поле `usage` (токены, время, оценка
 стоимости) дописывает координатор — не трогай.
 `entry` — путь относительно папки теста к тому, что открывать в просмотрщике (html, svg, mp4 или md).
 

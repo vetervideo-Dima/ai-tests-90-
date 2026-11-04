@@ -17,6 +17,7 @@ app.innerHTML = `
   <div class="stats">
     <span class="stat">прогнано <b>${s.done}</b> / ${s.total}</span>
     <span class="stat">работает <b>${s.ok}</b></span>
+    <span class="stat">one-shot с первого раза <b>${s.v1_ok}</b> / ${s.done}</span>
     <span class="stat">токены <b>${s.tokens ? fmtTok(s.tokens) : '—'}</b></span>
     <span class="stat">≈ <b>$${s.usd.toFixed(2)}</b></span>
     <span class="stat">время <b>${Math.round(s.minutes)} мин</b></span>
@@ -47,7 +48,7 @@ function card(t) {
   return `<a class="card" href="tests/${t.slug}/">
     <div class="thumb">${thumb}<span class="badge ${st}">${STATUS[t.status]}</span><span class="num">#${String(t.n).padStart(2, '0')}</span></div>
     <div class="body"><h3>${esc(t.title)}</h3><div class="g">${esc(t.genre)} · ${esc(t.fmt)}</div>
-    <div class="meta-row">${t.usd != null ? `<span>≈ <b>$${t.usd.toFixed(2)}</b></span>` : ''}${t.tokens ? `<span><b>${fmtTok(t.tokens)}</b> ток.</span>` : ''}${t.minutes ? `<span><b>${Math.round(t.minutes)}</b> мин</span>` : ''}${!t.tokens ? '<span>волна ' + (t.wave ?? '—') + '</span>' : ''}</div></div></a>`;
+    <div class="meta-row">${t.usd != null ? `<span>≈ <b>$${t.usd.toFixed(2)}</b></span>` : ''}${t.tokens ? `<span><b>${fmtTok(t.tokens)}</b> ток.</span>` : ''}${t.minutes ? `<span><b>${Math.round(t.minutes)}</b> мин</span>` : ''}${!t.tokens ? '<span>волна ' + (t.wave ?? '—') + '</span>' : ''}${t.v1_worked === true ? '<span title="v1 one-shot работал сразу">v1 <b style="color:var(--ok)">✓</b></span>' : t.v1_worked === false ? '<span title="v1 one-shot был сломан, исправлен в v2">v1 <b style="color:var(--broken)">✗</b></span>' : ''}</div></div></a>`;
 }
 
 function render() {

@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sorting Sound — 8 algorithms racing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0c11;--panel:#11141c;--panel2:#151926;--line:#222838;--fg:#e8ebf4;--dim:#8a91a7;
+  --acc:#7cf3c9;--cmp:#ffd166;--swp:#ff5d8f;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans)}
+body{display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px 16px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#141826,#0d1017)}
+h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+h1 span{color:var(--acc)}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;flex:1}
+button,select{font:600 12px var(--sans);color:var(--fg);background:#1a1f2e;border:1px solid #2b3247;border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover,select:hover{background:#222a3d}
+button.primary{background:var(--acc);color:#05281c;border-color:transparent;min-width:84px}
+label.ctl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim)}
+label.ctl output{font-family:var(--mono);color:var(--fg);min-width:58px;font-size:11px}
+input[type=range]{accent-color:var(--acc);width:120px}
+.tick{font:11px var(--mono);color:var(--dim)}
+main{flex:1;display:grid;grid-template-columns:1fr 340px;gap:12px;padding:12px;min-height:0;position:relative}
+#grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;min-height:0}
+.card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;
+  overflow:hidden;cursor:pointer;min-height:150px;transition:border-color .2s,box-shadow .2s}
+.card:hover{border-color:#34405a}
+.card.focus{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset,0 0 26px rgba(124,243,201,.13)}
+.card .hd{display:flex;align-items:center;gap:8px;padding:8px 10px 2px}
+.card .name{font-weight:800;font-size:13px;flex:1}
+.card .rank{font:600 10.5px var(--mono);padding:2px 8px;border-radius:99px;background:#1d2232;color:var(--dim)}
+.card.done .rank{background:var(--acc);color:#05281c}
+.card .mute{background:none;border:none;padding:2px 4px;font-size:13px;color:var(--dim);cursor:pointer;line-height:1}
+.card .mute.off{opacity:.35}
+.card .stats{display:flex;gap:12px;padding:0 10px;font:10.5px var(--mono);color:var(--dim)}
+.card .stats b{color:var(--fg);font-weight:600}
+.card .stats .c b{color:var(--cmp)}
+.card .stats .s b{color:var(--swp)}
+.card canvas{flex:1;width:100%;min-height:0;display:block}
+.card .ln{font:10.5px var(--mono);color:#a9b0c6;padding:3px 10px 8px;white-space:pre;overflow:hidden;text-overflow:ellipsis;border-top:1px solid #1a1f2c}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+aside .tabs{display:flex;flex-wrap:wrap;gap:4px;padding:10px}
+aside .tabs button{padding:4px 8px;font-size:11px;border-radius:6px}
+aside .tabs button.on{background:var(--acc);color:#05281c;border-color:transparent}
+aside h2{margin:2px 14px 4px;font-size:15px}
+aside .meta{margin:0 14px 8px;font:11px var(--mono);color:var(--dim);display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+aside .meta span:nth-child(odd){color:#6c7389}
+#code{margin:4px 8px;padding:6px 0;background:#0c0f16;border:1px solid #1c2130;border-radius:8px;font:12px/1.55 var(--mono);overflow:auto}
+.cl{display:grid;grid-template-columns:26px 1fr auto;gap:6px;padding:1px 8px;position:relative;white-space:pre;
+  background:rgba(124,243,201,calc(var(--h,0)*.16))}
+.cl .n{color:#495069;text-align:right}
+.cl .x{color:#cfd5e6;overflow:hidden;text-overflow:ellipsis}
+.cl .k{color:#5c647d;font-size:10px;align-self:center}
+.cl.cur{background:rgba(124,243,201,.22);box-shadow:inset 3px 0 0 var(--acc)}
+.cl.cur .x{color:#fff}
+#results{margin:8px 14px 12px;font:11.5px var(--mono);color:var(--dim)}
+#results h3{font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.12em;color:#6c7389;margin:6px 0}
+#results ol{margin:0;padding-left:20px}
+#results li{padding:1px 0}
+#results li b{color:var(--fg)}
+.legend{display:flex;gap:12px;margin:2px 14px 6px;font:10.5px var(--mono);color:var(--dim)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+#overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(6,8,12,.55);backdrop-filter:blur(3px);z-index:5;cursor:pointer}
+#overlay .box{text-align:center;padding:28px 34px;border-radius:16px;background:rgba(17,20,28,.92);border:1px solid #2b3247;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+#overlay .play{width:74px;height:74px;border-radius:50%;background:var(--acc);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:30px;color:#05281c;box-shadow:0 0 40px rgba(124,243,201,.35)}
+#overlay p{margin:4px 0;color:var(--dim);font-size:13px}
+#overlay p b{color:var(--fg);font-size:17px}
+@media (max-width:1000px){
+  body{overflow:auto}
+  main{grid-template-columns:1fr}
+  #grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:170px}
+  aside{min-height:420px}
+  input[type=range]{width:90px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sorting <span>Sound</span></h1>
+  <div class="controls">
+    <button id="play" class="primary">▶ Start</button>
+    <button id="stepBtn" title="Advance one operation">Step</button>
+    <button id="shuffle" title="New array (R)">⟳ Shuffle</button>
+    <label class="ctl">Size <input id="size" type="range" min="16" max="256" step="8" value="64"><output id="sizeO">64</output></label>
+    <label class="ctl">Speed <input id="speed" type="range" min="0" max="100" value="42"><output id="speedO"></output></label>
+    <label class="ctl">Data
+      <select id="dist">
+        <option value="random">Random</option>
+        <option value="reversed">Reversed</option>
+        <option value="nearly">Nearly sorted</option>
+        <option value="few">Few unique</option>
+      </select></label>
+    <label class="ctl">Scale
+      <select id="scale">
+        <option value="penta">Pentatonic</option>
+        <option value="glide">Continuous</option>
+      </select></label>
+    <button id="snd" title="Sound on/off">🔊 Sound</button>
+    <label class="ctl">Vol <input id="vol" type="range" min="0" max="100" value="55"></label>
+    <span class="tick" id="tick">ops 0</span>
+  </div>
+</header>
+<main>
+  <div id="grid"></div>
+  <aside>
+    <div class="tabs" id="tabs"></div>
+    <h2 id="cname"></h2>
+    <div class="meta" id="cmeta"></div>
+    <div class="legend"><span><i style="background:var(--cmp)"></i>compare</span><span><i style="background:var(--swp)"></i>swap / write</span><span><i style="background:var(--acc)"></i>sorted</span></div>
+    <div id="code"></div>
+    <div id="results"><h3>Finish order</h3><ol id="rlist"></ol></div>
+  </aside>
+  <div id="overlay"><div class="box"><div class="play">▶</div><p><b>Start the race</b></p><p>8 algorithms · same array · every comparison sings</p><p style="font-size:11px">Space = play/pause · R = shuffle · click a panel to read its code</p></div></div>
+</main>
+<script>
+(() => {
+'use strict';
+// ---------- event constructors (yielded by algorithm generators) ----------
+// t: 0 compare/read, 1 swap, 2 write, 3 line marker (free)
+const C = (i, j, l, v) => ({ t: 0, i, j, l, v });
+const S = (i, j, l) => ({ t: 1, i, j, l });
+const W = (i, v, l) => ({ t: 2, i, v, l });
+const L = (l) => ({ t: 3, l });
+
+const ALGOS = [
+{ key:'bubble', name:'Bubble', cl:'cmp', wl:'swaps', cx:['n','n²','n²','1'], stable:'yes',
+  code:['for i ← 0 to n−2','  swapped ← false','  for j ← 0 to n−2−i','    if A[j] > A[j+1]','      swap(A[j], A[j+1]); swapped ← true','  if not swapped: break'],
+  *fn(s){ const a=s.a,n=a.length;
+    for(let i=0;i<n-1;i++){ yield L(0); let sw=false; yield L(1);
+      for(let j=0;j<n-1-i;j++){ yield C(j,j+1,3); if(a[j]>a[j+1]){ yield S(j,j+1,4); sw=true; } }
+      if(!sw){ yield L(5); break; } } } },
+{ key:'insertion', name:'Insertion', cl:'cmp', wl:'swaps', cx:['n','n²','n²','1'], stable:'yes',
+  code:['for i ← 1 to n−1','  j ← i','  while j > 0 and A[j−1] > A[j]','    swap(A[j−1], A[j])','    j ← j − 1'],
+  *fn(s){ const a=s.a,n=a.length;
+    for(let i=1;i<n;i++){ yield L(0); let j=i; yield L(1);
+      while(j>0){ yield C(j-1,j,2); if(a[j-1]>a[j]){ yield S(j-1,j,3); j--; yield L(4); } else break; } } } },
+{ key:'selection', name:'Selection', cl:'cmp', wl:'swaps', cx:['n²','n²','n²','1'], stable:'no',
+  code:['for i ← 0 to n−2','  min ← i','  for j ← i+1 to n−1','    if A[j] < A[min]','      min ← j','  swap(A[i], A[min])'],
+  *fn(s){ const a=s.a,n=a.length;
+    for(let i=0;i<n-1;i++){ yield L(0); let m=i; yield L(1);
+      for(let j=i+1;j<n;j++){ yield C(j,m,3); if(a[j]<a[m]){ m=j; yield L(4); } }
+      if(m!==i) yield S(i,m,5); } } },
+{ key:'merge', name:'Merge', cl:'cmp', wl:'writes', cx:['n log n','n log n','n log n','n'], stable:'yes',
+  code:['mergeSort(lo, hi):','  if lo ≥ hi: return','  mid ← ⌊(lo+hi)/2⌋; sort(lo,mid); sort(mid+1,hi)','  B[lo..hi] ← A[lo..hi]; i ← lo; j ← mid+1','  while i ≤ mid and j ≤ hi: B[i] ≤ B[j] ?','    then A[k++] ← B[i++]','    else A[k++] ← B[j++]','  copy leftovers into A[k..hi]'],
+  *fn(s){ const a=s.a,n=a.length,b=new Array(n);
+    function* ms(lo,hi){ yield L(0); if(lo>=hi){ yield L(1); return; }
+      const mid=(lo+hi)>>1; yield L(2); yield* ms(lo,mid); yield* ms(mid+1,hi);
+      for(let k=lo;k<=hi;k++) b[k]=a[k]; yield L(3);
+      let i=lo,j=mid+1,k=lo;
+      while(i<=mid&&j<=hi){ yield C(i,j,4,b[i]);
+        if(b[i]<=b[j]){ yield W(k,b[i],5); k++; i++; } else { yield W(k,b[j],6); k++; j++; } }
+      while(i<=mid){ yield W(k,b[i],7); k++; i++; }
+      while(j<=hi){ yield W(k,b[j],7); k++; j++; } }
+    yield* ms(0,n-1); } },
+{ key:'quick', name:'Quick', cl:'cmp', wl:'swaps', cx:['n log n','n log n','n²','log n'], stable:'no',
+  code:['quickSort(lo, hi):','  if lo ≥ hi: return','  swap(A[mid], A[hi]); p ← A[hi]; i ← lo','  for j ← lo to hi−1','    if A[j] < p','      swap(A[i], A[j]); i ← i+1','  swap(A[i], A[hi])','  quickSort(lo, i−1); quickSort(i+1, hi)'],
+  *fn(s){ const a=s.a;
+    function* qs(lo,hi){ yield L(0); if(lo>=hi){ yield L(1); return; }
+      const mid=(lo+hi)>>1; yield S(mid,hi,2); const p=a[hi]; let i=lo; yield L(3);
+      for(let j=lo;j<hi;j++){ yield C(j,hi,4); if(a[j]<p){ if(i!==j) yield S(i,j,5); i++; } }
+      if(i!==hi) yield S(i,hi,6);
+      yield L(7); yield* qs(lo,i-1); yield* qs(i+1,hi); }
+    yield* qs(0,a.length-1); } },
+{ key:'heap', name:'Heap', cl:'cmp', wl:'swaps', cx:['n log n','n log n','n log n','1'], stable:'no',
+  code:['for i ← ⌊n/2⌋−1 down to 0: siftDown(i, n)','for end ← n−1 down to 1','  swap(A[0], A[end])','  siftDown(0, end)','siftDown(i, m): while 2i+1 < m','  c ← larger child of i','  if A[i] ≥ A[c]: return','  swap(A[i], A[c]); i ← c'],
+  *fn(s){ const a=s.a,n=a.length;
+    function* sift(i,m){ while(2*i+1<m){ yield L(4); let c=2*i+1;
+        if(c+1<m){ yield C(c,c+1,5); if(a[c+1]>a[c]) c++; }
+        yield C(i,c,6); if(a[i]>=a[c]) return;
+        yield S(i,c,7); i=c; } }
+    for(let i=(n>>1)-1;i>=0;i--){ yield L(0); yield* sift(i,n); }
+    for(let e=n-1;e>0;e--){ yield L(1); yield S(0,e,2); yield L(3); yield* sift(0,e); } } },
+{ key:'radix', name:'Radix (LSD)', cl:'reads', wl:'writes', cx:['d(n+b)','d(n+b)','d(n+b)','n+b'], stable:'yes',
+  code:['m ← max(A)','for exp ← 1 while m / exp ≥ 1, exp ← exp·10','  count[0..9] ← 0','  for i ← 0..n−1: count[digit(A[i])]++','  count[d] += count[d−1]  (prefix sums)','  for i ← n−1 down to 0: B[−−count[digit(A[i])]] ← A[i]','  for i ← 0..n−1: A[i] ← B[i]'],
+  *fn(s){ const a=s.a,n=a.length,b=new Array(n); let m=0;
+    for(let i=0;i<n;i++){ yield C(i,-1,0); if(a[i]>m) m=a[i]; }
+    for(let exp=1; Math.floor(m/exp)>0; exp*=10){ yield L(1);
+      const cnt=new Array(10).fill(0); yield L(2);
+      for(let i=0;i<n;i++){ yield C(i,-1,3); cnt[Math.floor(a[i]/exp)%10]++; }
+      for(let d=1;d<10;d++) cnt[d]+=cnt[d-1]; yield L(4);
+      for(let i=n-1;i>=0;i--){ yield C(i,-1,5); const d=Math.floor(a[i]/exp)%10; b[--cnt[d]]=a[i]; }
+      for(let i=0;i<n;i++){ yield W(i,b[i],6); } } } },
+{ key:'shell', name:'Shell (Ciura)', cl:'cmp', wl:'swaps', cx:['n log n','≈n^1.25','≈n^1.5','1'], stable:'no',
+  code:['for gap in [701,301,132,57,23,10,4,1] (gap < n)','  for i ← gap to n−1','    j ← i','    while j ≥ gap and A[j−gap] > A[j]','      swap(A[j−gap], A[j])','      j ← j − gap'],
+  *fn(s){ const a=s.a,n=a.length;
+    for(const g of [701,301,132,57,23,10,4,1]){ if(g>=n) continue; yield L(0);
+      for(let i=g;i<n;i++){ yield L(1); let j=i; yield L(2);
+        while(j>=g){ yield C(j-g,j,3); if(a[j-g]>a[j]){ yield S(j-g,j,4); j-=g; yield L(5); } else break; } } } } },
+];
+
+// ---------- DOM ----------
+const $ = (q) => document.querySelector(q);
+const grid = $('#grid'), tabs = $('#tabs'), codeEl = $('#code');
+const ui = { play:$('#play'), step:$('#stepBtn'), shuffle:$('#shuffle'), size:$('#size'), sizeO:$('#sizeO'),
+  speed:$('#speed'), speedO:$('#speedO'), dist:$('#dist'), scale:$('#scale'), snd:$('#snd'), vol:$('#vol'),
+  tick:$('#tick'), overlay:$('#overlay'), rlist:$('#rlist'), cname:$('#cname'), cmeta:$('#cmeta') };
+
+let focus = 0;
+const cards = ALGOS.map((A, idx) => {
+  const el = document.createElement('div'); el.className = 'card';
+  el.innerHTML = `<div class="hd"><div class="name">${A.name}</div><button class="mute" title="Mute this algorithm">♪</button><div class="rank">ready</div></div>
+  <div class="stats"><span class="c">${A.cl} <b>0</b></span><span class="s">${A.wl} <b>0</b></span></div>
+  <canvas></canvas><div class="ln">&nbsp;</div>`;
+  grid.appendChild(el);
+  const cv = el.querySelector('canvas');
+  const card = { el, cv, g: cv.getContext('2d'), rank: el.querySelector('.rank'), cmp: el.querySelectorAll('.stats b')[0],
+    swp: el.querySelectorAll('.stats b')[1], ln: el.querySelector('.ln'), mute: el.querySelector('.mute'), w: 0, h: 0, muted: false,
+    last: { c: -1, s: -1, r: '', l: -2 } };
+  el.addEventListener('click', () => setFocus(idx));
+  card.mute.addEventListener('click', (e) => { e.stopPropagation(); card.muted = !card.muted; card.mute.classList.toggle('off', card.muted); });
+  const ro = new ResizeObserver(() => sizeCanvas(card)); ro.observe(cv);
+  const tb = document.createElement('button'); tb.textContent = A.name.split(' ')[0]; tb.addEventListener('click', () => setFocus(idx));
+  tabs.appendChild(tb); card.tab = tb;
+  return card;
+});
+function sizeCanvas(c) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = c.cv.getBoundingClientRect();
+  c.w = Math.max(1, Math.round(r.width * dpr)); c.h = Math.max(1, Math.round(r.height * dpr));
+  if (c.cv.width !== c.w || c.cv.height !== c.h) { c.cv.width = c.w; c.cv.height = c.h; }
+}
+let codeLines = [];
+function setFocus(i) {
+  focus = i;
+  cards.forEach((c, k) => { c.el.classList.toggle('focus', k === i); c.tab.classList.toggle('on', k === i); });
+  const A = ALGOS[i];
+  ui.cname.textContent = A.name + ' sort';
+  ui.cmeta.innerHTML = `<span>best</span><span>O(${A.cx[0]})</span><span>average</span><span>O(${A.cx[1]})</span><span>worst</span><span>O(${A.cx[2]})</span><span>space</span><span>O(${A.cx[3]}) · stable: ${A.stable}</span>`;
+  codeEl.innerHTML = '';
+  codeLines = A.code.map((t, k) => {
+    const d = document.createElement('div'); d.className = 'cl';
+    d.innerHTML = `<span class="n">${k + 1}</span><span class="x"></span><span class="k"></span>`;
+    d.querySelector('.x').textContent = t; codeEl.appendChild(d);
+    return { d, k: d.querySelector('.k'), lastH: -1, lastK: -1 };
+  });
+}
+
+// ---------- state ----------
+let N = 64, runs = [], running = false, started = false, acc = 0, finishCount = 0, totalOps = 0, palette = [];
+function makeArray(n, kind) {
+  let a = Array.from({ length: n }, (_, i) => i + 1);
+  const shuffle = () => { for (let i = n - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } };
+  if (kind === 'random') shuffle();
+  else if (kind === 'reversed') a.reverse();
+  else if (kind === 'nearly') { for (let k = 0; k < Math.max(2, n * 0.06); k++) { const i = (Math.random() * n) | 0, j = Math.min(n - 1, Math.max(0, i + ((Math.random() * 7) | 0) - 3)); [a[i], a[j]] = [a[j], a[i]]; } }
+  else if (kind === 'few') { a = a.map((v) => Math.ceil(Math.ceil(v / n * 5) * n / 5)); shuffle(); }
+  return a;
+}
+function buildPalette() {
+  palette = [];
+  for (let v = 0; v <= N; v++) { const t = v / N; palette.push(`hsl(${(250 - t * 190).toFixed(1)} ${(70 + t * 15).toFixed(0)}% ${(46 + t * 14).toFixed(0)}%)`); }
+}
+function reset() {
+  N = +ui.size.value; ui.sizeO.textContent = N;
+  const base = makeArray(N, ui.dist.value);
+  buildPalette();
+  finishCount = 0; totalOps = 0; acc = 0; ui.rlist.innerHTML = '';
+  runs = ALGOS.map((A) => {
+    const s = { A, a: base.slice(), cmp: 0, swp: 0, ops: 0, done: false, rank: 0, doneT: 0,
+      hc: new Float32Array(N), hs: new Float32Array(N), line: -1, lh: new Float32Array(A.code.length), hits: new Uint32Array(A.code.length),
+      toneV: 0, toneDirty: false };
+    s.gen = A.fn(s);
+    return s;
+  });
+  cards.forEach((c) => { c.el.classList.remove('done'); c.last = { c: -1, s: -1, r: '', l: -2 }; });
+  if (started) { running = true; ui.play.textContent = '❚❚ Pause'; }
+}
+
+// ---------- stepping ----------
+function stepRun(s, budget, now) {
+  const a = s.a;
+  while (budget > 0 && !s.done) {
+    const r = s.gen.next();
+    if (r.done) { finish(s, now); break; }
+    const e = r.value;
+    s.line = e.l; s.lh[e.l] = 1; s.hits[e.l]++;
+    switch (e.t) {
+      case 0: s.cmp++; s.hc[e.i] = 1; if (e.j >= 0) s.hc[e.j] = 1; s.toneV = e.v !== undefined ? e.v : a[e.i]; s.toneDirty = true; budget--; s.ops++; break;
+      case 1: { const t = a[e.i]; a[e.i] = a[e.j]; a[e.j] = t; s.swp++; s.hs[e.i] = 1; s.hs[e.j] = 1; budget--; s.ops++; break; }
+      case 2: a[e.i] = e.v; s.swp++; s.hs[e.i] = 1; budget--; s.ops++; break;
+    }
+  }
+}
+function finish(s, now) {
+  s.done = true; s.rank = ++finishCount; s.doneT = now; s.line = -1;
+  const li = document.createElement('li');
+  li.innerHTML = `<b>${s.A.name}</b> — ${s.ops.toLocaleString()} ops (${s.cmp.toLocaleString()} ${s.A.cl}, ${s.swp.toLocaleString()} ${s.A.wl})`;
+  ui.rlist.appendChild(li);
+  chime(s.rank, ALGOS.indexOf(s.A));
+  if (finishCount === ALGOS.length) { running = false; ui.play.textContent = '⟳ Again'; }
+}
+
+// ---------- audio ----------
+let actx = null, master = null, pans = [], soundOn = true, voices = 0;
+function initAudio() {
+  if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  actx = new AC();
+  const comp = actx.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 6; comp.connect(actx.destination);
+  master = actx.createGain(); master.gain.value = +ui.vol.value / 100; master.connect(comp);
+  pans = ALGOS.map((_, i) => { const p = actx.createStereoPanner ? actx.createStereoPanner() : actx.createGain();
+    if (p.pan) p.pan.value = -0.8 + 1.6 * ((i % 4) / 3); p.connect(master); return p; });
+}
+const PENTA = [0, 2, 4, 7, 9];
+function freqFor(v) {
+  const t = Math.max(0, Math.min(1, (v - 1) / Math.max(1, N - 1)));
+  if (ui.scale.value === 'glide') return 130.81 * Math.pow(2, t * 4);
+  const idx = Math.round(t * 20); const semi = 12 * Math.floor(idx / 5) + PENTA[idx % 5];
+  return 130.81 * Math.pow(2, semi / 12);
+}
+function tone(f, which, dur, gain, type) {
+  if (!actx || !soundOn || voices > 40) return;
+  const t = actx.currentTime;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(pans[which]); o.start(t); o.stop(t + dur + 0.02);
+  voices++; o.onended = () => { voices--; o.disconnect(); g.disconnect(); };
+}
+function chime(rank, which) {
+  if (!actx || cards[which].muted) return;
+  const base = 523.25 * Math.pow(2, -(rank - 1) / 12);
+  tone(base, which, 0.5, 0.12, 'sine');
+  setTimeout(() => tone(base * 1.5, which, 0.6, 0.1, 'sine'), 90);
+}
+
+// ---------- rendering ----------
+const COL_CMP = '#ffd166', COL_SWP = '#ff5d8f', COL_DONE = '#7cf3c9';
+function draw(s, c, now) {
+  const g = c.g, W = c.w, H = c.h; if (!W || !H) return;
+  g.clearRect(0, 0, W, H);
+  const n = s.a.length, bw = W / n, gap = bw > 4 ? Math.max(1, Math.floor(bw * 0.18)) : 0, top = 6 * (W / Math.max(1, c.cv.clientWidth)), hh = H - top;
+  const sweep = s.done ? Math.min(n, ((now - s.doneT) / 600) * n) : -1;
+  for (let i = 0; i < n; i++) {
+    const v = s.a[i], h = Math.max(1, (v / N) * hh), x0 = Math.round(i * bw), x1 = Math.round((i + 1) * bw) - gap, y = H - h, w = Math.max(1, x1 - x0);
+    g.globalAlpha = 1;
+    g.fillStyle = (s.done && i < sweep) ? COL_DONE : palette[v];
+    g.fillRect(x0, y, w, h);
+    const hs = s.hs[i], hc = s.hc[i];
+    if (hs > 0.03) { g.globalAlpha = hs; g.fillStyle = COL_SWP; g.fillRect(x0, y, w, h); }
+    else if (hc > 0.03) { g.globalAlpha = hc; g.fillStyle = COL_CMP; g.fillRect(x0, y, w, h); }
+  }
+  g.globalAlpha = 1;
+}
+
+function updateCard(s, c) {
+  if (c.last.c !== s.cmp) { c.cmp.textContent = s.cmp.toLocaleString(); c.last.c = s.cmp; }
+  if (c.last.s !== s.swp) { c.swp.textContent = s.swp.toLocaleString(); c.last.s = s.swp; }
+  const r = s.done ? `#${s.rank} ✓` : (s.ops ? 'running' : 'ready');
+  if (c.last.r !== r) { c.rank.textContent = r; c.last.r = r; c.el.classList.toggle('done', s.done); }
+  if (c.last.l !== s.line) { c.ln.textContent = s.line >= 0 ? '▸ ' + s.A.code[s.line].trim() : (s.done ? 'sorted ✓' : ' '); c.last.l = s.line; }
+}
+function updateCode(s) {
+  for (let k = 0; k < codeLines.length; k++) {
+    const L = codeLines[k], h = Math.round(s.lh[k] * 20) / 20;
+    if (L.lastH !== h) { L.d.style.setProperty('--h', h); L.lastH = h; }
+    const cur = k === s.line;
+    if (L.cur !== cur) { L.d.classList.toggle('cur', cur); L.cur = cur; }
+    if (L.lastK !== s.hits[k]) { L.k.textContent = s.hits[k] ? '×' + compact(s.hits[k]) : ''; L.lastK = s.hits[k]; }
+  }
+}
+const compact = (x) => x < 1000 ? '' + x : x < 1e6 ? (x / 1000).toFixed(x < 1e4 ? 1 : 0) + 'k' : (x / 1e6).toFixed(1) + 'M';
+
+// ---------- speed ----------
+const speedVal = () => 0.05 * Math.pow(10, (+ui.speed.value / 100) * 4.6);
+function showSpeed() { const v = speedVal(); ui.speedO.textContent = (v < 1 ? v.toFixed(2) : v < 10 ? v.toFixed(1) : Math.round(v)) + ' op/f'; }
+
+// ---------- loop ----------
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  if (running) {
+    acc += speedVal() * dt * 60;
+    const steps = Math.floor(acc); acc -= steps;
+    if (steps > 0) { for (const s of runs) stepRun(s, steps, now); totalOps += steps; }
+  }
+  const decay = Math.pow(0.0015, dt), ldecay = Math.pow(0.02, dt);
+  const live = runs.filter((s, i) => s.toneDirty && !cards[i].muted).length || 1;
+  runs.forEach((s, i) => {
+    if (s.toneDirty) {
+      s.toneDirty = false;
+      if (!cards[i].muted) tone(freqFor(s.toneV), i, 0.09, 0.16 / Math.sqrt(live), 'triangle');
+    }
+    for (let k = 0; k < N; k++) { s.hc[k] *= decay; s.hs[k] *= decay; }
+    for (let k = 0; k < s.lh.length; k++) s.lh[k] *= ldecay;
+    draw(s, cards[i], now); updateCard(s, cards[i]);
+  });
+  if (runs[focus]) updateCode(runs[focus]);
+  ui.tick.textContent = 'ops ' + totalOps.toLocaleString();
+  requestAnimationFrame(frame);
+}
+
+// ---------- controls ----------
+function start() {
+  initAudio(); started = true; ui.overlay.style.display = 'none';
+  if (finishCount === ALGOS.length) reset();
+  running = true; ui.play.textContent = '❚❚ Pause';
+}
+function togglePlay() { if (running) { running = false; ui.play.textContent = '▶ Play'; } else start(); }
+ui.play.addEventListener('click', togglePlay);
+ui.overlay.addEventListener('click', start);
+ui.step.addEventListener('click', () => { initAudio(); started = true; ui.overlay.style.display = 'none'; running = false; ui.play.textContent = '▶ Play'; const now = performance.now(); for (const s of runs) stepRun(s, 1, now); totalOps++; });
+ui.shuffle.addEventListener('click', () => { initAudio(); reset(); });
+ui.size.addEventListener('input', () => { ui.sizeO.textContent = ui.size.value; });
+ui.size.addEventListener('change', reset);
+ui.dist.addEventListener('change', reset);
+ui.speed.addEventListener('input', showSpeed);
+ui.vol.addEventListener('input', () => { if (master) master.gain.setTargetAtTime(+ui.vol.value / 100, actx.currentTime, 0.02); });
+ui.snd.addEventListener('click', () => { soundOn = !soundOn; ui.snd.textContent = soundOn ? '🔊 Sound' : '🔇 Muted'; initAudio(); });
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'r' || e.key === 'R') reset();
+});
+window.addEventListener('resize', () => cards.forEach(sizeCanvas));
+
+showSpeed(); setFocus(0); reset(); cards.forEach(sizeCanvas);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

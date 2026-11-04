@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ambient Machine</title>
+<style>
+:root{
+  --hue:200; --sat:70%; --accent:hsl(var(--hue) var(--sat) 66%);
+  --accent-dim:hsl(var(--hue) var(--sat) 40% / .35);
+  --bg:#05060a; --panel:rgba(14,16,24,.58); --line:rgba(255,255,255,.09); --text:#e8ecf4; --muted:#8a93a6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow:hidden;
+  -webkit-font-smoothing:antialiased;user-select:none}
+canvas#viz{position:fixed;inset:0;width:100%;height:100%;display:block}
+header{position:fixed;top:18px;left:22px;z-index:3;pointer-events:none}
+header h1{font-size:15px;letter-spacing:.32em;text-transform:uppercase;font-weight:600}
+header p{font-size:12px;color:var(--muted);margin-top:4px;letter-spacing:.04em}
+#info{position:fixed;top:18px;right:22px;z-index:3;text-align:right;font-size:12px;color:var(--muted);line-height:1.6;
+  font-variant-numeric:tabular-nums;pointer-events:none}
+#info b{color:var(--text);font-weight:600}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;z-index:6;pointer-events:none;transition:opacity .9s ease}
+#overlay.hidden{opacity:0}
+#overlay.hidden #bigStart{pointer-events:none;transform:scale(.85)}
+#bigStart{pointer-events:auto;-webkit-tap-highlight-color:transparent;width:190px;height:190px;border-radius:50%;border:1px solid var(--accent);
+  background:radial-gradient(circle at 50% 40%,hsl(var(--hue) var(--sat) 30% / .55),rgba(8,10,16,.75) 70%);
+  color:var(--text);font:inherit;font-size:26px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;cursor:pointer;
+  box-shadow:0 0 60px var(--accent-dim),inset 0 0 40px hsl(var(--hue) var(--sat) 50% / .2);
+  transition:transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .4s;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#bigStart:hover{transform:scale(1.05);box-shadow:0 0 90px var(--accent-dim),inset 0 0 50px hsl(var(--hue) var(--sat) 50% / .3)}
+#bigStart small{display:block;font-size:10px;letter-spacing:.3em;color:var(--muted);margin-top:8px;font-weight:500}
+#panel{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:4;width:min(1000px,calc(100% - 24px));
+  display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:12px 22px;align-items:center;
+  background:var(--panel);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--line);border-radius:18px;padding:14px 18px}
+#toggle{width:92px;height:40px;border-radius:12px;border:1px solid var(--accent);background:hsl(var(--hue) var(--sat) 40% / .18);
+  color:var(--text);font:inherit;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+#toggle:hover{background:hsl(var(--hue) var(--sat) 45% / .3)}
+.ctl label{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.ctl label span{color:var(--text);letter-spacing:.04em;text-transform:none;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(90deg,var(--accent),rgba(255,255,255,.12))}
+input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:linear-gradient(90deg,var(--accent),rgba(255,255,255,.12))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;margin-top:-6px;background:#fff;box-shadow:0 0 12px var(--accent)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;border:none;background:#fff;box-shadow:0 0 12px var(--accent)}
+.seq-wrap{grid-column:1 / -1}
+.seq-head{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.seq-head span:last-child{text-transform:none;letter-spacing:.04em}
+#seq{display:grid;grid-template-columns:repeat(16,1fr);gap:5px}
+.cell{position:relative;height:34px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);overflow:hidden;transition:background .25s,border-color .25s}
+.cell:nth-child(4n+1){border-color:rgba(255,255,255,.12)}
+.cell i{position:absolute;left:3px;right:3px;bottom:3px;border-radius:3px;background:var(--accent);opacity:.75;transition:height .4s,opacity .3s}
+.cell.off i{opacity:0}
+.cell.oct i{box-shadow:0 0 8px var(--accent)}
+.cell.now{background:hsl(var(--hue) var(--sat) 60% / .25);border-color:var(--accent)}
+.cell.mut{animation:mut 1.2s ease-out}
+@keyframes mut{0%{background:rgba(255,255,255,.55)}100%{background:rgba(255,255,255,.04)}}
+@media (max-width:760px){
+  #panel{grid-template-columns:auto 1fr;gap:10px 16px;padding:12px 14px;bottom:10px}
+  #panel .ctl.vol{grid-column:2}
+  #seq{grid-template-columns:repeat(8,1fr)}
+  .cell{height:26px}
+  header{top:14px;left:16px}
+  #info{top:58px;left:16px;right:auto;text-align:left;line-height:1.5}
+  #bigStart{width:160px;height:160px;font-size:22px}
+}
+</style>
+</head>
+<body>
+<canvas id="viz"></canvas>
+<header><h1>Ambient Machine</h1><p>generative modal music · Web Audio</p></header>
+<div id="info"><div>Key <b id="iKey">—</b></div><div>Chord <b id="iNum">#0</b> · Bar <b id="iBar">0</b></div></div>
+<div id="overlay"><button id="bigStart" aria-label="Start">Start<small>tap to begin</small></button></div>
+<div id="panel">
+  <button id="toggle">Start</button>
+  <div class="ctl"><label>Mood <span id="moodVal">Drift</span></label><input type="range" id="mood" min="0" max="1" step="0.01" value="0.5"></div>
+  <div class="ctl"><label>Tempo <span id="bpmVal">72 BPM</span></label><input type="range" id="tempo" min="48" max="120" step="1" value="72"></div>
+  <div class="ctl vol"><label>Volume <span id="volVal">70%</span></label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.7"></div>
+  <div class="seq-wrap">
+    <div class="seq-head"><span>16-step sequencer</span><span id="mutInfo">mutates every 8 bars</span></div>
+    <div id="seq"></div>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const rand = (a, b) => a + Math.random() * (b - a);
+const randInt = (a, b) => Math.floor(rand(a, b + 1));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+function weighted(items, weights) {
+  let s = 0; for (const w of weights) s += w;
+  let r = Math.random() * s;
+  for (let i = 0; i < items.length; i++) { r -= weights[i]; if (r <= 0) return items[i]; }
+  return items[items.length - 1];
+}
+
+/* ---------------- music theory ---------------- */
+const NOTE = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+const MODES = {
+  phrygian:   [0, 1, 3, 5, 7, 8, 10],
+  aeolian:    [0, 2, 3, 5, 7, 8, 10],
+  dorian:     [0, 2, 3, 5, 7, 9, 10],
+  mixolydian: [0, 2, 4, 5, 7, 9, 10],
+  ionian:     [0, 2, 4, 5, 7, 9, 11],
+  lydian:     [0, 2, 4, 6, 7, 9, 11],
+};
+const MODE_ORDER = ['phrygian', 'aeolian', 'dorian', 'mixolydian', 'ionian', 'lydian']; // dark → bright
+const MOOD_NAMES = ['Nocturne', 'Mist', 'Drift', 'Dawn', 'Radiant'];
+const SUFFIX = {
+  '4,7,11': 'maj7', '4,7,10': '7', '3,7,10': 'm7', '3,6,10': 'm7♭5', '3,7,11': 'm(maj7)',
+  '4,8,11': 'maj7♯5', '3,6,9': '°7', '4,6,10': '7♭5', '4,6,11': 'maj7♭5'
+};
+const PERMS4 = (() => {
+  const out = [];
+  const rec = (a, rest) => { if (!rest.length) { out.push(a); return; } rest.forEach((x, i) => rec([...a, x], rest.filter((_, j) => j !== i))); };
+  rec([], [0, 1, 2, 3]); return out;
+})();
+
+function buildChord(tonic, mode, degree, use9) {
+  const sc = MODES[mode];
+  const tone = i => { const k = degree + i; return sc[k % 7] + 12 * Math.floor(k / 7); };
+  const r = tone(0);
+  const iv = [0, tone(2) - r, tone(4) - r, tone(6) - r, tone(8) - r];
+  const rootPc = (tonic + r) % 12;
+  let suf = SUFFIX[iv[1] + ',' + iv[2] + ',' + iv[3]] || '';
+  if (use9) {
+    if (iv[4] === 14 && /7/.test(suf) && suf !== '°7') suf = suf.replace('7', '9');
+    else if (iv[4] === 13) suf += '(♭9)';
+  }
+  return {
+    tonic, mode, degree, use9, rootPc, iv,
+    name: NOTE[rootPc] + suf,
+    minor: iv[1] === 3, dim: iv[2] === 6,
+    pcs: iv.slice(0, use9 ? 5 : 4).map(x => (rootPc + x) % 12),
+  };
+}
+
+function voiceLead(prev, pcs) {
+  let best = null, bestCost = Infinity;
+  for (const perm of PERMS4) {
+    const v = []; let cost = 0;
+    for (let i = 0; i < 4; i++) {
+      const pc = pcs[perm[i]], target = prev[i];
+      let d = ((pc - target) % 12 + 12) % 12; if (d > 6) d -= 12;
+      let m = target + d;
+      while (m < 50) m += 12; while (m > 79) m -= 12;
+      v.push(m); cost += Math.abs(m - target);
+    }
+    const s = [...v].sort((a, b) => a - b);
+    for (let i = 0; i < 3; i++) if (s[i + 1] - s[i] < 2) cost += 5;
+    const mean = s.reduce((a, b) => a + b, 0) / 4;
+    cost += Math.abs(mean - 64) * 0.25;
+    if (cost < bestCost) { bestCost = cost; best = v; }
+  }
+  return best;
+}
+
+/* ---------------- state ---------------- */
+const S = {
+  bpm: 72, mood: 0.5, vol: 0.7,
+  playing: false, step: 0, bar: 0, nextTime: 0, chordBarsLeft: 0,
+  tonic: 2, mode: 'dorian', degree: 0, history: [], chordCount: 0,
+  chord: null, voicing: [57, 62, 65, 69], pattern: [], moodDirty: false,
+  fmRatio: 1, padPan: 0,
+};
+S.chord = buildChord(S.tonic, S.mode, 0, true);
+
+function newPattern() {
+  const p = []; let idx = randInt(0, 3);
+  for (let i = 0; i < 16; i++) {
+    idx = clamp(idx + pick([-2, -1, -1, 0, 1, 1, 2]), 0, 5);
+    p.push({
+      on: Math.random() < (i % 4 === 0 ? 0.75 : i % 2 === 0 ? 0.45 : 0.3),
+      idx, oct: Math.random() < 0.2 ? 1 : 0, vel: rand(0.55, 1), pan: rand(-0.6, 0.6),
+    });
+  }
+  return p;
+}
+S.pattern = newPattern();
+
+function mutatePattern() {
+  const changed = new Set();
+  const n = randInt(2, 5);
+  for (let k = 0; k < n; k++) {
+    const op = Math.random(), i = randInt(0, 15), c = S.pattern[i];
+    if (op < 0.35) { c.on = !c.on; changed.add(i); }
+    else if (op < 0.65) { c.idx = clamp(c.idx + pick([-2, -1, 1, 2]), 0, 5); c.on = true; changed.add(i); }
+    else if (op < 0.8) { c.oct = 1 - c.oct; changed.add(i); }
+    else if (op < 0.92) { const j = randInt(0, 15); const t = S.pattern[i]; S.pattern[i] = S.pattern[j]; S.pattern[j] = t; changed.add(i); changed.add(j); }
+    else { const r = randInt(1, 3); S.pattern = S.pattern.slice(r).concat(S.pattern.slice(0, r)); for (let q = 0; q < 16; q++) changed.add(q); }
+  }
+  // keep density sane, nudged by mood
+  const lo = 4 + Math.round(S.mood * 2), hi = 9 + Math.round(S.mood * 3);
+  let on = S.pattern.filter(c => c.on).length;
+  while (on < lo) { const i = randInt(0, 15); if (!S.pattern[i].on) { S.pattern[i].on = true; changed.add(i); on++; } }
+  while (on > hi) { const i = randInt(0, 15); if (S.pattern[i].on && i % 4 !== 0) { S.pattern[i].on = false; changed.add(i); on--; } }
+  return [...changed];
+}
+
+function moodModeIndex() { return clamp(Math.round(S.mood * 5 + (Math.random() + Math.random() - 1) * 1.3), 0, 5); }
+
+function modulate() {
+  const r = Math.random();
+  if (r < 0.45 || S.moodDirty) {
+    S.mode = MODE_ORDER[moodModeIndex()];            // modal interchange
+  } else if (r < 0.8) {
+    S.tonic = (S.tonic + (Math.random() < 0.5 ? 7 : 5)) % 12;   // up/down a fifth
+    if (Math.random() < 0.5) S.mode = MODE_ORDER[moodModeIndex()];
+  } else {
+    S.tonic = (S.tonic + pick([2, 10, 3, 9, 4, 8])) % 12;     // chromatic-mediant colour shift
+  }
+  S.moodDirty = false;
+  S.history = [];
+}
+
+function nextChord() {
+  if (S.chordCount > 0 && (Math.random() < 0.16 || S.moodDirty)) modulate();
+  const IW = [0.05, 1.1, 0.9, 1.6, 1.4, 1.0, 1.15]; // interval weights (in scale steps)
+  const degs = [0, 1, 2, 3, 4, 5, 6], w = [];
+  for (const d of degs) {
+    let x = IW[(d - S.degree + 7) % 7];
+    const c = buildChord(S.tonic, S.mode, d, false);
+    if (c.dim) x *= 0.12;
+    if (S.history.includes(d)) x *= 0.3;
+    if (d === 0 && S.history.length > 4) x *= 2;
+    w.push(x);
+  }
+  const d = weighted(degs, w);
+  S.history.push(d); if (S.history.length > 3) S.history.shift();
+  S.degree = d;
+  S.chordCount++;
+  const ch = buildChord(S.tonic, S.mode, d, Math.random() < 0.55);
+  // arp set: chord tones around middle C
+  let base = 60 + ch.rootPc; if (base > 66) base -= 12;
+  const set = ch.iv.slice(0, ch.use9 ? 5 : 4).map(x => base + x);
+  set.push(base + 12);
+  ch.arpSet = set;
+  const padPcs = ch.use9 ? [ch.pcs[1], ch.pcs[2], ch.pcs[3], ch.pcs[4]] : ch.pcs.slice(0, 4);
+  S.voicing = voiceLead(S.voicing, padPcs);
+  ch.voicing = S.voicing.slice();
+  let bass = 36 + ch.rootPc; if (bass > 44) bass -= 12;
+  ch.bass = bass;
+  ch.modeIndex = MODE_ORDER.indexOf(S.mode);
+  ch.n = S.chordCount;
+  S.chord = ch;
+  return ch;
+}
+
+/* ---------------- audio engine ---------------- */
+let ctx = null, A = {};
+const ksCache = new Map();
+
+function makeImpulse(sec, decay) {
+  const sr = ctx.sampleRate, len = Math.floor(sr * sec), pre = Math.floor(sr * 0.025);
+  const buf = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch); let lp = 0;
+    for (let i = 0; i < len; i++) {
+      if (i < pre) { d[i] = 0; continue; }
+      const t = (i - pre) / (len - pre);
+      const env = Math.pow(1 - t, decay);
+      const c = 0.85 - 0.72 * t;           // darker tail as it decays
+      lp += c * ((Math.random() * 2 - 1) - lp);
+      d[i] = lp * env;
+    }
+    // a few sparse early reflections
+    for (let k = 0; k < 14; k++) {
+      const i = pre + Math.floor(rand(0.002, 0.09) * sr);
+      d[i] += rand(-0.7, 0.7) * (1 - k / 14);
+    }
+  }
+  return buf;
+}
+function satCurve(k) {
+  const n = 2048, c = new Float32Array(n), norm = Math.tanh(k);
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / norm; }
+  return c;
+}
+function lfo(freq, depth, target, type = 'sine') {
+  const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq;
+  const g = ctx.createGain(); g.gain.value = depth;
+  o.connect(g).connect(target); o.start();
+  return { o, g };
+}
+
+function initAudio() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+  const master = ctx.createGain(); master.gain.value = 0;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.knee.value = 14; comp.ratio.value = 3; comp.attack.value = 0.03; comp.release.value = 0.35;
+  const analyser = ctx.createAnalyser(); analyser.fftSize = 4096; analyser.smoothingTimeConstant = 0.8;
+  analyser.minDecibels = -92; analyser.maxDecibels = -24;
+  master.connect(comp); comp.connect(ctx.destination); comp.connect(analyser);
+
+  // reverb (generated noise impulse)
+  const revIn = ctx.createGain();
+  const revHP = ctx.createBiquadFilter(); revHP.type = 'highpass'; revHP.frequency.value = 160;
+  const reverb = ctx.createConvolver(); reverb.buffer = makeImpulse(6, 2.8);
+  const revOut = ctx.createGain(); revOut.gain.value = 0.85;
+  revIn.connect(revHP).connect(reverb).connect(revOut).connect(master);
+
+  // tape delay: delay → lowpass → highpass → saturation → feedback, with wow & flutter
+  const dIn = ctx.createGain();
+  const delay = ctx.createDelay(4); delay.delayTime.value = 0.75 * 60 / S.bpm;
+  const tlp = ctx.createBiquadFilter(); tlp.type = 'lowpass'; tlp.frequency.value = 2600; tlp.Q.value = 0.5;
+  const thp = ctx.createBiquadFilter(); thp.type = 'highpass'; thp.frequency.value = 240;
+  const sat = ctx.createWaveShaper(); sat.curve = satCurve(1.8); sat.oversample = '2x';
+  const fb = ctx.createGain(); fb.gain.value = 0.5;
+  const dOut = ctx.createGain(); dOut.gain.value = 0.6;
+  const dPan = ctx.createStereoPanner();
+  dIn.connect(delay); delay.connect(tlp); tlp.connect(thp); thp.connect(sat); sat.connect(fb); fb.connect(delay);
+  sat.connect(dOut); dOut.connect(dPan); dPan.connect(master);
+  const dRev = ctx.createGain(); dRev.gain.value = 0.35; dOut.connect(dRev).connect(revIn);
+  lfo(0.31, 0.0035, delay.delayTime);           // wow
+  lfo(5.7, 0.00045, delay.delayTime);           // flutter
+  lfo(0.09, 0.65, dPan.pan);                    // drifting stereo image
+
+  // pad bus
+  const padBus = ctx.createGain(); padBus.gain.value = 1;
+  const padFilter = ctx.createBiquadFilter(); padFilter.type = 'lowpass'; padFilter.Q.value = 0.8; padFilter.frequency.value = 1400;
+  lfo(0.045, 450, padFilter.frequency);
+  const padOut = ctx.createGain(); padOut.gain.value = 0.55;
+  padBus.connect(padFilter).connect(padOut).connect(master);
+  const padRev = ctx.createGain(); padRev.gain.value = 0.85; padOut.connect(padRev).connect(revIn);
+  const padDel = ctx.createGain(); padDel.gain.value = 0.15; padOut.connect(padDel).connect(dIn);
+
+  // arp bus
+  const arpBus = ctx.createGain(); arpBus.gain.value = 0.5;
+  arpBus.connect(master);
+  const arpRev = ctx.createGain(); arpRev.gain.value = 0.55; arpBus.connect(arpRev).connect(revIn);
+  const arpDel = ctx.createGain(); arpDel.gain.value = 0.6; arpBus.connect(arpDel).connect(dIn);
+
+  // bass bus
+  const bassBus = ctx.createGain(); bassBus.gain.value = 0.32;
+  const bassLP = ctx.createBiquadFilter(); bassLP.type = 'lowpass'; bassLP.frequency.value = 500;
+  bassBus.connect(bassLP).connect(master);
+  const bassRev = ctx.createGain(); bassRev.gain.value = 0.18; bassLP.connect(bassRev).connect(revIn);
+
+  A = { master, comp, analyser, delay, fb, padFilter, padBus, arpBus, bassBus, tlp };
+  applyMood(true);
+  vizInitBins();
+}
+
+function applyMood(immediate) {
+  if (!ctx) return;
+  const t = ctx.currentTime, tc = immediate ? 0.01 : 1.5;
+  A.padFilter.frequency.setTargetAtTime(500 + S.mood * 2300, t, tc);
+  A.tlp.frequency.setTargetAtTime(1600 + S.mood * 2600, t, tc);
+  A.fb.gain.setTargetAtTime(0.42 + (1 - S.mood) * 0.16, t, tc);
+}
+function applyTempo() {
+  if (!ctx) return;
+  A.delay.delayTime.setTargetAtTime(0.75 * 60 / S.bpm, ctx.currentTime, 0.4);
+}
+
+function ksBuffer(midi) {
+  if (ksCache.has(midi)) return ksCache.get(midi);
+  const sr = ctx.sampleRate, f = mtof(midi);
+  const N = Math.max(2, Math.floor(sr / f)), len = Math.floor(sr * 2.4);
+  const buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+  let lp = 0;
+  for (let i = 0; i < N; i++) { lp += 0.6 * ((Math.random() * 2 - 1) - lp); d[i] = lp; }
+  const decay = 0.9975;
+  for (let i = N; i < len; i++) d[i] = decay * 0.5 * (d[i - N] + (i - N - 1 >= 0 ? d[i - N - 1] : 0));
+  let peak = 0; for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
+  if (peak > 0) for (let i = 0; i < len; i++) d[i] /= peak;
+  const entry = { buf, rate: f / (sr / (N + 0.5)) };
+  ksCache.set(midi, entry);
+  return entry;
+}
+
+function pluck(midi, t, vel, pan) {
+  const { buf, rate } = ksBuffer(midi);
+  const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(2200 + S.mood * 4200, t); lp.frequency.exponentialRampToValueAtTime(900 + S.mood * 900, t + 1.2);
+  const g = ctx.createGain(); g.gain.setValueAtTime(vel, t); g.gain.setTargetAtTime(0, t + 0.5, 0.45);
+  const p = ctx.createStereoPanner(); p.pan.value = pan;
+  src.connect(lp).connect(g).connect(p).connect(A.arpBus);
+  src.start(t); src.stop(t + 2.4);
+}
+
+function padNote(midi, t, dur, vel, pan) {
+  const f = mtof(midi), atk = 1.6 + (1 - S.mood) * 1.4, rel = 3.2;
+  const hold = Math.max(atk, dur), end = t + hold + rel + 0.1;
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0, t);
+  out.gain.linearRampToValueAtTime(vel, t + atk);
+  out.gain.setValueAtTime(vel, t + hold);
+  out.gain.exponentialRampToValueAtTime(0.0001, t + hold + rel);
+  const p = ctx.createStereoPanner(); p.pan.value = pan;
+  out.connect(p).connect(A.padBus);
+  const index = f * (0.5 + S.mood * 1.6);
+  for (const det of [-6, 6]) {
+    const car = ctx.createOscillator(); car.type = 'sine'; car.frequency.value = f; car.detune.value = det + rand(-3, 3);
+    const mod = ctx.createOscillator(); mod.type = 'sine'; mod.frequency.value = f * S.fmRatio * (1 + rand(-0.002, 0.002));
+    const mg = ctx.createGain();
+    mg.gain.setValueAtTime(index * 0.15, t);
+    mg.gain.linearRampToValueAtTime(index, t + atk * 1.3);
+    mg.gain.linearRampToValueAtTime(index * 0.3, end);
+    mod.connect(mg).connect(car.frequency);
+    const cg = ctx.createGain(); cg.gain.value = 0.5;
+    car.connect(cg).connect(out);
+    car.start(t); mod.start(t); car.stop(end); mod.stop(end);
+  }
+}
+
+function bassNote(midi, t, dur) {
+  const f = mtof(midi), atk = 0.6, rel = 2.2, hold = Math.max(atk, dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.9, t + atk);
+  g.gain.setValueAtTime(0.9, t + hold); g.gain.exponentialRampToValueAtTime(0.0001, t + hold + rel);
+  g.connect(A.bassBus);
+  const car = ctx.createOscillator(); car.frequency.value = f;
+  const mod = ctx.createOscillator(); mod.frequency.value = f * 2;
+  const mg = ctx.createGain(); mg.gain.value = f * 0.35;
+  mod.connect(mg).connect(car.frequency); car.connect(g);
+  const end = t + hold + rel + 0.1;
+  car.start(t); mod.start(t); car.stop(end); mod.stop(end);
+}
+
+/* ---------------- scheduler ---------------- */
+const uiQueue = [];
+let timer = null, suspendTimer = null;
+const stepDur = () => 60 / S.bpm / 4;
+
+function scheduleStep(t) {
+  const s = S.step;
+  if (s === 0) {
+    if (S.bar > 0 && S.bar % 8 === 0) {
+      const changed = mutatePattern();
+      uiQueue.push({ t, type: 'mutate', changed, pattern: S.pattern.map(c => ({ ...c })) });
+    }
+    if (S.chordBarsLeft <= 0) {
+      const bars = weighted([1, 2, 4], [0.3, 0.55, 0.15]);
+      S.chordBarsLeft = bars;
+      if (Math.random() < 0.3) S.fmRatio = weighted([1, 2, 0.5, 3, 1.5], [3, 2 + S.mood * 2, 2 - S.mood, S.mood, 1]);
+      const ch = nextChord();
+      const dur = bars * 16 * stepDur();
+      ch.voicing.forEach((m, i) => padNote(m, t + i * 0.06, dur, 0.13, (i / 3 - 0.5) * 1.1));
+      bassNote(ch.bass, t, dur * 0.9);
+      uiQueue.push({ t, type: 'chord', chord: ch });
+    }
+    S.chordBarsLeft--;
+  }
+  const c = S.pattern[s];
+  if (c.on && S.chord.arpSet) {
+    const set = S.chord.arpSet;
+    const midi = set[c.idx % set.length] + 12 * c.oct;
+    const swing = (s % 2) ? stepDur() * 0.1 : 0;
+    const acc = s % 4 === 0 ? 1.2 : 1;
+    pluck(midi, t + swing + rand(0, 0.006), 0.32 * c.vel * acc, c.pan);
+    uiQueue.push({ t: t + swing, type: 'note', midi, vel: c.vel * acc });
+  }
+  uiQueue.push({ t, type: 'step', step: s, bar: S.bar });
+  S.step = (s + 1) % 16;
+  if (S.step === 0) S.bar++;
+  S.nextTime += stepDur();
+}
+function scheduler() {
+  // background tabs throttle timers to ~1 s, so look further ahead there
+  const ahead = document.hidden ? 1.6 : 0.15;
+  if (S.nextTime < ctx.currentTime - 0.5) S.nextTime = ctx.currentTime + 0.05; // recover after a stall
+  while (S.nextTime < ctx.currentTime + ahead) scheduleStep(S.nextTime);
+  if (uiQueue.length > 1500) uiQueue.splice(0, uiQueue.length - 1500);
+}
+
+async function start() {
+  if (!ctx) initAudio();
+  clearTimeout(suspendTimer);
+  if (ctx.state !== 'running') await ctx.resume();
+  S.playing = true;
+  S.nextTime = ctx.currentTime + 0.12; S.step = 0; S.chordBarsLeft = 0;
+  A.master.gain.cancelScheduledValues(ctx.currentTime);
+  A.master.gain.setTargetAtTime(S.vol, ctx.currentTime, 0.4);
+  clearInterval(timer); timer = setInterval(scheduler, 25); scheduler();
+  $('#overlay').classList.add('hidden');
+  $('#toggle').textContent = 'Stop';
+}
+function stop() {
+  S.playing = false;
+  clearInterval(timer); timer = null;
+  A.master.gain.cancelScheduledValues(ctx.currentTime);
+  A.master.gain.setTargetAtTime(0, ctx.currentTime, 0.35);
+  uiQueue.length = 0;
+  suspendTimer = setTimeout(() => { if (!S.playing) ctx.suspend(); }, 1800);
+  $('#toggle').textContent = 'Start';
+}
+const toggle = () => (S.playing ? stop() : start());
+
+/* ---------------- UI ---------------- */
+const seqEl = $('#seq'); const cells = [];
+for (let i = 0; i < 16; i++) { const d = document.createElement('div'); d.className = 'cell'; d.appendChild(document.createElement('i')); seqEl.appendChild(d); cells.push(d); }
+function renderPattern(p, changed) {
+  p.forEach((c, i) => {
+    const el = cells[i];
+    el.classList.toggle('off', !c.on); el.classList.toggle('oct', !!c.oct);
+    el.firstChild.style.height = (18 + (c.idx / 5) * 62 + c.oct * 18) + '%';
+  });
+  if (changed) changed.forEach(i => { const el = cells[i]; el.classList.remove('mut'); void el.offsetWidth; el.classList.add('mut'); });
+}
+renderPattern(S.pattern);
+
+$('#bigStart').addEventListener('click', start);
+$('#toggle').addEventListener('click', toggle);
+addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); toggle(); } });
+const moodName = m => MOOD_NAMES[clamp(Math.round(m * 4), 0, 4)];
+$('#mood').addEventListener('input', e => {
+  const old = S.mood; S.mood = +e.target.value; $('#moodVal').textContent = moodName(S.mood);
+  if (Math.abs(old - S.mood) > 0.001) S.moodDirty = true;
+  applyMood(false);
+});
+$('#tempo').addEventListener('input', e => { S.bpm = +e.target.value; $('#bpmVal').textContent = S.bpm + ' BPM'; applyTempo(); });
+$('#vol').addEventListener('input', e => {
+  S.vol = +e.target.value; $('#volVal').textContent = Math.round(S.vol * 100) + '%';
+  if (ctx && S.playing) A.master.gain.setTargetAtTime(S.vol, ctx.currentTime, 0.1);
+});
+
+/* ---------------- visuals ---------------- */
+// On machines where "GPU" canvas is really software GL (SwiftShader, llvmpipe…), CPU raster is much faster.
+const softwareGL = (() => {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (!gl) return true;
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const r = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(r);
+  } catch (e) { return false; }
+})();
+const canvas = $('#viz'), g = canvas.getContext('2d', { alpha: false, willReadFrequently: softwareGL });
+const panelEl = $('#panel');
+let W = 0, H = 0, DPR = 1, quality = 1;
+const L = { cx: 0, cy: 0, R: 100 };
+function computeLayout() {
+  const pr = panelEl.getBoundingClientRect();
+  const top = W < 760 ? 96 : 70;
+  const availH = Math.max(220, pr.top - 8 - top);
+  L.cx = W / 2;
+  L.cy = top + availH / 2;
+  L.R = Math.max(36, Math.min(W / 2 - 8, availH / 2) / 2.3);
+}
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2) * quality;
+  W = innerWidth; H = innerHeight;
+  canvas.width = Math.max(1, Math.round(W * DPR)); canvas.height = Math.max(1, Math.round(H * DPR));
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  g.fillStyle = '#05060a'; g.fillRect(0, 0, W, H);
+  computeLayout();
+}
+addEventListener('resize', resize);
+if (window.ResizeObserver) new ResizeObserver(computeLayout).observe(panelEl);
+resize();
+
+const HALF = 96;
+const barVal = new Float32Array(HALF), peak = new Float32Array(HALF);
+let bins = null, freqData = null, timeData = null;
+function vizInitBins() {
+  freqData = new Uint8Array(A.analyser.frequencyBinCount);
+  timeData = new Uint8Array(A.analyser.fftSize);
+  const ny = ctx.sampleRate / 2, n = A.analyser.frequencyBinCount;
+  bins = [];
+  for (let j = 0; j < HALF; j++) {
+    const f0 = 45 * Math.pow(12000 / 45, j / HALF), f1 = 45 * Math.pow(12000 / 45, (j + 1) / HALF);
+    const b0 = Math.floor(f0 / ny * n), b1 = Math.max(b0 + 1, Math.ceil(f1 / ny * n));
+    bins.push([b0, Math.min(n, b1)]);
+  }
+}
+
+const col = { h: 200, s: 70, l: 58 }, colT = { h: 200, s: 70, l: 58 };
+function chordColor(ch) {
+  return {
+    h: ((ch.rootPc * 7) % 12) * 30 + (ch.minor ? -16 : 14) + ch.modeIndex * 5,
+    s: ch.minor ? 62 : 80,
+    l: 50 + S.mood * 10 + (ch.dim ? -6 : 0),
+  };
+}
+Object.assign(colT, chordColor({ ...S.chord, modeIndex: 2 }));
+Object.assign(col, colT);
+
+const display = { name: S.chord.name, key: NOTE[S.tonic] + ' ' + S.mode, pcs: S.chord.pcs, root: S.chord.rootPc, n: 0, bar: 0 };
+let curStep = -1, pulse = 0, flash = 0, rot = 0;
+const particles = [], ripples = [];
+const pcLit = new Float32Array(12);
+
+function processQueue() {
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  while (uiQueue.length && uiQueue[0].t <= now) {
+    const e = uiQueue.shift();
+    if (e.type === 'step') {
+      if (curStep >= 0) cells[curStep].classList.remove('now');
+      curStep = e.step; cells[curStep].classList.add('now');
+      display.bar = e.bar;
+      const left = 8 - (e.bar % 8);
+      mutInfo.textContent = `mutation in ${left} bar${left > 1 ? 's' : ''}`;
+      iBar.textContent = e.bar + 1;
+    } else if (e.type === 'chord') {
+      const ch = e.chord;
+      Object.assign(colT, chordColor(ch));
+      display.name = ch.name; display.pcs = ch.pcs; display.root = ch.rootPc; display.n = ch.n;
+      display.key = NOTE[ch.tonic] + ' ' + ch.mode;
+      iKey.textContent = display.key; iNum.textContent = '#' + ch.n;
+      flash = 1;
+      ripples.push({ r: 0, a: 1 });
+    } else if (e.type === 'mutate') {
+      renderPattern(e.pattern, e.changed);
+    } else if (e.type === 'note') {
+      pulse = Math.min(1, pulse + 0.35 * e.vel);
+      const pc = ((e.midi % 12) + 12) % 12;
+      pcLit[pc] = 1;
+      spawn(pc, e.vel);
+    }
+  }
+}
+const mutInfo = $('#mutInfo'), iBar = $('#iBar'), iKey = $('#iKey'), iNum = $('#iNum');
+
+function spawn(pc, vel) {
+  const a = -Math.PI / 2 + pc / 12 * Math.PI * 2;
+  for (let k = 0; k < 5; k++) {
+    if (particles.length > 220) particles.shift();
+    particles.push({ a: a + rand(-0.1, 0.1), r: 0, v: rand(10, 38) * (0.6 + vel), life: 1, s: rand(1, 2.4), da: rand(-0.15, 0.15) });
+  }
+}
+
+function lerpHue(a, b, t) { const d = ((b - a) % 360 + 540) % 360 - 180; return a + d * t; }
+const hasConic = typeof g.createConicGradient === 'function';
+let lastT = performance.now(), slowTime = 0, fastTime = 0, lastCss = '';
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rawDt = (now - lastT) / 1000; lastT = now;
+  const dt = Math.min(0.05, rawDt);
+  // adaptive resolution: drop render scale on slow devices, restore when it is cheap again
+  if (rawDt > 1 / 40) { slowTime += rawDt; fastTime = 0; } else { fastTime += rawDt; slowTime = Math.max(0, slowTime - rawDt * 0.5); }
+  if (slowTime > 1.2 && quality > 0.7) { quality = Math.max(0.7, quality - 0.15); slowTime = 0; resize(); }
+  else if (fastTime > 6 && quality < 1) { quality = Math.min(1, quality + 0.15); fastTime = 0; resize(); }
+
+  processQueue();
+  const k = 1 - Math.pow(0.05, dt);
+  col.h = lerpHue(col.h, colT.h, k); col.s += (colT.s - col.s) * k; col.l += (colT.l - col.l) * k;
+  const css = col.h.toFixed(0) + '|' + col.s.toFixed(0);
+  if (css !== lastCss) {
+    lastCss = css;
+    document.documentElement.style.setProperty('--hue', col.h.toFixed(0));
+    document.documentElement.style.setProperty('--sat', col.s.toFixed(0) + '%');
+  }
+  pulse *= Math.pow(0.08, dt); flash *= Math.pow(0.25, dt);
+  for (let i = 0; i < 12; i++) pcLit[i] *= Math.pow(0.15, dt);
+  rot += dt * 0.025;
+
+  // spectrum
+  const live = !!ctx && (S.playing || A.master.gain.value > 0.01);
+  let level = 0;
+  if (live) {
+    A.analyser.getByteFrequencyData(freqData);
+    A.analyser.getByteTimeDomainData(timeData);
+    for (let j = 0; j < HALF; j++) {
+      const [b0, b1] = bins[j]; let m = 0;
+      for (let b = b0; b < b1; b++) if (freqData[b] > m) m = freqData[b];
+      const v = Math.pow(m / 255, 2) * (0.85 + j / HALF * 0.5);
+      barVal[j] += (v - barVal[j]) * (v > barVal[j] ? 0.5 : 0.1);
+      level += barVal[j];
+    }
+  } else {
+    const t = now / 1000;
+    for (let j = 0; j < HALF; j++) {
+      const v = 0.07 + 0.06 * Math.sin(t * 1.3 + j * 0.21) + 0.04 * Math.sin(t * 0.7 - j * 0.53);
+      barVal[j] += (v - barVal[j]) * 0.1; level += barVal[j];
+    }
+  }
+  level /= HALF;
+  for (let j = 0; j < HALF; j++) peak[j] = Math.max(barVal[j], peak[j] - dt * 0.18);
+
+  const { cx, cy, R } = L, { h, s, l } = col;
+  const maxLen = R * 0.85, pr = R + maxLen + Math.max(16, R * 0.16), wr = R * 0.74;
+
+  // trails + glow
+  g.globalCompositeOperation = 'source-over';
+  g.globalAlpha = 1;
+  g.fillStyle = 'rgba(5,6,10,0.34)'; g.fillRect(0, 0, W, H);
+  const GR = pr * 1.6;
+  const gr = g.createRadialGradient(cx, cy, R * 0.3, cx, cy, GR);
+  gr.addColorStop(0, `hsla(${h},${s}%,${l}%,${0.07 + level * 0.35 + flash * 0.06})`);
+  gr.addColorStop(1, `hsla(${h},${s}%,${l}%,0)`);
+  g.fillStyle = gr; g.fillRect(cx - GR, cy - GR, GR * 2, GR * 2);
+
+  g.globalCompositeOperation = 'lighter';
+  // spectrum bars: batched into 4 intensity buckets, colored by a conic gradient
+  let paint;
+  if (hasConic) {
+    paint = g.createConicGradient(-Math.PI / 2 + rot, cx, cy);
+    const stops = 8;
+    for (let i = 0; i <= stops; i++) {
+      const u = i / stops, mirror = 1 - Math.abs(u * 2 - 1); // 0 at top (bass) → 1 at bottom (treble)
+      paint.addColorStop(u, `hsl(${h - 30 + mirror * 70},${s}%,${l + 8}%)`);
+    }
+  } else paint = `hsl(${h},${s}%,${l + 8}%)`;
+  const bw = (Math.PI * 2 * R) / (HALF * 2);
+  g.strokeStyle = paint; g.lineCap = 'round';
+  const BUCKETS = [[0, 0.12, 0.35], [0.12, 0.3, 0.55], [0.3, 0.55, 0.75], [0.55, 9, 0.95]];
+  for (const [lo, hi, alpha] of BUCKETS) {
+    g.beginPath();
+    let any = false;
+    for (let j = 0; j < HALF; j++) {
+      const v = barVal[j]; if (v < lo || v >= hi) continue;
+      any = true;
+      const len = 2 + v * maxLen;
+      for (let side = -1; side <= 1; side += 2) {
+        const a = -Math.PI / 2 + rot + side * ((j + 0.5) / HALF) * Math.PI;
+        const ca = Math.cos(a), sa = Math.sin(a);
+        g.moveTo(cx + ca * R, cy + sa * R); g.lineTo(cx + ca * (R + len), cy + sa * (R + len));
+      }
+    }
+    if (!any) continue;
+    g.globalAlpha = alpha * 0.22; g.lineWidth = bw * 1.9; g.stroke();
+    g.globalAlpha = alpha; g.lineWidth = bw * 0.55; g.stroke();
+  }
+  // peak caps
+  g.globalAlpha = 0.8; g.fillStyle = `hsl(${h + 25},${s}%,${Math.min(90, l + 30)}%)`;
+  g.beginPath();
+  for (let j = 0; j < HALF; j++) {
+    if (peak[j] < 0.04) continue;
+    const r = R + 6 + peak[j] * maxLen;
+    for (let side = -1; side <= 1; side += 2) {
+      const a = -Math.PI / 2 + rot + side * ((j + 0.5) / HALF) * Math.PI;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      g.rect(x - 1, y - 1, 2, 2);
+    }
+  }
+  g.fill();
+
+  // sequencer step ring
+  g.lineCap = 'butt';
+  const sr = R - 7;
+  for (let i = 0; i < 16; i++) {
+    const a0 = -Math.PI / 2 + (i / 16) * Math.PI * 2 + 0.03, a1 = a0 + Math.PI * 2 / 16 - 0.06;
+    const on = S.pattern[i].on, cur = i === curStep && live;
+    g.globalAlpha = cur ? 1 : on ? 0.45 : 0.12;
+    g.strokeStyle = cur ? '#fff' : `hsl(${h},${s}%,${l + 15}%)`;
+    g.lineWidth = cur ? 3 : 2;
+    g.beginPath(); g.arc(cx, cy, sr, a0, a1); g.stroke();
+  }
+
+  // waveform ring
+  g.globalAlpha = 0.6;
+  g.strokeStyle = `hsl(${h + 20},${s}%,${l + 18}%)`; g.lineWidth = 1.3;
+  g.beginPath();
+  const WN = 200;
+  for (let i = 0; i <= WN; i++) {
+    const a = -Math.PI / 2 + (i / WN) * Math.PI * 2;
+    const sv = live ? (timeData[Math.floor((i % WN) / WN * 1536)] - 128) / 128 : Math.sin(i * 0.3 + now / 600) * 0.03;
+    const r = wr + sv * R * 0.3;
+    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.stroke();
+
+  // chord-change ripples
+  g.lineWidth = 1.5;
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const rp = ripples[i];
+    rp.r += dt * 0.55; rp.a -= dt * 0.5;
+    if (rp.a <= 0) { ripples.splice(i, 1); continue; }
+    g.globalAlpha = rp.a * 0.5; g.strokeStyle = `hsl(${h},${s}%,${l + 20}%)`;
+    g.beginPath(); g.arc(cx, cy, R + rp.r * (pr - R) * 1.4, 0, Math.PI * 2); g.stroke();
+  }
+
+  // pitch-class ring: chord tones lit, arp notes flash
+  const pts = [];
+  g.globalAlpha = 1;
+  g.fillStyle = 'rgba(255,255,255,0.16)';
+  g.beginPath();
+  for (let pc = 0; pc < 12; pc++) {
+    const a = -Math.PI / 2 + pc / 12 * Math.PI * 2;
+    const x = cx + Math.cos(a) * pr, y = cy + Math.sin(a) * pr;
+    if (display.pcs.includes(pc)) pts.push([x, y, pc]);
+    else { g.moveTo(x + 2, y); g.arc(x, y, 2, 0, Math.PI * 2); }
+  }
+  g.fill();
+  if (pts.length > 2) {
+    g.globalAlpha = 0.14 + flash * 0.3; g.strokeStyle = `hsl(${h},${s}%,${l + 10}%)`; g.lineWidth = 1;
+    g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.stroke();
+  }
+  for (const [x, y, pc] of pts) {
+    const root = pc === display.root, lit = pcLit[pc], sc = clamp(R / 100, 0.55, 1.3);
+    g.globalAlpha = 0.25 + lit * 0.4; g.fillStyle = `hsl(${h},${s}%,${l + 10}%)`;
+    g.beginPath(); g.arc(x, y, ((root ? 11 : 8) + lit * 8) * sc, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 1; g.fillStyle = `hsl(${h},${s}%,${Math.min(95, l + 28 + lit * 15)}%)`;
+    g.beginPath(); g.arc(x, y, (root ? 5 : 3.6) * sc, 0, Math.PI * 2); g.fill();
+  }
+  // note labels
+  if (R > 55) {
+    g.globalAlpha = 0.55; g.fillStyle = '#cfd6e6';
+    g.font = `500 ${Math.round(Math.max(9, R * 0.075))}px ui-sans-serif,system-ui,sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let pc = 0; pc < 12; pc++) {
+      const a = -Math.PI / 2 + pc / 12 * Math.PI * 2, rr = pr + Math.max(16, R * 0.15);
+      g.fillText(NOTE[pc], cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    }
+  }
+
+  // particles (batched)
+  g.globalAlpha = 0.75; g.fillStyle = `hsl(${h + 30},${s}%,${l + 25}%)`;
+  g.beginPath();
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.r += p.v * dt; p.v *= Math.pow(0.5, dt); p.a += p.da * dt; p.life -= dt * 0.4;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    const rr = pr + 10 + p.r, z = p.s * p.life;
+    g.rect(cx + Math.cos(p.a) * rr - z / 2, cy + Math.sin(p.a) * rr - z / 2, z, z);
+  }
+  g.fill();
+
+  // center disc + labels
+  g.globalCompositeOperation = 'source-over';
+  g.globalAlpha = 1;
+  const cg = g.createRadialGradient(cx, cy, 0, cx, cy, wr * 0.95);
+  cg.addColorStop(0, `hsla(${h},${s}%,${l - 22}%,${0.5 + pulse * 0.2})`);
+  cg.addColorStop(1, `hsla(${h},${s}%,${l - 40}%,0)`);
+  g.fillStyle = cg; g.beginPath(); g.arc(cx, cy, wr * 0.95, 0, Math.PI * 2); g.fill();
+
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = `hsla(${h},30%,95%,0.96)`;
+  g.font = `600 ${Math.round(R * 0.3)}px ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;
+  g.fillText(ctx ? display.name : 'Ambient', cx, cy - R * 0.06);
+  g.fillStyle = `hsla(${h},40%,82%,0.65)`;
+  g.font = `500 ${Math.max(9, Math.round(R * 0.09))}px ui-sans-serif,system-ui,sans-serif`;
+  g.fillText((ctx ? display.key : 'press start').toUpperCase(), cx, cy + R * 0.22);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

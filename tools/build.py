@@ -60,6 +60,7 @@ def collect():
             "shots": shots,
             "shot": shot,
             "date": (meta or {}).get("date"),
+            "v1_worked": (meta or {}).get("v1_worked"),
             "notes": (meta or {}).get("notes", ""),
             "v1_issues": (meta or {}).get("v1_issues", ""),
             "v2_changes": (meta or {}).get("v2_changes", ""),
@@ -100,6 +101,7 @@ def build():
     summary = {
         "total": len(items), "done": len(done),
         "ok": sum(i["status"] == "ok" for i in items),
+        "v1_ok": sum(i["v1_worked"] is True for i in items),
         "tokens": sum(i["tokens"] or 0 for i in items),
         "usd": round(sum(i["usd"] or 0 for i in items), 2),
         "minutes": round(sum(i["minutes"] or 0 for i in items), 1),

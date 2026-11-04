@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>THE LONG QUIET — Title Sequence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet">
+<style>
+  :root { --font: "Michroma", "Eurostile", "Bank Gothic", "Arial Black", "Helvetica Neue", Arial, sans-serif; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { color: #e8e2d6; font-family: var(--font); -webkit-font-smoothing: antialiased; user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #frame { position: fixed; left: 0; right: 0; pointer-events: none; }
+  .credit, #tagline {
+    position: absolute; left: 0; right: 0; text-align: center; opacity: 0;
+    letter-spacing: 0.55em; text-indent: 0.55em; text-transform: uppercase; white-space: nowrap;
+    text-shadow: -1px 0 rgba(255,60,40,.35), 1px 0 rgba(40,140,255,.35), 0 0 18px rgba(160,190,255,.25);
+  }
+  .credit { top: 50%; transform: translateY(-50%); }
+  .credit small { display: block; opacity: .55; letter-spacing: .6em; margin-bottom: 1.1em; font-size: .6em; }
+  #tagline { top: 61%; color: #bfc7d4; }
+  #start {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 5; gap: 18px; transition: opacity .8s ease;
+  }
+  #start .t { font-size: clamp(11px, 1.4vw, 15px); letter-spacing: .7em; text-indent: .7em; color: #d8d2c4; }
+  #start .s { font-size: clamp(9px, 0.9vw, 11px); letter-spacing: .5em; text-indent: .5em; color: #7f8794; }
+  #start .ring { width: 54px; height: 54px; border: 1px solid rgba(220,210,190,.45); border-radius: 50%;
+    display: grid; place-items: center; animation: pulse 2.4s ease-in-out infinite; }
+  #start .ring::after { content: ""; border-left: 11px solid #e8e2d6; border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 4px; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(200,210,255,.25); } 50% { box-shadow: 0 0 0 14px rgba(200,210,255,0); } }
+  #replay {
+    position: fixed; right: 18px; bottom: 14px; z-index: 6; background: none; border: 1px solid rgba(255,255,255,.25);
+    color: #cfd3da; font: 10px var(--font); letter-spacing: .35em; padding: 9px 14px 9px 18px; cursor: pointer;
+    opacity: 0; pointer-events: none; transition: opacity 1s;
+  }
+  #replay.on { opacity: .7; pointer-events: auto; }
+  #replay:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <div class="credit" id="c1"><small>a</small><span>Northlight Pictures presents</span></div>
+  <div class="credit" id="c2"><small>in association with</small><span>Halcyon Deep</span></div>
+  <div id="tagline"><span>After the last signal, something answered.</span></div>
+</div>
+<div id="start"><div class="ring"></div><div class="t">THE LONG QUIET</div><div class="s">click to begin · sound on</div></div>
+<button id="replay">REPLAY</button>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../../vendor/three/build/three.module.js",
+  "three/addons/": "../../../vendor/three/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ---------------------------------------------------------- setup */
+const ASPECT = 2.39;
+const VFOV_CONTENT = 28;              // vertical FOV inside the letterbox (deg)
+const TITLE_W = 11.5;                 // world width of the title
+const CAM_Z0 = 10, CAM_Z1 = -32;      // drift path
+const TITLE_DIST = 13;
+const TITLE_Z = CAM_Z1 - TITLE_DIST;
+const isSmall = Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer:coarse)').matches;
+const DUST_N = isSmall ? 2400 : 4200;
+const TITLE_N = isSmall ? 9000 : 16000;
+const PR = Math.min(devicePixelRatio || 1, 2);
+let renderScale = Math.min(1, 1.5 / PR);   // scene RT scale (adaptive)
+
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(PR);
+renderer.setSize(innerWidth, innerHeight);
+renderer.autoClear = false;
+document.body.prepend(renderer.domElement);
+const gl = renderer.getContext();
+const maxPoint = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1] || 64;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 600);
+camera.position.set(0, 0, CAM_Z0);
+
+const rtOpts = { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false };
+const rtScene = new THREE.WebGLRenderTarget(4, 4, rtOpts);
+const rtBright = new THREE.WebGLRenderTarget(4, 4, rtOpts);
+
+const bufSize = new THREE.Vector2(), rtSize = new THREE.Vector2();
+const S = { contentH: 1, tanHalf: Math.tan(THREE.MathUtils.degToRad(VFOV_CONTENT / 2)) };
+
+/* ---------------------------------------------------------- glsl helpers */
+const NOISE = /* glsl */`
+float hash1(vec3 p){ p = fract(p*0.3183099+.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+float vnoise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(hash1(i),hash1(i+vec3(1,0,0)),f.x), mix(hash1(i+vec3(0,1,0)),hash1(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(hash1(i+vec3(0,0,1)),hash1(i+vec3(1,0,1)),f.x), mix(hash1(i+vec3(0,1,1)),hash1(i+vec3(1,1,1)),f.x),f.y),f.z); }
+float fbm(vec3 p){ float a=.5, s=0.; for(int i=0;i<4;i++){ s+=a*vnoise(p); p=p*2.03+vec3(1.7,9.2,3.1); a*=.5; } return s; }
+`;
+
+/* ---------------------------------------------------------- background: nebula, planet limb, star */
+const bgMat = new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false,
+  uniforms: { uRes: { value: new THREE.Vector2() }, uContentH: { value: 1 }, uTime: { value: 0 }, uCamZ: { value: 0 },
+              uStar: { value: new THREE.Vector2(0, -0.33) }, uStarI: { value: 1 } },
+  vertexShader: `void main(){ gl_Position = vec4(position.xy, 0.9999, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform vec2 uRes; uniform float uContentH, uTime, uCamZ, uStarI; uniform vec2 uStar;
+    ${NOISE}
+    float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    void main(){
+      vec2 q = (gl_FragCoord.xy - uRes*0.5) / uContentH;
+      vec2 pc = vec2(0.0, -3.32); float R = 2.97;
+      float dp = length(q - pc) - R;
+      // nebula / dust fog
+      float n = fbm(vec3(q*1.7 + vec2(uTime*0.006, 0.0), uTime*0.02 - uCamZ*0.015));
+      float n2 = fbm(vec3(q*4.0 - vec2(0.0, uTime*0.01), 3.0 - uCamZ*0.03));
+      vec3 neb = mix(vec3(0.002,0.003,0.007), vec3(0.020,0.030,0.050), smoothstep(0.4,0.9,n));
+      neb += vec3(0.05,0.035,0.02) * smoothstep(0.6,0.95,n2) * 0.3;
+      // sparse far stars
+      vec2 cell = floor(gl_FragCoord.xy / 2.0);
+      float st = step(0.9965, h2(cell)) * (0.3 + 0.7*h2(cell+3.1)) * (0.6+0.4*sin(uTime*2.0 + h2(cell)*40.0));
+      neb += vec3(st) * 0.5;
+      // star
+      vec2 sd = q - uStar; float d = length(sd);
+      float glow = 0.8*exp(-d*10.0) + 0.09*exp(-d*3.0);
+      float core = 14.0*exp(-d*d*7000.0);
+      vec3 starCol = vec3(1.0, 0.80, 0.58);
+      float sx = abs(q.x - uStar.x);
+      float vis = smoothstep(-0.40, -0.335, uStar.y);
+      vec3 atmCol = mix(vec3(0.15,0.38,0.85), vec3(1.0,0.62,0.32), exp(-sx*5.0));
+      float atm = exp(-max(dp,0.0)*55.0) * (0.10 + 1.6*exp(-sx*2.6)*vis);
+      vec3 outside = neb*(1.0 + glow*3.0) + starCol*(glow + core)*uStarI + atmCol*atm*uStarI;
+      float rim = exp(min(dp, 0.0)*120.0) * (0.15 + 1.2*exp(-sx*3.0)*vis);
+      vec3 inside = vec3(0.0015,0.0022,0.0035) + atmCol*rim*0.6 + starCol*glow*0.03;
+      float m = smoothstep(-0.0012, 0.0012, dp);
+      gl_FragColor = vec4(mix(inside, outside, m), 1.0);
+    }`
+});
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat);
+bg.frustumCulled = false; bg.renderOrder = -1;
+scene.add(bg);
+
+/* ---------------------------------------------------------- shared particle shader parts */
+const DOF_VERT = /* glsl */`
+  uniform float uScale, uContentH, uCoc, uFocus, uMaxSize;
+  float dofSize(float worldSize, float d, out float alpha, out float blur){
+    float base = worldSize * uScale / d;
+    float coc = uCoc * uContentH * abs(d - uFocus) / d;
+    float size = min(sqrt(base*base + coc*coc), uMaxSize);
+    float sz = max(size, 1.5);
+    alpha = clamp((max(base,0.6)*max(base,0.6)) / (sz*sz), 0.0, 1.0);
+    blur = clamp(coc / (base + 2.0) / 2.5, 0.0, 1.0);
+    return sz;
+  }`;
+const DOF_FRAG = /* glsl */`
+  varying float vA, vBlur; varying vec3 vCol;
+  void main(){
+    vec2 c = gl_PointCoord - 0.5; float r = length(c) * 2.0;
+    if (r > 1.0) discard;
+    float sharp = exp(-r*r*5.0);
+    float disc = smoothstep(1.0, 0.82, r) * (0.78 + 0.4*smoothstep(0.5, 0.93, r));
+    float sh = mix(sharp, disc, vBlur);
+    gl_FragColor = vec4(vCol * sh * vA, 1.0);
+  }`;
+const commonU = () => ({
+  uTime: { value: 0 }, uScale: { value: 1 }, uContentH: { value: 1 }, uCoc: { value: 0.022 },
+  uFocus: { value: 7 }, uMaxSize: { value: 40 }, uLight: { value: new THREE.Vector3(0, -50, -400) },
+});
+
+/* ---------------------------------------------------------- volumetric dust */
+function makeDust() {
+  const pos = new Float32Array(DUST_N * 3), size = new Float32Array(DUST_N), seed = new Float32Array(DUST_N);
+  let i = 0;
+  while (i < DUST_N) {
+    const x = (Math.random() * 2 - 1) * 11, y = (Math.random() * 2 - 1) * 6.5, z = 14 - Math.random() * 115;
+    // keep the area right in front of the final title pose clear-ish
+    if (z < CAM_Z1 + 1.5 && z > TITLE_Z - 1 && Math.abs(x) < 7 && Math.abs(y) < 2.2 && Math.random() < 0.85) continue;
+    pos.set([x, y, z], i * 3);
+    size[i] = 0.006 + Math.pow(Math.random(), 3) * 0.02;
+    seed[i] = Math.random();
+    i++;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { ...commonU(), uGain: { value: 1 } },
+    vertexShader: /* glsl */`
+      uniform float uTime, uGain; uniform vec3 uLight;
+      attribute float aSize, aSeed;
+      varying float vA, vBlur; varying vec3 vCol;
+      ${DOF_VERT}
+      void main(){
+        vec3 p = position; float s = aSeed * 6.2831;
+        p += vec3(sin(uTime*0.11 + s + p.z*0.07), cos(uTime*0.09 + s*1.3 + p.x*0.05), sin(uTime*0.07 + s*0.7)) * vec3(0.5,0.35,0.5);
+        p.y += (aSeed - 0.5) * uTime * 0.04;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        float d = max(-mv.z, 0.05);
+        float a, b; float sz = dofSize(aSize, d, a, b);
+        a *= smoothstep(0.6, 2.4, d) * (1.0 - smoothstep(55.0, 95.0, d));
+        vec3 lp = normalize(p - uLight), pc = normalize(cameraPosition - p);
+        float c = max(dot(lp, pc), 0.0);
+        float phase = 0.32 + 0.7*pow(c, 3.0) + 3.5*pow(c, 14.0);
+        float tw = 0.7 + 0.3*sin(uTime*(0.8 + aSeed*2.5) + s*5.0);
+        vCol = mix(vec3(0.55,0.68,1.0), vec3(1.0,0.78,0.55), smoothstep(0.55, 1.0, c)) * phase * tw * 0.9 * uGain;
+        vA = a; vBlur = b;
+        gl_PointSize = sz;
+        gl_Position = projectionMatrix * mv;
+        if (mv.z > -0.05) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      }`,
+    fragmentShader: DOF_FRAG,
+  });
+  const p = new THREE.Points(g, m); p.frustumCulled = false;
+  return p;
+}
+const dust = makeDust();
+scene.add(dust);
+
+/* ---------------------------------------------------------- title from particles */
+async function sampleTitle(text) {
+  try { await Promise.race([document.fonts.load('160px Michroma'), new Promise(r => setTimeout(r, 2500))]); } catch (e) {}
+  const cv = document.createElement('canvas');
+  const W = 2400, H = 300; cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const fs = 150;
+  ctx.font = `${fs}px "Michroma", "Eurostile", "Arial Black", Arial, sans-serif`;
+  ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+  const sp = fs * 0.28;
+  const widths = [...text].map(ch => ctx.measureText(ch).width);
+  const total = widths.reduce((a, b) => a + b, 0) + sp * (text.length - 1);
+  const scaleDown = Math.min(1, (W - 40) / total);
+  ctx.setTransform(scaleDown, 0, 0, scaleDown, W / 2 - total * scaleDown / 2, H / 2);
+  let x = 0;
+  [...text].forEach((ch, i) => { ctx.fillText(ch, x, 0); x += widths[i] + sp; });
+  const img = ctx.getImageData(0, 0, W, H).data;
+  const pts = [];
+  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (img[(y * W + x) * 4 + 3] > 130) pts.push(x, y);
+  const tw = total * scaleDown, k = TITLE_W / tw;
+  const count = Math.min(TITLE_N, pts.length / 2);
+  const out = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const j = Math.floor(Math.random() * (pts.length / 2));
+    out[i * 3] = (pts[j * 2] - W / 2) * k + (Math.random() - 0.5) * k * 2;
+    out[i * 3 + 1] = -(pts[j * 2 + 1] - H / 2) * k + (Math.random() - 0.5) * k * 2;
+    out[i * 3 + 2] = TITLE_Z + (Math.random() - 0.5) * 0.06;
+  }
+  return out;
+}
+
+function makeTitle(target) {
+  const n = target.length / 3;
+  const start = new Float32Array(n * 3), rnd = new Float32Array(n * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    v.randomDirection().multiplyScalar(3 + Math.pow(Math.random(), 0.7) * 16);
+    v.z = v.z * 1.4 + Math.random() * 10; v.y *= 0.6;
+    start[i * 3] = target[i * 3] + v.x; start[i * 3 + 1] = target[i * 3 + 1] + v.y; start[i * 3 + 2] = target[i * 3 + 2] + v.z;
+    rnd[i * 3] = Math.random(); rnd[i * 3 + 1] = Math.random(); rnd[i * 3 + 2] = Math.random();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(target, 3));
+  g.setAttribute('aStart', new THREE.BufferAttribute(start, 3));
+  g.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 3));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { ...commonU(), uAssemble: { value: -10 }, uSweepX: { value: -100 }, uSweep: { value: 0 }, uTitleW: { value: TITLE_W } },
+    vertexShader: /* glsl */`
+      uniform float uTime, uAssemble, uSweepX, uSweep, uTitleW;
+      attribute vec3 aStart, aRnd;
+      varying float vA, vBlur; varying vec3 vCol;
+      ${DOF_VERT}
+      float ease(float p){ return p < 0.5 ? 4.0*p*p*p : 1.0 - pow(-2.0*p + 2.0, 3.0)*0.5; }
+      void main(){
+        float delay = (position.x / uTitleW + 0.5) * 1.3 + aRnd.x * 0.9;
+        float p = clamp((uAssemble - delay) / 2.6, 0.0, 1.0);
+        float e = ease(p);
+        float s = aRnd.z * 6.2831;
+        vec3 st = aStart + vec3(sin(uTime*0.13 + s), cos(uTime*0.1 + s*1.7), sin(uTime*0.08 + s*0.3)) * 0.6;
+        vec3 swirl = vec3(sin(s*7.0 + uTime*0.9), cos(s*5.0 + uTime*0.8), sin(s*3.0 + uTime*0.6)) * 1.6 * sin(3.14159*e);
+        vec3 p3 = mix(st, position, e) + swirl;
+        p3 += vec3(sin(uTime*1.7 + s*9.0), cos(uTime*1.3 + s*7.0), 0.0) * 0.006 * e;
+        vec4 mv = modelViewMatrix * vec4(p3, 1.0);
+        float d = max(-mv.z, 0.05);
+        float wsize = mix(0.012 + aRnd.y*0.012, 0.013 + aRnd.y*0.007, e);
+        float a, b; float sz = dofSize(wsize, d, a, b);
+        a *= smoothstep(0.25, 1.4, d);
+        float sweep = exp(-pow((position.x - uSweepX) * 0.9, 2.0)) * uSweep * e;
+        float settle = smoothstep(0.75, 1.0, p);
+        float tw = 0.75 + 0.25*sin(uTime*(1.5 + aRnd.y*3.0) + s*11.0);
+        vec3 warm = vec3(1.0, 0.92, 0.82), cool = vec3(0.6, 0.75, 1.0);
+        vCol = mix(cool*0.4, warm*(0.62 + 0.14*tw), settle) + vec3(0.7,0.85,1.0)*sweep*1.8;
+        vA = a; vBlur = b;
+        gl_PointSize = sz;
+        gl_Position = projectionMatrix * mv;
+        if (mv.z > -0.05) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      }`,
+    fragmentShader: DOF_FRAG,
+  });
+  const p = new THREE.Points(g, m); p.frustumCulled = false;
+  return p;
+}
+let title = null;
+
+/* ---------------------------------------------------------- post */
+const postScene = new THREE.Scene();
+const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
+quad.frustumCulled = false; postScene.add(quad);
+const POST_VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+
+const brightMat = new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false,
+  uniforms: { tScene: { value: null }, uTexel: { value: new THREE.Vector2() }, uStarUv: { value: new THREE.Vector2(.5, .3) },
+              uThr: { value: 1.0 }, uStreak: { value: 1 }, uRays: { value: 1 } },
+  vertexShader: POST_VERT,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tScene; uniform vec2 uTexel, uStarUv; uniform float uThr, uStreak, uRays;
+    varying vec2 vUv;
+    vec3 bright(vec2 uv){ vec3 c = texture2D(tScene, uv).rgb; float l = dot(c, vec3(.2126,.7152,.0722));
+      return c * max(l - uThr, 0.0) / max(l, 1e-4); }
+    float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+    void main(){
+      vec3 s = vec3(0.0);
+      float jx = ign(gl_FragCoord.xy + 7.0) - 0.5;
+      for (int i = -12; i <= 12; i++) { float fi = float(i) + jx; s += bright(vUv + vec2(fi * uTexel.x * 2.5, 0.0)) * exp(-abs(fi) * 0.13); }
+      s *= 0.2;
+      vec3 rays = vec3(0.0);
+      vec2 delta = (vUv - uStarUv) * (0.7 / 18.0);
+      vec2 cuv = vUv - delta * ign(gl_FragCoord.xy); float dec = 1.0;
+      for (int i = 0; i < 18; i++) { cuv -= delta; rays += bright(cuv) * dec; dec *= 0.86; }
+      rays *= 1.0 / 9.0;
+      gl_FragColor = vec4(s * vec3(0.30,0.52,1.0) * uStreak + rays * vec3(1.0,0.78,0.58) * uRays, 1.0);
+    }`
+});
+
+const compMat = new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false,
+  uniforms: {
+    tScene: { value: null }, tBright: { value: null }, uRes: { value: new THREE.Vector2() }, uContentH: { value: 1 },
+    uTime: { value: 0 }, uFade: { value: 0 }, uCA: { value: 0.003 }, uGrain: { value: 0.075 },
+    uStar: { value: new THREE.Vector2() }, uStarVis: { value: 0 }, uSweep: { value: 0 }, uSweepX: { value: -5 },
+    uExposure: { value: 1.0 },
+  },
+  vertexShader: POST_VERT,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tScene, tBright; uniform vec2 uRes, uStar; uniform float uContentH, uTime, uFade, uCA, uGrain, uStarVis, uSweep, uSweepX, uExposure;
+    varying vec2 vUv;
+    vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
+    float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+    void main(){
+      vec2 uv = vUv;
+      vec2 q = (gl_FragCoord.xy - uRes*0.5) / uContentH;
+      vec2 dir = uv - 0.5;
+      float r2 = dot(dir*vec2(uRes.x/uRes.y,1.0), dir*vec2(uRes.x/uRes.y,1.0));
+      vec2 off = dir * uCA * (0.5 + r2*2.5);
+      vec3 col;
+      col.r = texture2D(tScene, uv - off).r;
+      col.g = texture2D(tScene, uv).g;
+      col.b = texture2D(tScene, uv + off).b;
+      vec3 br;
+      br.r = texture2D(tBright, uv - off).r;
+      br.g = texture2D(tBright, uv).g;
+      br.b = texture2D(tBright, uv + off).b;
+      col += br;
+      // anamorphic flare from the star
+      vec2 sq = q - uStar;
+      float streak = exp(-abs(sq.y)*260.0) * (exp(-abs(sq.x)*1.1)*0.55 + exp(-abs(sq.x)*7.0)*0.8);
+      float halo = exp(-length(sq*vec2(0.35,1.0))*22.0) * 0.5;
+      col += vec3(0.32,0.52,1.0) * (streak + halo) * uStarVis;
+      // lens ghosts mirrored through centre
+      for (int i = 1; i <= 3; i++) {
+        float fi = float(i);
+        vec2 gp = -uStar * (0.35 + fi*0.45);
+        float gd = length(q - gp);
+        float rr = 0.02 + fi*0.018;
+        float ring = smoothstep(rr, rr*0.75, gd) * (0.4 + 0.6*smoothstep(rr*0.4, rr, gd));
+        col += vec3(0.25 + fi*0.1, 0.45, 0.9 - fi*0.15) * ring * 0.035 * uStarVis;
+      }
+      // sweeping anamorphic flare across the title
+      vec2 wq = q - vec2(uSweepX, 0.0);
+      float sw = exp(-abs(wq.y)*190.0) * exp(-abs(wq.x)*0.9) + exp(-length(wq*vec2(0.5,1.0))*16.0)*0.9 + exp(-length(wq)*60.0)*2.0;
+      col += vec3(0.38,0.6,1.0) * sw * uSweep;
+      col *= uExposure * (1.0 + 0.015*sin(uTime*47.0) + 0.01*sin(uTime*13.0));
+      col = aces(col);
+      // vignette
+      col *= mix(1.0, smoothstep(1.55, 0.25, length(q*vec2(0.62, 1.25))), 0.75);
+      col = pow(col, vec3(1.0/2.2));
+      // film grain
+      float fr = floor(uTime * 24.0);
+      vec2 go = vec2(mod(fr * 37.0, 997.0), mod(fr * 91.0, 991.0));
+      float g = hash(gl_FragCoord.xy + go) + hash(gl_FragCoord.xy + go.yx + 17.0) - 1.0;
+      float lum = dot(col, vec3(0.299,0.587,0.114));
+      col += g * uGrain * (1.15 - lum);
+      col *= uFade;
+      // 2.39:1 letterbox
+      float bar = (uRes.y - uContentH) * 0.5;
+      float inside = step(bar, gl_FragCoord.y) * step(gl_FragCoord.y, uRes.y - bar);
+      gl_FragColor = vec4(max(col, 0.0) * inside, 1.0);
+    }`
+});
+
+/* ---------------------------------------------------------- layout */
+const frame = document.getElementById('frame');
+function sizeTargets() {
+  // the scene (background + particles) renders at an adaptive fraction of the screen resolution;
+  // grain, flare and letterbox are composited at full resolution on top
+  const rw = Math.max(2, Math.round(bufSize.x * renderScale)), rh = Math.max(2, Math.round(bufSize.y * renderScale));
+  rtSize.set(rw, rh);
+  rtScene.setSize(rw, rh);
+  rtBright.setSize(Math.max(1, rw >> 2), Math.max(1, rh >> 2));
+  const contentRT = S.contentH * renderScale;
+  const scale = rh / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+  for (const m of [dust.material, title && title.material]) if (m) {
+    m.uniforms.uScale.value = scale; m.uniforms.uContentH.value = contentRT;
+    m.uniforms.uMaxSize.value = Math.min(maxPoint, Math.max(14, 46 * rh / 900));
+  }
+  bgMat.uniforms.uRes.value.copy(rtSize); bgMat.uniforms.uContentH.value = contentRT;
+  brightMat.uniforms.uTexel.value.set(1 / rtBright.width, 1 / rtBright.height);
+}
+function resize() {
+  const W = innerWidth, H = innerHeight;
+  renderer.setPixelRatio(PR);
+  renderer.setSize(W, H);
+  renderer.getDrawingBufferSize(bufSize);
+  const contentCss = Math.min(H, W / ASPECT);
+  S.contentH = contentCss * renderer.getPixelRatio();
+  camera.aspect = W / H;
+  camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(S.tanHalf * H / contentCss));
+  camera.updateProjectionMatrix();
+  compMat.uniforms.uRes.value.copy(bufSize); compMat.uniforms.uContentH.value = S.contentH;
+  sizeTargets();
+  frame.style.top = ((H - contentCss) / 2) + 'px';
+  frame.style.height = contentCss + 'px';
+  frame.style.fontSize = Math.max(7, Math.min(contentCss * 0.03, W / 72)) + 'px';
+  // shrink any line that would not fit the frame width (narrow phones)
+  for (const el of frame.querySelectorAll('.credit, #tagline')) {
+    el.style.fontSize = '';
+    const sp = el.querySelector('span'), w = sp.getBoundingClientRect().width;
+    if (w > W * 0.92) el.style.fontSize = (W * 0.92 / w) + 'em';
+  }
+}
+addEventListener('resize', resize);
+resize();
+
+// adaptive quality: keep ~60 FPS by scaling the scene buffer between 0.5 and 1.0
+let perfAcc = 0, perfN = 0, perfT = 0;
+function adapt(dt, now) {
+  if (dt > 0.25) return;            // tab switch / hitch: ignore
+  perfAcc += dt; perfN++;
+  if (now - perfT < 1000 || perfN < 20) return;
+  const avg = perfAcc / perfN; perfAcc = 0; perfN = 0; perfT = now;
+  const maxS = Math.min(1, 1.5 / PR);
+  let ns = renderScale;
+  if (avg > 1 / 45) ns = Math.max(0.5, renderScale - 0.15);
+  else if (avg < 1 / 58 && renderScale < maxS) ns = Math.min(maxS, renderScale + 0.1);
+  if (ns !== renderScale) { renderScale = ns; sizeTargets(); }
+}
+
+/* ---------------------------------------------------------- audio drone */
+let audio = null;
+function impulse(ac, dur, decay) {
+  const len = Math.floor(ac.sampleRate * dur), b = ac.createBuffer(2, len, ac.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
+  return b;
+}
+function noiseBuf(ac, sec) {
+  const b = ac.createBuffer(1, ac.sampleRate * sec, ac.sampleRate), d = b.getChannelData(0);
+  let last = 0; for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = w * 0.5 + last * 3; }
+  return b;
+}
+function startAudio() {
+  if (audio) { try { audio.ac.close(); } catch (e) {} audio = null; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  const ac = new AC(); ac.resume();
+  const now = ac.currentTime + 0.05;
+  const master = ac.createGain(); master.gain.setValueAtTime(0, now);
+  master.gain.linearRampToValueAtTime(0.75, now + 3.5);
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4;
+  master.connect(comp).connect(ac.destination);
+  const verb = ac.createConvolver(); verb.buffer = impulse(ac, 5.5, 2.6);
+  const wet = ac.createGain(); wet.gain.value = 0.7; verb.connect(wet).connect(master);
+  const dry = ac.createGain(); dry.gain.value = 0.75; dry.connect(master);
+  const bus = ac.createGain(); bus.connect(dry); bus.connect(verb);
+
+  // drone: detuned stack on A
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 3.5;
+  lp.frequency.setValueAtTime(220, now); lp.frequency.linearRampToValueAtTime(950, now + 9.6); lp.frequency.linearRampToValueAtTime(520, now + 15);
+  lp.connect(bus);
+  const lfo = ac.createOscillator(); lfo.frequency.value = 0.07; const lfoG = ac.createGain(); lfoG.gain.value = 120;
+  lfo.connect(lfoG).connect(lp.frequency); lfo.start(now);
+  [[55, 'sawtooth', .16], [55.21, 'sawtooth', .14], [82.6, 'triangle', .12], [109.7, 'sawtooth', .05], [27.5, 'sine', .35], [164.6, 'sine', .025]].forEach(([f, t, g]) => {
+    const o = ac.createOscillator(); o.type = t; o.frequency.value = f;
+    const gg = ac.createGain(); gg.gain.value = g; o.connect(gg).connect(lp); o.start(now);
+    const v = ac.createOscillator(); v.frequency.value = 0.1 + Math.random() * 0.15; const vg = ac.createGain(); vg.gain.value = f * 0.003;
+    v.connect(vg).connect(o.frequency); v.start(now);
+  });
+  // wind / dust hiss
+  const nb = noiseBuf(ac, 4);
+  const wind = ac.createBufferSource(); wind.buffer = nb; wind.loop = true;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 600; bp.Q.value = 0.9;
+  const wg = ac.createGain(); wg.gain.value = 0.05;
+  const wl = ac.createOscillator(); wl.frequency.value = 0.09; const wlg = ac.createGain(); wlg.gain.value = 300;
+  wl.connect(wlg).connect(bp.frequency); wl.start(now);
+  wind.connect(bp).connect(wg).connect(bus); wind.start(now);
+  // riser into the title
+  const rs = ac.createBufferSource(); rs.buffer = nb; rs.loop = true;
+  const rbp = ac.createBiquadFilter(); rbp.type = 'bandpass'; rbp.Q.value = 7;
+  rbp.frequency.setValueAtTime(180, now + 5.5); rbp.frequency.exponentialRampToValueAtTime(3800, now + 9.5);
+  const rg = ac.createGain(); rg.gain.setValueAtTime(0, now); rg.gain.setValueAtTime(0, now + 5.5);
+  rg.gain.linearRampToValueAtTime(0.22, now + 9.45); rg.gain.linearRampToValueAtTime(0, now + 9.65);
+  rs.connect(rbp).connect(rg).connect(bus); rs.start(now);
+  // impact at the title
+  const T = now + 9.6;
+  const boom = ac.createOscillator(); boom.type = 'sine';
+  boom.frequency.setValueAtTime(78, T); boom.frequency.exponentialRampToValueAtTime(26, T + 2.8);
+  const bg2 = ac.createGain(); bg2.gain.setValueAtTime(0, now); bg2.gain.setValueAtTime(0.0001, T);
+  bg2.gain.exponentialRampToValueAtTime(0.95, T + 0.03); bg2.gain.exponentialRampToValueAtTime(0.0001, T + 4.5);
+  boom.connect(bg2).connect(bus); boom.start(now);
+  const hit = ac.createBufferSource(); hit.buffer = nb;
+  const hlp = ac.createBiquadFilter(); hlp.type = 'lowpass'; hlp.frequency.setValueAtTime(1800, T); hlp.frequency.exponentialRampToValueAtTime(120, T + 2);
+  const hg = ac.createGain(); hg.gain.setValueAtTime(0, now); hg.gain.setValueAtTime(0.0001, T);
+  hg.gain.exponentialRampToValueAtTime(0.5, T + 0.02); hg.gain.exponentialRampToValueAtTime(0.0001, T + 2.5);
+  hit.connect(hlp).connect(hg).connect(bus); hit.start(now);
+  // cold shimmer chord for the hold
+  const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300; hp.connect(verb);
+  [220, 329.6, 493.9, 659.3].forEach((f, i) => {
+    const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f * (1 + (Math.random() - .5) * 0.002);
+    const g = ac.createGain(); g.gain.setValueAtTime(0, now); g.gain.setValueAtTime(0, T);
+    g.gain.linearRampToValueAtTime(0.035 / (1 + i * 0.4), T + 3.5);
+    const tr = ac.createOscillator(); tr.frequency.value = 0.2 + i * 0.07; const tg = ac.createGain(); tg.gain.value = 0.012;
+    tr.connect(tg).connect(g.gain); tr.start(now);
+    o.connect(g).connect(hp); o.start(now);
+  });
+  audio = { ac };
+}
+
+/* ---------------------------------------------------------- timeline */
+const clamp01 = x => Math.min(1, Math.max(0, x));
+const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const env = (t, a, b, fi, fo) => smooth(a, a + fi, t) * (1 - smooth(b - fo, b, t));
+const c1 = document.getElementById('c1'), c2 = document.getElementById('c2'), tag = document.getElementById('tagline');
+const startEl = document.getElementById('start'), replayEl = document.getElementById('replay');
+
+let started = false, t0 = 0;
+const clock0 = performance.now();
+function begin() {
+  started = true; t0 = performance.now();
+  startEl.style.opacity = 0; startEl.style.pointerEvents = 'none';
+  replayEl.classList.remove('on');
+  startAudio();
+}
+startEl.addEventListener('click', begin);
+replayEl.addEventListener('click', (e) => { e.stopPropagation(); begin(); });
+addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { if (!started) begin(); } });
+
+const tmpV = new THREE.Vector3();
+function frameState(time, t) {
+  // camera drift
+  const s = clamp01(t / 10.5);
+  const e = 1 - Math.pow(1 - s, 2.4);
+  const hold = Math.max(0, t - 10.5);
+  const push = 0.8 * (1 - Math.exp(-hold / 9));
+  const k = 1 - e;
+  camera.position.set(Math.sin(time * 0.31) * 0.45 * k + Math.sin(time * 0.9) * 0.02,
+                      Math.cos(time * 0.23) * 0.28 * k + Math.cos(time * 0.7) * 0.015,
+                      started ? CAM_Z0 + (CAM_Z1 - CAM_Z0) * e - push : CAM_Z0);
+  camera.rotation.set(Math.sin(time * 0.17) * 0.01 * k, Math.sin(time * 0.21) * 0.015 * k, Math.sin(time * 0.13) * 0.03 * k);
+  camera.updateMatrixWorld();
+
+  const titleDist = camera.position.z - TITLE_Z;
+  const focus = THREE.MathUtils.lerp(6.5, titleDist, smooth(6.4, 9.2, t));
+  const coc = 0.02 + 0.01 * smooth(6.0, 9.0, t);
+
+  // star rising over the limb
+  const starY = started ? THREE.MathUtils.lerp(-0.44, -0.336, smooth(1.5, 10.0, t)) : -0.44;
+  const burst = Math.exp(-Math.pow((t - 9.6) / 0.45, 2));
+  const starI = 0.9 + 1.4 * burst;
+  const starVis = smooth(-0.375, -0.336, starY) * (0.55 + 1.3 * burst);
+
+  // flare sweep across the title
+  const sweepP = smooth(8.9, 10.5, t);
+  const sweepX = THREE.MathUtils.lerp(-1.5, 1.5, sweepP);
+  const sweep = env(t, 8.9, 10.6, 0.4, 0.5) * 0.9;
+
+  // starscreen -> world light position (for forward scattering)
+  const ndcX = 0 * 2 * S.contentH / bufSize.x;
+  const ndcY = starY * 2 * S.contentH / bufSize.y;
+  tmpV.set(ndcX, ndcY, 0.5).unproject(camera).sub(camera.position).normalize().multiplyScalar(300).add(camera.position);
+
+  const ca = 0.0016 + 0.003 * env(t, 6, 10, 1.5, 1) + 0.01 * burst;
+  const fade = started ? (t < 0.5 ? 0.25 * (1 - t / 0.5) : smooth(0.5, 3.2, t)) : 0.25;
+
+  return { focus, coc, starY, starI, starVis, sweepX, sweep, ca, fade, light: tmpV, titleDist };
+}
+
+/* ---------------------------------------------------------- render loop */
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const time = (now - clock0) / 1000;
+  const t = started ? (now - t0) / 1000 : -1;
+  const st = frameState(time, t);
+
+  for (const m of [dust.material, title && title.material]) if (m) {
+    m.uniforms.uTime.value = time; m.uniforms.uFocus.value = st.focus; m.uniforms.uCoc.value = st.coc;
+    m.uniforms.uLight.value.copy(st.light);
+  }
+  if (title) {
+    const u = title.material.uniforms;
+    u.uAssemble.value = started ? t - 5.6 : -10;
+    u.uSweep.value = st.sweep;
+    u.uSweepX.value = st.sweepX * 2 * st.titleDist * S.tanHalf;
+  }
+  dust.material.uniforms.uGain.value = 1.0 - 0.35 * smooth(8.5, 11, t);
+  bgMat.uniforms.uTime.value = time; bgMat.uniforms.uCamZ.value = camera.position.z;
+  bgMat.uniforms.uStar.value.set(0, st.starY); bgMat.uniforms.uStarI.value = st.starI;
+
+  renderer.setRenderTarget(rtScene); renderer.setClearColor(0x000000, 1); renderer.clear();
+  renderer.render(scene, camera);
+
+  // bright pass: anamorphic streak + god rays
+  const su = (0.5 * bufSize.x) / bufSize.x, sv = (0.5 * bufSize.y + st.starY * S.contentH) / bufSize.y;
+  brightMat.uniforms.tScene.value = rtScene.texture; brightMat.uniforms.uStarUv.value.set(su, sv);
+  brightMat.uniforms.uRays.value = 1.2 + 1.5 * Math.exp(-Math.pow((t - 9.6) / 0.6, 2));
+  quad.material = brightMat; renderer.setRenderTarget(rtBright); renderer.clear(); renderer.render(postScene, postCam);
+
+  // composite
+  const cu = compMat.uniforms;
+  cu.tScene.value = rtScene.texture; cu.tBright.value = rtBright.texture;
+  cu.uTime.value = time; cu.uFade.value = st.fade; cu.uCA.value = st.ca;
+  cu.uStar.value.set(0, st.starY); cu.uStarVis.value = st.starVis;
+  cu.uSweep.value = st.sweep; cu.uSweepX.value = st.sweepX;
+  quad.material = compMat; renderer.setRenderTarget(null); renderer.clear(); renderer.render(postScene, postCam);
+
+  // HTML credits
+  c1.style.opacity = env(t, 1.6, 4.6, 0.9, 0.9).toFixed(3);
+  c2.style.opacity = env(t, 4.9, 7.4, 0.9, 0.9).toFixed(3);
+  tag.style.opacity = (smooth(10.6, 12.2, t) * 0.85).toFixed(3);
+  if (t > 12.5 && !replayEl.classList.contains('on')) replayEl.classList.add('on');
+  adapt((now - last) / 1000, now);
+  last = now;
+}
+
+sampleTitle('THE LONG QUIET').then(target => {
+  title = makeTitle(target);
+  scene.add(title);
+  resize();
+});
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

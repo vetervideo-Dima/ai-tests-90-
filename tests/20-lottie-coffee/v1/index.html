@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lottie Coffee</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #2b211c; }
+  body { display: flex; align-items: center; justify-content: center; }
+  #anim { width: min(512px, 90vw); height: min(512px, 90vw); }
+</style>
+</head>
+<body>
+<div id="anim"></div>
+<script src="../../../vendor/lottie-web/lottie.min.js"></script>
+<script>
+  fetch('coffee.json')
+    .then(r => r.json())
+    .then(data => {
+      lottie.loadAnimation({
+        container: document.getElementById('anim'),
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        animationData: data
+      });
+    })
+    .catch(err => console.error('Failed to load coffee.json', err));
+</script>
+</body>
+</html>

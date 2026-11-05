@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ASCII Donut — web port</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #030308; }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; }
+  #glow { filter: blur(7px) saturate(1.4); opacity: .6; mix-blend-mode: screen; pointer-events: none; }
+  #fx {
+    position: fixed; inset: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.18) 2px 3px),
+      radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,.65) 100%);
+  }
+</style>
+</head>
+<body>
+<canvas id="term"></canvas>
+<canvas id="glow"></canvas>
+<div id="fx"></div>
+<script>
+// Web port of donut.py: same math (torus + orbiting planet + stars, z-buffer, ANSI-256 palette), 30 FPS.
+(() => {
+  'use strict';
+  const RAMP = '.,-~:;=!*#$@';
+  const NR = RAMP.length;
+  const FPS = 30, FRAME_MS = 1000 / FPS;
+
+  const TORUS_PAL = [53, 89, 90, 125, 126, 161, 162, 198, 204, 209, 215, 216, 222, 223, 229, 230, 231];
+  const OCEAN_PAL = [18, 19, 20, 26, 27, 32, 33, 39, 38, 45, 81, 117, 159];
+  const LAND_PAL  = [22, 28, 34, 64, 70, 76, 106, 112, 148, 154, 190, 193];
+  const ICE_PAL   = [60, 103, 146, 152, 189, 195, 231];
+  const ATMO_COL = 87, ORBIT_COL = 237, STATUS_COL = 244;
+  const STAR_TINTS = [[244, 255], [67, 153], [136, 229], [240, 250]];
+
+  const R1 = 1, R2 = 2, K2 = 11, ORBIT_A = 4.9, ORBIT_I = 24 * Math.PI / 180, PLANET_R = 0.85, OMEGA = 0.6;
+  const ln = Math.hypot(1, 1.3, 1);
+  const LX = -1 / ln, LY = 1.3 / ln, LZ = -1 / ln;
+  const hn = Math.hypot(LX, LY, LZ - 1);
+  const HX = LX / hn, HY = LY / hn, HZ = (LZ - 1) / hn;
+
+  // xterm-256 palette -> CSS colours
+  const XTERM = (() => {
+    const base = ['#000000','#cd0000','#00cd00','#cdcd00','#0000ee','#cd00cd','#00cdcd','#e5e5e5',
+                  '#7f7f7f','#ff0000','#00ff00','#ffff00','#5c5cff','#ff00ff','#00ffff','#ffffff'];
+    const lv = [0, 95, 135, 175, 215, 255];
+    const out = base.slice();
+    for (let n = 16; n < 232; n++) {
+      const k = n - 16;
+      out.push(`rgb(${lv[(k / 36) | 0]},${lv[((k / 6) | 0) % 6]},${lv[k % 6]})`);
+    }
+    for (let n = 232; n < 256; n++) { const g = 8 + (n - 232) * 10; out.push(`rgb(${g},${g},${g})`); }
+    return out;
+  })();
+
+  const cv = document.getElementById('term');
+  const gcv = document.getElementById('glow');
+  const ctx = cv.getContext('2d', { alpha: false });
+  const gctx = gcv.getContext('2d');
+
+  let W = 0, H = 0, cw = 8, chh = 16, dpr = 1;
+  let scene = null;
+  let fontCss = '';
+
+  function mulberry32(a) {
+    return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+
+  function buildScene(w, h) {
+    const s = { w, h: h - 1 };
+    s.cx = s.w / 2; s.cy = s.h / 2;
+    const ext = R1 + R2, reach = ORBIT_A + PLANET_R;
+    // portrait screens (phones): tilt the orbit plane towards vertical so the scene fills the screen
+    const portrait = s.h * 2 > s.w * 1.15;
+    s.gamma = portrait ? 68 * Math.PI / 180 : 0;
+    s.cg = Math.cos(s.gamma); s.sg = Math.sin(s.gamma);
+    s.orbitPos = a => {
+      const x = ORBIT_A * Math.cos(a), y = ORBIT_A * Math.sin(a) * Math.sin(ORBIT_I), z = ORBIT_A * Math.sin(a) * Math.cos(ORBIT_I);
+      return [x * s.cg - y * s.sg, x * s.sg + y * s.cg, z];
+    };
+    // fit K1 from the projected extents (K1 = 1) of the torus and the whole planet orbit
+    let mx = 2 * ext / (K2 - ext), my = ext / (K2 - ext);
+    for (let k = 0; k < 256; k++) {
+      const [x, y, z] = s.orbitPos(2 * Math.PI * k / 256);
+      const ooz = 1 / (K2 + z - PLANET_R);
+      mx = Math.max(mx, 2 * (Math.abs(x) + PLANET_R) * ooz);
+      my = Math.max(my, (Math.abs(y) + PLANET_R) * ooz);
+    }
+    s.K1 = Math.max(1, Math.min(s.w * 0.485 / mx, s.h * 0.48 / my));
+    s.oozMin = 1 / (K2 + reach); s.oozMax = 1 / (K2 - reach);
+
+    // torus samples (pos + normal), packed
+    const scale = 2 * s.K1 / (K2 - ext);
+    const nPhi = Math.min(1200, Math.max(90, Math.round(2 * Math.PI * ext * scale * 1.1)));
+    const nTh = Math.min(400, Math.max(30, Math.round(2 * Math.PI * R1 * scale * 1.2)));
+    const T = new Float32Array(nPhi * nTh * 6);
+    let o = 0;
+    for (let i = 0; i < nTh; i++) {
+      const th = 2 * Math.PI * i / nTh, ct = Math.cos(th), st = Math.sin(th);
+      for (let j = 0; j < nPhi; j++) {
+        const ph = 2 * Math.PI * j / nPhi, cp = Math.cos(ph), sp = Math.sin(ph), c = R2 + R1 * ct;
+        T[o++] = c * cp; T[o++] = R1 * st; T[o++] = -c * sp;
+        T[o++] = ct * cp; T[o++] = st; T[o++] = -ct * sp;
+      }
+    }
+    s.torus = T;
+
+    // sphere samples (normal, u, v, ice)
+    const rad = PLANET_R * 2 * s.K1 / (K2 - ORBIT_A);
+    const nV = Math.min(160, Math.max(16, Math.round(Math.PI * rad * 1.6)));
+    const nU = Math.min(320, Math.max(32, Math.round(2 * Math.PI * rad * 1.6)));
+    const S = new Float32Array((nV - 1) * nU * 6);
+    o = 0;
+    for (let i = 1; i < nV; i++) {
+      const v = Math.PI * i / nV, sv = Math.sin(v), cvv = Math.cos(v);
+      for (let j = 0; j < nU; j++) {
+        const u = 2 * Math.PI * j / nU;
+        S[o++] = sv * Math.cos(u); S[o++] = cvv; S[o++] = sv * Math.sin(u);
+        S[o++] = u; S[o++] = v; S[o++] = Math.abs(cvv) > 0.86 ? 1 : 0;
+      }
+    }
+    s.sphere = S;
+
+    const nOrb = Math.max(80, Math.round(2 * Math.PI * ORBIT_A * 2 * s.K1 / K2 * 0.45));
+    s.orbit = [];
+    for (let k = 0; k < nOrb; k++) {
+      s.orbit.push(s.orbitPos(2 * Math.PI * k / nOrb));
+    }
+
+    const rnd = mulberry32(1234);
+    const count = Math.max(24, (s.w * s.h / 34) | 0);
+    s.stars = [];
+    for (let i = 0; i < count; i++) {
+      const depth = rnd();
+      s.stars.push({ x: rnd() * s.w, y: (rnd() * s.h) | 0, ph: rnd() * Math.PI * 2, sp: 0.6 + rnd() * 2.4,
+                     drift: 0.15 + 1.1 * depth * depth, tint: STAR_TINTS[(rnd() * STAR_TINTS.length) | 0] });
+    }
+    const n = s.w * s.h;
+    s.chars = new Uint8Array(n);   // index into RAMP+extras (0 = space)
+    s.cols = new Uint8Array(n);
+    s.zbuf = new Float32Array(n);
+    return s;
+  }
+
+  // glyph table: 0 = space, 1..12 ramp, 13 '+', 14 '*'
+  const GLYPH = ' ' + RAMP + '+*';
+  const G_DOT = 1, G_PLUS = 13, G_STAR = 14;
+
+  function render(s, t) {
+    const { w, h, K1, cx, cy, chars, cols, zbuf } = s;
+    chars.fill(0); zbuf.fill(0);
+    const omin = s.oozMin, orng = s.oozMax - s.oozMin;
+
+    for (const st of s.stars) {
+      const b = 0.5 + 0.5 * Math.sin(t * st.sp + st.ph);
+      if (b < 0.22) continue;
+      let x = (st.x - st.drift * t) % w; if (x < 0) x += w;
+      const p = st.y * w + (x | 0);
+      if (b < 0.55) { chars[p] = G_DOT; cols[p] = st.tint[0]; }
+      else if (b < 0.88) { chars[p] = G_PLUS; cols[p] = b < 0.7 ? st.tint[0] : st.tint[1]; }
+      else { chars[p] = G_STAR; cols[p] = st.tint[1]; }
+    }
+
+    for (const [ox, oy, oz] of s.orbit) {
+      const ooz = 1 / (K2 + oz);
+      const xp = (cx + 2 * K1 * ooz * ox) | 0, yp = (cy - K1 * ooz * oy) | 0;
+      if (xp >= 0 && xp < w && yp >= 0 && yp < h) {
+        const p = yp * w + xp;
+        if (ooz > zbuf[p]) { zbuf[p] = ooz; chars[p] = G_DOT; cols[p] = oz > 0 ? ORBIT_COL : ORBIT_COL + 3; }
+      }
+    }
+
+    // torus
+    const A = t * 0.9, B = t * 0.45;
+    const cA = Math.cos(A), sA = Math.sin(A), cB = Math.cos(B), sB = Math.sin(B);
+    const T = s.torus, tl = T.length, np = TORUS_PAL.length;
+    for (let i = 0; i < tl; i += 6) {
+      const x = T[i], y = T[i + 1], z = T[i + 2];
+      const y1 = y * cA - z * sA, z1 = y * sA + z * cA;
+      const ooz = 1 / (K2 + z1);
+      const xp = Math.floor(cx + 2 * K1 * ooz * (x * cB - y1 * sB));
+      if (xp < 0 || xp >= w) continue;
+      const yp = Math.floor(cy - K1 * ooz * (x * sB + y1 * cB));
+      if (yp < 0 || yp >= h) continue;
+      const p = yp * w + xp;
+      if (ooz <= zbuf[p]) continue;
+      zbuf[p] = ooz;
+      const nx = T[i + 3], ny = T[i + 4], nz = T[i + 5];
+      const ny1 = ny * cA - nz * sA, nz1 = ny * sA + nz * cA;
+      const nx2 = nx * cB - ny1 * sB, ny2 = nx * sB + ny1 * cB;
+      const d = nx2 * LX + ny2 * LY + nz1 * LZ;
+      let lum = 0.08;
+      if (d > 0) {
+        let sp = nx2 * HX + ny2 * HY + nz1 * HZ;
+        sp = sp > 0 ? Math.pow(sp, 16) : 0;
+        lum = Math.min(1, 0.08 + 0.72 * d + 0.45 * sp);
+      }
+      const ci = Math.min(NR - 1, (lum * NR) | 0);
+      chars[p] = ci + 1;
+      cols[p] = TORUS_PAL[Math.min(np - 1, (((ooz - omin) / orng * 0.35 + lum * 0.65) * np) | 0)];
+    }
+
+    // planet
+    const ang = t * OMEGA;
+    const [pcx, pcy, pcz] = s.orbitPos(ang);
+    const spin = t * 0.7;
+    const S = s.sphere, sl = S.length;
+    for (let i = 0; i < sl; i += 6) {
+      const nx = S[i], ny = S[i + 1], nz = S[i + 2];
+      if (nz > 0.2) continue;
+      const ooz = 1 / (K2 + pcz + PLANET_R * nz);
+      const xp = Math.floor(cx + 2 * K1 * ooz * (pcx + PLANET_R * nx));
+      if (xp < 0 || xp >= w) continue;
+      const yp = Math.floor(cy - K1 * ooz * (pcy + PLANET_R * ny));
+      if (yp < 0 || yp >= h) continue;
+      const p = yp * w + xp;
+      if (ooz <= zbuf[p]) continue;
+      zbuf[p] = ooz;
+      const d = nx * LX + ny * LY + nz * LZ;
+      const lum = 0.1 + 0.9 * (d > 0 ? d : 0);
+      chars[p] = Math.min(NR - 1, (lum * NR) | 0) + 1;
+      if (nz > -0.28 && d > -0.2) { cols[p] = ATMO_COL; continue; }
+      let pal;
+      if (S[i + 5]) pal = ICE_PAL;
+      else {
+        const uu = S[i + 3] + spin, v = S[i + 4];
+        const land = Math.sin(3 * uu) * Math.sin(2 * v + 0.5) + 0.5 * Math.sin(5 * uu + 1.3) * Math.sin(3 * v + 1) > 0.22;
+        pal = land ? LAND_PAL : OCEAN_PAL;
+      }
+      cols[p] = pal[Math.min(pal.length - 1, (((ooz - omin) / orng * 0.3 + lum * 0.7) * pal.length) | 0)];
+    }
+  }
+
+  function draw(s, fps) {
+    ctx.fillStyle = '#030308';
+    ctx.fillRect(0, 0, W, H);
+    // centre the grid
+    const ox = Math.floor((W - s.w * cw) / 2), oy = Math.floor((H - (s.h + 1) * chh) / 2);
+    ctx.font = fontCss;
+    ctx.textBaseline = 'middle';
+    const { w, h, chars, cols } = s;
+    for (let r = 0; r < h; r++) {
+      const base = r * w, y = oy + r * chh + chh / 2;
+      // draw runs of same colour; spaces break runs (cheaper & keeps glyphs on the grid)
+      let c = 0;
+      while (c < w) {
+        const g = chars[base + c];
+        if (!g) { c++; continue; }
+        const col = cols[base + c];
+        let str = '', c0 = c;
+        while (c < w && chars[base + c] && cols[base + c] === col) { str += GLYPH[chars[base + c]]; c++; }
+        ctx.fillStyle = XTERM[col];
+        if (str.length === 1) ctx.fillText(str, ox + c0 * cw, y);
+        else for (let k = 0; k < str.length; k++) ctx.fillText(str[k], ox + (c0 + k) * cw, y);
+      }
+    }
+    const status = ` donut.py  ${s.w}x${s.h + 1}  ${fps.toFixed(1)} fps  tap / space to pause`.slice(0, s.w - 1);
+    ctx.fillStyle = XTERM[STATUS_COL];
+    for (let k = 0; k < status.length; k++) ctx.fillText(status[k], ox + k * cw, oy + h * chh + chh / 2);
+
+    gctx.clearRect(0, 0, gcv.width, gcv.height);
+    gctx.drawImage(cv, 0, 0, gcv.width, gcv.height);
+  }
+
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    const vw = window.innerWidth, vh = window.innerHeight;
+    // cell ~ 1:2 like a terminal; target ~8.5 px cells on desktop, at least 56 columns on phones
+    let cols = Math.round(vw / 8.6);
+    cols = Math.max(vw < 600 ? 64 : 56, Math.min(220, cols));
+    const cssCw = vw / cols;
+    const cssCh = cssCw * 2;
+    const rows = Math.max(12, Math.floor(vh / cssCh));
+    cw = cssCw * dpr; chh = cssCh * dpr;
+    W = cv.width = Math.round(vw * dpr);
+    H = cv.height = Math.round(vh * dpr);
+    gcv.width = Math.round(vw / 2); gcv.height = Math.round(vh / 2);
+    // fit the font so a glyph is one cell wide
+    const probe = 'JetBrains Mono, "DejaVu Sans Mono", Menlo, Consolas, monospace';
+    let size = cw / 0.6;
+    ctx.font = `700 ${size}px ${probe}`;
+    const mw = ctx.measureText('M').width || cw;
+    size = Math.min(size * cw / mw, chh * 0.95);
+    fontCss = `700 ${size.toFixed(2)}px ${probe}`;
+    scene = buildScene(cols, rows);
+  }
+
+  let paused = false, pauseAt = 0, tOffset = 0;
+  const t0 = performance.now();
+  let lastFrame = 0, lastTick = 0, fpsEst = FPS;
+
+  function tick(now) {
+    requestAnimationFrame(tick);
+    if (now - lastFrame < FRAME_MS - 1) return;          // throttle to 30 FPS
+    lastFrame = (now - lastFrame > FRAME_MS * 2) ? now : lastFrame + FRAME_MS;
+    if (lastTick) { const dt = now - lastTick; if (dt > 0) fpsEst = fpsEst * 0.9 + (1000 / dt) * 0.1; }
+    lastTick = now;
+    if (paused) return;
+    const t = (now - t0 - tOffset) / 1000;
+    render(scene, t);
+    draw(scene, fpsEst);
+  }
+
+  function togglePause() {
+    const now = performance.now();
+    if (paused) tOffset += now - pauseAt; else pauseAt = now;
+    paused = !paused;
+  }
+  window.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); togglePause(); } });
+  window.addEventListener('pointerdown', togglePause);
+  let rT = 0;
+  window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(resize, 80); });
+  document.addEventListener('visibilitychange', () => { lastTick = 0; });
+
+  resize();
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('700 16px "JetBrains Mono"').then(() => resize()).catch(() => {});
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

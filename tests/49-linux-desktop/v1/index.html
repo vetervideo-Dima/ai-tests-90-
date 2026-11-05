@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tux Desktop</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+:root{--accent:#e95420;--tb-h:48px;--radius:10px;--mono:"Ubuntu Mono","DejaVu Sans Mono","JetBrains Mono",Menlo,Consolas,monospace}
+body{font:13px/1.4 "Ubuntu","Cantarell","Noto Sans","Segoe UI",system-ui,-apple-system,sans-serif;color:var(--fg);background:#000;user-select:none;-webkit-user-select:none;-webkit-font-smoothing:antialiased}
+body[data-theme=dark]{--fg:#f2f2f2;--muted:#a3a3a8;--win:#242428;--win2:#2d2d32;--title:#1d1d21;--border:rgba(255,255,255,.09);--hover:rgba(255,255,255,.08);--input:#1a1a1d;--panel:rgba(20,20,24,.78);--shadow:0 24px 60px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.7);--shadow2:0 8px 24px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.6);--term:#17171c}
+body[data-theme=light]{--fg:#1e1e22;--muted:#68686e;--win:#fbfbfc;--win2:#efeff2;--title:#e9e9ec;--border:rgba(0,0,0,.12);--hover:rgba(0,0,0,.06);--input:#fff;--panel:rgba(246,246,250,.82);--shadow:0 24px 60px rgba(0,0,0,.25),0 0 0 1px rgba(0,0,0,.14);--shadow2:0 8px 24px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.12);--term:#2c0b24}
+button{font:inherit;color:inherit}
+input,textarea,select{font:inherit;color:inherit}
+body.dragging,body.dragging *{user-select:none!important;cursor:inherit}
+svg{display:block}
+.si{width:18px;height:18px;flex:none}
+
+/* desktop */
+#desktop{position:absolute;left:0;top:0;right:0;bottom:var(--tb-h);overflow:hidden;z-index:0;background-size:cover;background-position:center;transition:background .4s}
+#icons{position:absolute;inset:12px;display:grid;grid-auto-flow:column;grid-template-rows:repeat(auto-fill,96px);grid-auto-columns:92px;gap:4px;align-content:start;justify-content:start}
+.dicon{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px 4px;border-radius:8px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85);text-align:center;font-size:12px;cursor:default;border:1px solid transparent;height:92px}
+.dicon svg,.dicon img{width:48px;height:48px;flex:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35));object-fit:cover;border-radius:4px}
+.dicon:hover{background:rgba(255,255,255,.12)}
+.dicon.sel{background:color-mix(in srgb,var(--accent) 40%,transparent);border-color:color-mix(in srgb,var(--accent) 70%,transparent)}
+.dicon span{max-width:86px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+#windows{position:absolute;inset:0;pointer-events:none}
+
+/* windows */
+.win{position:absolute;pointer-events:auto;transition:opacity .16s ease,transform .16s ease;will-change:transform}
+.win .frame{position:absolute;inset:0;display:flex;flex-direction:column;border-radius:var(--radius);overflow:hidden;background:var(--win);color:var(--fg);box-shadow:var(--shadow2)}
+.win.active .frame{box-shadow:var(--shadow)}
+.win.opening,.win.closing{opacity:0;transform:scale(.94)}
+.win.closing{pointer-events:none}
+.win.min{opacity:0;transform:translateY(80px) scale(.8);pointer-events:none;visibility:hidden;transition:opacity .2s,transform .2s,visibility 0s .2s}
+.win.max{left:0!important;top:0!important;width:100%!important;height:100%!important}
+.win.max .frame{border-radius:0}
+.win.anim{transition:left .2s ease,top .2s ease,width .2s ease,height .2s ease,opacity .16s,transform .16s}
+.titlebar{height:40px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;background:var(--title);border-bottom:1px solid var(--border);touch-action:none;cursor:default}
+.titlebar .ticon svg{width:18px;height:18px}
+.ttitle{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;opacity:.92}
+.win:not(.active) .ttitle,.win:not(.active) .ticon{opacity:.5}
+.tbtns{display:flex;gap:8px}
+.tbtns button{width:24px;height:24px;border-radius:50%;border:0;background:var(--hover);display:grid;place-items:center;padding:0;cursor:pointer;transition:background .12s}
+.tbtns button:hover{background:rgba(127,127,127,.32)}
+.tbtns .b-close:hover{background:#e01b24;color:#fff}
+.tbtns svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.6;fill:none}
+.wbody{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;overflow:hidden}
+.rz{position:absolute;z-index:3;touch-action:none}
+.rz.n{top:-4px;left:10px;right:10px;height:8px;cursor:ns-resize}
+.rz.s{bottom:-4px;left:10px;right:10px;height:8px;cursor:ns-resize}
+.rz.e{right:-4px;top:10px;bottom:10px;width:8px;cursor:ew-resize}
+.rz.w{left:-4px;top:10px;bottom:10px;width:8px;cursor:ew-resize}
+.rz.ne{right:-5px;top:-5px;width:15px;height:15px;cursor:nesw-resize}
+.rz.sw{left:-5px;bottom:-5px;width:15px;height:15px;cursor:nesw-resize}
+.rz.nw{left:-5px;top:-5px;width:15px;height:15px;cursor:nwse-resize}
+.rz.se{right:-5px;bottom:-5px;width:15px;height:15px;cursor:nwse-resize}
+.win.max .rz{display:none}
+
+/* common controls */
+.toolbar{display:flex;align-items:center;gap:4px;padding:6px 8px;background:var(--win2);border-bottom:1px solid var(--border);flex:none;flex-wrap:wrap}
+.toolbar button,.btn{border:1px solid var(--border);background:var(--win);border-radius:6px;padding:4px 10px;cursor:pointer;min-height:28px;display:inline-flex;align-items:center;gap:6px;transition:background .12s}
+.toolbar button:hover,.btn:hover{background:var(--hover)}
+.toolbar button:disabled{opacity:.4;pointer-events:none}
+.toolbar button.ib{padding:4px 6px;border-color:transparent;background:transparent}
+.toolbar button.ib:hover{background:var(--hover)}
+.toolbar button.on{background:color-mix(in srgb,var(--accent) 25%,transparent);border-color:var(--accent)}
+.primary,.toolbar button.primary{background:var(--accent)!important;border-color:transparent!important;color:#fff!important}
+.primary:hover{filter:brightness(1.1)}
+.sep{width:1px;height:22px;background:var(--border);margin:0 4px}
+.grow{flex:1}
+.chk{display:inline-flex;align-items:center;gap:4px;padding:0 6px;cursor:pointer}
+.chk input{accent-color:var(--accent)}
+.statusbar{flex:none;display:flex;justify-content:space-between;gap:12px;padding:3px 10px;font-size:11.5px;color:var(--muted);background:var(--win2);border-top:1px solid var(--border);white-space:nowrap;overflow:hidden}
+.statusbar span{overflow:hidden;text-overflow:ellipsis}
+.inp{width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--input);outline:none}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
+
+/* taskbar */
+#taskbar{position:absolute;left:0;right:0;bottom:0;height:var(--tb-h);display:flex;align-items:center;gap:4px;padding:0 6px;background:var(--panel);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);border-top:1px solid var(--border);z-index:10;color:var(--fg)}
+#startBtn{width:40px;height:38px;border:0;border-radius:8px;background:transparent;display:grid;place-items:center;cursor:pointer;flex:none}
+#startBtn:hover,#startBtn.on{background:var(--hover)}
+#startBtn svg{width:28px;height:28px}
+#tasks{flex:1;display:flex;gap:4px;min-width:0;overflow:hidden;height:100%;align-items:center}
+.task{display:flex;align-items:center;gap:8px;height:38px;max-width:200px;min-width:40px;flex:0 1 200px;padding:0 10px;border:0;border-radius:8px;background:transparent;cursor:pointer;position:relative;overflow:hidden}
+.task:hover{background:var(--hover)}
+.task.active{background:var(--hover)}
+.task::after{content:"";position:absolute;left:50%;bottom:2px;width:6px;height:3px;border-radius:2px;background:var(--muted);transform:translateX(-50%);transition:width .2s,background .2s}
+.task.active::after{width:22px;background:var(--accent)}
+.task .ticon svg{width:22px;height:22px}
+.task.minimized{opacity:.65}
+.tlabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+#tray{display:flex;align-items:center;gap:2px;height:100%;flex:none}
+.trayi{display:flex;gap:8px;align-items:center;padding:0 10px;height:38px;border-radius:8px;opacity:.9}
+#clock{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;height:38px;padding:0 10px;border:0;border-radius:8px;background:transparent;cursor:pointer;line-height:1.15}
+#clock:hover,#clock.on{background:var(--hover)}
+#clock b{font-weight:600;font-size:13px;font-variant-numeric:tabular-nums}
+#clock small{font-size:11px;color:var(--muted)}
+#showDesk{width:8px;height:100%;border:0;border-left:1px solid var(--border);background:transparent;cursor:pointer;margin-left:4px}
+#showDesk:hover{background:var(--hover)}
+
+/* popups */
+.popup{position:absolute;bottom:calc(var(--tb-h) + 8px);background:var(--panel);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);z-index:20;color:var(--fg);transition:opacity .15s,transform .15s}
+.popup.hide{opacity:0;transform:translateY(10px) scale(.98);pointer-events:none}
+#menu{left:8px;width:min(440px,calc(100vw - 16px));padding:14px;transform-origin:bottom left}
+.msearch{position:relative}
+.msearch .si{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.6}
+.msearch input{padding-left:34px}
+#mapps{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:4px;margin:12px 0;max-height:50vh;overflow:auto}
+.mapp{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border:0;background:transparent;border-radius:10px;cursor:pointer;font-size:12px;text-align:center}
+.mapp:hover,.mapp.hl{background:var(--hover)}
+.mapp svg,.mapp img{width:40px;height:40px;object-fit:cover;border-radius:4px}
+.mapp span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mhead{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);grid-column:1/-1;padding:4px 6px 0}
+.mfoot{display:flex;align-items:center;gap:6px;border-top:1px solid var(--border);padding-top:10px}
+.muser{flex:1;display:flex;gap:10px;align-items:center}
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#77216f);display:grid;place-items:center;color:#fff;font-weight:700}
+.muser small{display:block;color:var(--muted)}
+.mfoot button{width:34px;height:34px;border-radius:8px;border:0;background:transparent;cursor:pointer;display:grid;place-items:center}
+.mfoot button:hover{background:var(--hover)}
+#cal{right:8px;width:280px;padding:14px;transform-origin:bottom right}
+#cal .ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+#cal .ch b{font-size:14px}
+#cal .ch button{border:0;background:transparent;width:28px;height:28px;border-radius:6px;cursor:pointer}
+#cal .ch button:hover{background:var(--hover)}
+#cal .big{font-size:30px;font-weight:300;font-variant-numeric:tabular-nums}
+#cal .sub{color:var(--muted);margin-bottom:10px}
+.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:12px}
+.cg div{padding:6px 0;border-radius:50%}
+.cg .dn{color:var(--muted);font-size:11px}
+.cg .o{opacity:.35}
+.cg .t{background:var(--accent);color:#fff;font-weight:700}
+.ctx{position:fixed;z-index:40000;min-width:180px;padding:5px;background:var(--panel);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);color:var(--fg)}
+.ctx button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:7px 12px;border-radius:6px;cursor:pointer}
+.ctx button:hover{background:var(--accent);color:#fff}
+.ctx button.danger:hover{background:#e01b24}
+.ctx hr{border:0;border-top:1px solid var(--border);margin:4px 2px}
+.modal-ov{position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.35);display:grid;place-items:center;animation:fade .15s}
+.modal{width:min(400px,calc(100vw - 32px));background:var(--win);color:var(--fg);border-radius:14px;box-shadow:var(--shadow);padding:20px;animation:pop .18s ease}
+.modal h3{margin:0 0 8px;font-size:16px}
+.modal p{margin:0 0 12px;color:var(--muted)}
+.mbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+@keyframes fade{from{opacity:0}}
+@keyframes pop{from{transform:scale(.92);opacity:0}}
+#toasts{position:fixed;top:14px;right:14px;z-index:50000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--panel);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);color:var(--fg);padding:10px 14px;border-radius:10px;box-shadow:var(--shadow2);border-left:3px solid var(--accent);max-width:320px;animation:slidein .25s ease;transition:opacity .3s,transform .3s}
+.toast.out{opacity:0;transform:translateX(20px)}
+@keyframes slidein{from{opacity:0;transform:translateX(30px)}}
+#power{position:fixed;inset:0;background:#000;z-index:60000;display:grid;place-items:center;color:#888;font-family:var(--mono);opacity:0;transition:opacity .6s;pointer-events:none}
+#power.on{opacity:1;pointer-events:auto;cursor:pointer}
+
+/* terminal */
+.wbody.term{display:block;overflow:auto;background:var(--term);color:#e6e6e6;font:14px/1.45 var(--mono);padding:8px 10px 14px;user-select:text;-webkit-user-select:text;cursor:text}
+.tout>div{white-space:pre-wrap;word-break:break-word;min-height:1.45em}
+.tline{display:flex}
+.tprompt{white-space:pre}
+.tin{flex:1;min-width:20px;background:transparent;border:0;outline:0;font:inherit;color:inherit;padding:0;caret-color:#8ae234}
+.pu{color:#8ae234;font-weight:700}.pd{color:#729fcf;font-weight:700}
+.c-dir{color:#729fcf;font-weight:700}.c-exe{color:#8ae234;font-weight:700}.c-img{color:#ad7fa8;font-weight:700}
+.terr{color:#ff6b6b}.tdim{color:#8a8a8a}.tacc{color:var(--accent);font-weight:700}
+.nf{display:flex;gap:18px;flex-wrap:wrap}
+.nf pre{margin:0;font:inherit;color:var(--accent)}
+.nfk{color:var(--accent);font-weight:700}
+.blk{display:inline-block;width:22px;height:14px;vertical-align:middle}
+
+/* editor */
+.edwrap{flex:1;display:flex;min-height:0;background:var(--input)}
+.gutter{flex:none;width:48px;padding:10px 8px 10px 0;text-align:right;color:var(--muted);font:13px/20px var(--mono);overflow:hidden;white-space:pre;background:var(--win2);border-right:1px solid var(--border);opacity:.8}
+.edwrap textarea{flex:1;min-width:0;border:0;outline:0;resize:none;padding:10px 12px;background:transparent;font:13px/20px var(--mono);tab-size:2;user-select:text}
+.edwrap.wrapon .gutter{display:none}
+
+/* files */
+.fm{flex:1;display:flex;min-height:0}
+.side{flex:none;width:172px;padding:8px;background:var(--win2);border-right:1px solid var(--border);overflow:auto;display:flex;flex-direction:column;gap:2px}
+.side button{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:0;background:transparent;border-radius:6px;cursor:pointer;text-align:left;white-space:nowrap}
+.side button:hover{background:var(--hover)}
+.side button.on{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--fg)}
+.side button.on .si{color:var(--accent)}
+.grid{flex:1;overflow:auto;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));grid-auto-rows:min-content;gap:4px;align-content:start;outline:none}
+.fitem{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:8px;border:1px solid transparent;text-align:center;cursor:default}
+.fitem svg,.fitem img{width:52px;height:52px;object-fit:contain}
+.fitem img{background:#fff;border-radius:3px;box-shadow:0 1px 4px rgba(0,0,0,.3);width:48px;height:40px;margin:6px 0;object-fit:cover}
+.fitem:hover{background:var(--hover)}
+.fitem.sel{background:color-mix(in srgb,var(--accent) 25%,transparent);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
+.fname{font-size:12px;word-break:break-word;max-width:100%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 0}
+.crumbs{flex:1;display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;background:var(--input);border:1px solid var(--border);border-radius:6px;padding:2px 4px;margin:0 4px;height:30px}
+.crumbs button{border:0!important;background:transparent!important;padding:2px 6px!important;min-height:22px!important;white-space:nowrap}
+.crumbs button:hover{background:var(--hover)!important}
+.crumbs button:last-child{font-weight:700}
+.cs{opacity:.4}
+
+/* settings */
+.set{flex:1;display:flex;min-height:0}
+.set .side{width:190px}
+.spage{flex:1;overflow:auto;padding:20px 24px}
+.spage h2{margin:0 0 16px;font-size:20px;font-weight:600}
+.sect{background:var(--win2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.sect h4{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:600}
+.themes{display:flex;gap:14px;flex-wrap:wrap}
+.tcard{border:2px solid transparent;background:transparent;border-radius:12px;padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center}
+.tcard.on{border-color:var(--accent)}
+.tprev{width:130px;height:82px;border-radius:8px;position:relative;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.tprev::before{content:"";position:absolute;left:14px;top:14px;right:14px;bottom:18px;border-radius:5px;box-shadow:0 3px 8px rgba(0,0,0,.3)}
+.tprev::after{content:"";position:absolute;left:0;right:0;bottom:0;height:10px}
+.tprev.light{background:linear-gradient(135deg,#89f7fe,#66a6ff)}.tprev.light::before{background:#fafafa}.tprev.light::after{background:#f0f0f0cc}
+.tprev.dark{background:linear-gradient(135deg,#2c001e,#5e2750)}.tprev.dark::before{background:#2a2a2e}.tprev.dark::after{background:#111c}
+.swatches{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.sw{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer;box-shadow:0 0 0 1px var(--border)}
+.sw.on{border-color:var(--fg)}
+input[type=color]{width:36px;height:32px;border:1px solid var(--border);border-radius:8px;background:transparent;padding:2px;cursor:pointer}
+.row{display:flex;align-items:center;justify-content:space-between;padding:6px 0}
+.row+.row{border-top:1px solid var(--border)}
+.row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+.walls{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.wall{border:3px solid transparent;border-radius:10px;padding:0;cursor:pointer;overflow:hidden;background:transparent;text-align:left}
+.wall div{height:76px;background-size:cover!important;background-position:center!important}
+.wall span{display:block;padding:4px 8px;font-size:12px;background:var(--win)}
+.wall.on{border-color:var(--accent)}
+.about{display:flex;gap:20px;align-items:center}
+.about svg{width:96px;height:96px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px}
+.kv b{color:var(--muted);font-weight:500}
+
+/* paint */
+.ptb{gap:6px}
+.tgroup{display:flex;gap:2px;align-items:center;flex-wrap:wrap}
+.pc{width:20px;height:20px;border-radius:50%;border:2px solid var(--win2)!important;padding:0!important;min-height:0!important;box-shadow:0 0 0 1px var(--border);cursor:pointer}
+.pc.on{box-shadow:0 0 0 2px var(--accent)}
+.psize{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.psize input{width:90px;accent-color:var(--accent)}
+.psize span{min-width:18px}
+.pcanvas{flex:1;min-height:0;overflow:hidden;position:relative;background:repeating-conic-gradient(#cfcfcf 0 25%,#e6e6e6 0 50%) 0 0/16px 16px}
+.pcanvas canvas{position:absolute;left:0;top:0;cursor:crosshair;touch-action:none;background:#fff}
+
+@media (max-width:700px){
+  :root{--tb-h:54px}
+  .task .tlabel{display:none}
+  .task{flex:0 0 46px;justify-content:center;padding:0}
+  .side{width:56px;padding:6px 4px}
+  .side button span{display:none}
+  .side button{justify-content:center;padding:10px 0}
+  .set .side{width:56px}
+  .spage{padding:14px}
+  .trayi{display:none}
+  #icons{grid-auto-flow:row;grid-template-columns:repeat(auto-fill,84px);grid-template-rows:none;grid-auto-rows:96px}
+}
+</style>
+</head>
+<body data-theme="dark">
+<div id="desktop">
+  <div id="icons"></div>
+  <div id="windows"></div>
+</div>
+<div id="taskbar">
+  <button id="startBtn" title="Applications"></button>
+  <div id="tasks"></div>
+  <div id="tray">
+    <div class="trayi" id="trayIcons"></div>
+    <button id="clock" title="Calendar"><b id="clockT">--:--</b><small id="clockD"></small></button>
+    <button id="showDesk" title="Show desktop"></button>
+  </div>
+</div>
+<div id="menu" class="popup hide">
+  <div class="msearch"><span id="msi"></span><input id="msearch" class="inp" placeholder="Type to search apps and files…" autocomplete="off" spellcheck="false"></div>
+  <div id="mapps"></div>
+  <div class="mfoot">
+    <div class="muser"><div class="avatar">U</div><div><b>User</b><small>user@tuxbox</small></div></div>
+    <button id="mreset" title="Factory reset (clear storage)"></button>
+    <button id="mpower" title="Power off"></button>
+  </div>
+</div>
+<div id="cal" class="popup hide"></div>
+<div id="toasts"></div>
+<div id="power"><div id="powerMsg"></div></div>
+
+<script>
+'use strict';
+/* ============================================================
+   Utilities
+   ============================================================ */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const cmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+const isSmall = () => innerWidth < 700;
+const bus = new EventTarget();
+const emit = (t, d) => bus.dispatchEvent(new CustomEvent(t, { detail: d }));
+const PFX = 'tuxdesk.';
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(PFX + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) {
+    try { localStorage.setItem(PFX + k, JSON.stringify(v)); return true; }
+    catch (e) { toast('Storage error: ' + (e.name === 'QuotaExceededError' ? 'localStorage is full' : e.message)); return false; }
+  },
+  clear() { try { Object.keys(localStorage).filter(k => k.startsWith(PFX)).forEach(k => localStorage.removeItem(k)); } catch (e) {} }
+};
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.classList.add('out'), 2600); setTimeout(() => t.remove(), 3000);
+}
+const si = d => `<svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const SVG = {
+  back: si('<path d="M15 18l-6-6 6-6"/>'), fwd: si('<path d="M9 18l6-6-6-6"/>'), up: si('<path d="M12 19V5M5 12l7-7 7 7"/>'),
+  newdir: si('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/>'),
+  newfile: si('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15h6"/>'),
+  term: si('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>'),
+  home: si('<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'),
+  folder: si('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  disk: si('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h.01M11 15h6"/>'),
+  desk: si('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),
+  doc: si('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>'),
+  down: si('<path d="M12 4v12M6 10l6 6 6-6M5 20h14"/>'),
+  music: si('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
+  image: si('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>'),
+  power: si('<path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>'),
+  reset: si('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'),
+  search: si('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
+  wifi: si('<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="19.5" r=".8" fill="currentColor"/>'),
+  vol: si('<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>'),
+  bat: si('<rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2"/><rect x="4" y="9" width="11" height="6" rx="1" fill="currentColor" stroke="none"/>'),
+  palette: si('<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2" fill="currentColor"/><circle cx="12" cy="7.5" r="1.2" fill="currentColor"/><circle cx="16" cy="10" r="1.2" fill="currentColor"/>'),
+  info: si('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
+  brush: si('<path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14.5c-2 0-3.5 1.6-3.5 3.6 0 1.2-.8 2-1.5 2.4 1 .5 2.4.9 3.5.9 2.2 0 4-1.8 4-4z"/>'),
+  eraser: si('<path d="M7 21l-4-4a2 2 0 0 1 0-2.8L13.2 4a2 2 0 0 1 2.8 0l5 5a2 2 0 0 1 0 2.8L11.8 21z"/><path d="M21 21H7M8.5 10.5l6 6"/>'),
+  line: si('<path d="M4 20L20 4"/>'),
+  rect: si('<rect x="4" y="6" width="16" height="12" rx="1"/>'),
+  ellipse: si('<ellipse cx="12" cy="12" rx="9" ry="6.5"/>'),
+  fill: si('<path d="M4 12l7-7 7 7-7 7z"/><path d="M4 12h14"/><path d="M20 15s1.5 2 1.5 3a1.5 1.5 0 0 1-3 0c0-1 1.5-3 1.5-3z" fill="currentColor"/>'),
+};
+const ICONS = {
+  tux: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="17.5" rx="9" ry="11.5" fill="#1a1a1a"/><ellipse cx="16" cy="20.5" rx="6" ry="7.5" fill="#fff"/><ellipse cx="13" cy="10" rx="2.1" ry="2.5" fill="#fff"/><ellipse cx="19" cy="10" rx="2.1" ry="2.5" fill="#fff"/><circle cx="13.5" cy="10.5" r="1" fill="#111"/><circle cx="18.5" cy="10.5" r="1" fill="#111"/><path d="M13 13.4h6l-3 2.6z" fill="#f5a623"/><ellipse cx="11" cy="28.6" rx="4" ry="1.9" fill="#f5a623"/><ellipse cx="21" cy="28.6" rx="4" ry="1.9" fill="#f5a623"/></svg>`,
+  terminal: `<svg viewBox="0 0 48 48"><rect x="4" y="7" width="40" height="34" rx="6" fill="#2b2b30"/><rect x="4.75" y="7.75" width="38.5" height="32.5" rx="5.25" fill="none" stroke="#5a5a62" stroke-width="1.5"/><path d="M5 13a6 6 0 0 1 6-6h26a6 6 0 0 1 6 6z" fill="#44444c"/><path d="M12 21l6 5-6 5" fill="none" stroke="#8ae234" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 32h12" stroke="#e6e6e6" stroke-width="3" stroke-linecap="round"/></svg>`,
+  files: `<svg viewBox="0 0 48 48"><path d="M4 12a4 4 0 0 1 4-4h10l4 5h18a4 4 0 0 1 4 4v3H4z" fill="#1c5fb8"/><rect x="4" y="16" width="40" height="25" rx="4" fill="#3d8bfd"/><rect x="4" y="16" width="40" height="5" rx="2" fill="#86b7fe" opacity=".55"/><path d="M18 30l6-5 6 5v6h-12z" fill="#fff" opacity=".9"/></svg>`,
+  folder: `<svg viewBox="0 0 48 48"><path d="M4 12a4 4 0 0 1 4-4h10l4 5h18a4 4 0 0 1 4 4v3H4z" fill="#c4661a"/><rect x="4" y="16" width="40" height="25" rx="4" fill="#f39c3d"/><rect x="4" y="16" width="40" height="5" rx="2" fill="#f8c07a" opacity=".6"/></svg>`,
+  home: `<svg viewBox="0 0 48 48"><path d="M4 12a4 4 0 0 1 4-4h10l4 5h18a4 4 0 0 1 4 4v3H4z" fill="#c4661a"/><rect x="4" y="16" width="40" height="25" rx="4" fill="#f39c3d"/><path d="M17 31l7-6 7 6v6h-14z" fill="#fff" opacity=".92"/></svg>`,
+  editor: `<svg viewBox="0 0 48 48"><path d="M11 4h19l10 10v28a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z" fill="#f6f6f6"/><path d="M30 4v7a3 3 0 0 0 3 3h7z" fill="#c8c8c8"/><path d="M14 21h20M14 27h20M14 33h13" stroke="#3584e4" stroke-width="2.6" stroke-linecap="round"/><path d="M35 30l6-6 3 3-6 6-4 1z" fill="#f5a623"/></svg>`,
+  text: `<svg viewBox="0 0 48 48"><path d="M11 4h19l10 10v28a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z" fill="#f2f2f2"/><path d="M30 4v7a3 3 0 0 0 3 3h7z" fill="#c8c8c8"/><path d="M14 21h20M14 26h20M14 31h20M14 36h12" stroke="#9a9a9a" stroke-width="2" stroke-linecap="round"/></svg>`,
+  script: `<svg viewBox="0 0 48 48"><path d="M11 4h19l10 10v28a3 3 0 0 1-3 3H11a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z" fill="#2f3a2a"/><path d="M30 4v7a3 3 0 0 0 3 3h7z" fill="#5c6e52"/><path d="M15 24l5 4-5 4" fill="none" stroke="#8ae234" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M23 33h9" stroke="#ddd" stroke-width="2.6" stroke-linecap="round"/></svg>`,
+  image: `<svg viewBox="0 0 48 48"><rect x="5" y="8" width="38" height="32" rx="4" fill="#fff"/><rect x="8" y="11" width="32" height="26" rx="2" fill="#62a0ea"/><circle cx="17" cy="19" r="3.5" fill="#f6d32d"/><path d="M8 33l9-9 7 7 5-5 11 11H8z" fill="#2ec27e"/></svg>`,
+  paint: `<svg viewBox="0 0 48 48"><path d="M24 5C13 5 4 13 4 23c0 9 7 16 14 16 3 0 4-2 4-4s-2-3-2-5 2-3 4-3h6c8 0 14-4 14-11C44 9 35 5 24 5z" fill="#f6f5f4"/><circle cx="14" cy="21" r="3.6" fill="#e01b24"/><circle cx="19" cy="13" r="3.6" fill="#f6d32d"/><circle cx="29" cy="12" r="3.6" fill="#33d17a"/><circle cx="36" cy="18" r="3.6" fill="#3584e4"/><path d="M30 44l12-18 3 2-11 19z" fill="#865e3c"/></svg>`,
+  settings: `<svg viewBox="0 0 48 48"><g transform="translate(24 24)" fill="#77767b">${[0, 45, 90, 135].map(a => `<rect x="-4.5" y="-20" width="9" height="40" rx="2.5" transform="rotate(${a})"/>`).join('')}<circle r="15"/></g><circle cx="24" cy="24" r="12" fill="#9a9996"/><circle cx="24" cy="24" r="6" fill="#3d3846"/></svg>`,
+};
+
+/* ============================================================
+   In-memory file system (persisted to localStorage)
+   ============================================================ */
+const USER = 'user', HOST = 'tuxbox', HOME = '/home/user';
+const now = () => Date.now();
+const D = (children = {}) => ({ type: 'dir', children, mtime: now() });
+const F = (content = '') => ({ type: 'file', content, mtime: now() });
+class FsError extends Error {}
+const WELCOME = `Welcome to Tux Linux — Web Edition!
+
+This whole desktop runs inside a single HTML file.
+Everything you create is saved to your browser's localStorage.
+
+Things to try:
+  • Open the Terminal and type  help
+  • ls, cd, cat, mkdir, echo "hi" > file.txt, tree, neofetch
+  • Drag windows by their title bar, resize them from any edge
+  • Double-click a title bar to maximize
+  • Settings → change wallpaper, theme and accent color
+  • Paint something and save it to ~/Pictures
+
+Have fun!
+`;
+function defaultFS() {
+  return D({
+    bin: D({}),
+    etc: D({
+      hostname: F(HOST + '\n'),
+      'os-release': F('NAME="Tux Linux"\nVERSION="24.04 LTS (Web Edition)"\nID=tux\nPRETTY_NAME="Tux Linux 24.04 LTS"\nHOME_URL="file:///"\n'),
+      motd: F('Welcome to Tux Linux 24.04 LTS (GNU/Linux 6.8.0-web x86_64)\n'),
+      passwd: F('root:x:0:0:root:/root:/bin/bash\nuser:x:1000:1000:User:/home/user:/bin/bash\n'),
+    }),
+    home: D({
+      user: D({
+        Desktop: D({ 'welcome.txt': F(WELCOME) }),
+        Documents: D({
+          'notes.txt': F('Meeting notes\n=============\n- Ship the web desktop\n- Write more shell commands\n- Buy coffee\n'),
+          'todo.md': F('# TODO\n\n- [x] Window manager\n- [x] Terminal\n- [ ] World domination\n'),
+          projects: D({ 'hello.sh': F('#!/bin/sh\n# run me with: sh hello.sh  or  ./hello.sh\necho "Hello from a shell script!"\necho "You are in: $PWD"\ndate\n') }),
+        }),
+        Downloads: D({}),
+        Music: D({ 'playlist.txt': F('1. Tux Penguin Shuffle\n2. Kernel Panic (Remix)\n3. sudo make me a sandwich\n') }),
+        Pictures: D({}),
+        '.bashrc': F('# ~/.bashrc\nexport PS1="\\u@\\h:\\w$ "\nalias ll="ls -l"\nalias la="ls -a"\n'),
+      }),
+    }),
+    tmp: D({}),
+    usr: D({ bin: D({}), share: D({ doc: D({ 'README': F('Tux Linux documentation.\nType `help` in the terminal.\n') }) }) }),
+    var: D({ log: D({ syslog: F('[    0.000000] Linux version 6.8.0-web (gcc 13.2)\n[    0.120000] Booting paravirtualized kernel on JavaScript\n[    0.300000] tuxde: desktop session started\n') }) }),
+  });
+}
+let FS = LS.get('fs', null);
+if (!FS || FS.type !== 'dir' || !FS.children) FS = defaultFS();
+
+function resolve(p, cwd = HOME) {
+  if (p == null || p === '') p = '.';
+  if (p === '~' || p.startsWith('~/')) p = HOME + p.slice(1);
+  const parts = (p.startsWith('/') ? p : cwd + '/' + p).split('/');
+  const out = [];
+  for (const s of parts) { if (!s || s === '.') continue; if (s === '..') out.pop(); else out.push(s); }
+  return '/' + out.join('/');
+}
+function getNode(abs) {
+  let n = FS; if (abs === '/') return n;
+  for (const s of abs.slice(1).split('/')) { if (!n || n.type !== 'dir') return null; n = n.children[s]; if (!n) return null; }
+  return n || null;
+}
+const splitPath = abs => { const i = abs.lastIndexOf('/'); return [abs.slice(0, i) || '/', abs.slice(i + 1)]; };
+const basename = p => p === '/' ? '/' : p.slice(p.lastIndexOf('/') + 1);
+const joinPath = (d, n) => d === '/' ? '/' + n : d + '/' + n;
+const prettyPath = abs => abs === HOME ? '~' : abs.startsWith(HOME + '/') ? '~' + abs.slice(HOME.length) : abs;
+const sizeOf = n => n.type === 'dir' ? 4096 : (n.content || '').length;
+const isImageNode = (name, n) => n && n.type === 'file' && (typeof n.content === 'string' && n.content.startsWith('data:image/'));
+
+let fsSaveT = null, fsEmitPending = false;
+function fsChanged() {
+  clearTimeout(fsSaveT); fsSaveT = setTimeout(() => LS.set('fs', FS), 250);
+  if (!fsEmitPending) { fsEmitPending = true; queueMicrotask(() => { fsEmitPending = false; emit('fs'); }); }
+}
+const fs = {
+  isDir: p => getNode(p)?.type === 'dir',
+  isFile: p => getNode(p)?.type === 'file',
+  list(p) {
+    const n = getNode(p); if (!n) throw new FsError('No such file or directory');
+    if (n.type !== 'dir') throw new FsError('Not a directory');
+    return Object.keys(n.children).sort(cmp);
+  },
+  read(p) {
+    const n = getNode(p); if (!n) throw new FsError('No such file or directory');
+    if (n.type === 'dir') throw new FsError('Is a directory'); return n.content;
+  },
+  write(p, content, append = false) {
+    const [dir, name] = splitPath(p); const d = getNode(dir);
+    if (!d || d.type !== 'dir') throw new FsError('No such file or directory');
+    if (!name) throw new FsError('Is a directory');
+    const ex = d.children[name];
+    if (ex && ex.type === 'dir') throw new FsError('Is a directory');
+    if (ex) { ex.content = append ? ex.content + content : content; ex.mtime = now(); }
+    else d.children[name] = F(content);
+    d.mtime = now(); fsChanged();
+  },
+  touch(p) { const n = getNode(p); if (n) { n.mtime = now(); fsChanged(); } else fs.write(p, ''); },
+  mkdir(p, parents = false) {
+    if (parents) {
+      let n = FS; for (const s of p.slice(1).split('/').filter(Boolean)) {
+        if (!n.children[s]) { n.children[s] = D(); n.mtime = now(); }
+        n = n.children[s]; if (n.type !== 'dir') throw new FsError('Not a directory');
+      }
+      fsChanged(); return;
+    }
+    const [dir, name] = splitPath(p); const d = getNode(dir);
+    if (!d || d.type !== 'dir') throw new FsError('No such file or directory');
+    if (!name || d.children[name]) throw new FsError('File exists');
+    d.children[name] = D(); d.mtime = now(); fsChanged();
+  },
+  remove(p, recursive = false) {
+    if (p === '/') throw new FsError('Permission denied');
+    const [dir, name] = splitPath(p); const d = getNode(dir); const n = d && d.type === 'dir' ? d.children[name] : null;
+    if (!n) throw new FsError('No such file or directory');
+    if (n.type === 'dir' && !recursive) throw new FsError('Is a directory');
+    delete d.children[name]; d.mtime = now(); fsChanged();
+  },
+  move(src, dst) {
+    if (src === '/') throw new FsError('Permission denied');
+    const n = getNode(src); if (!n) throw new FsError('No such file or directory');
+    if (fs.isDir(dst)) dst = joinPath(dst, basename(src));
+    if (dst === src) return;
+    if (dst.startsWith(src + '/')) throw new FsError('Cannot move a directory into itself');
+    const [dd, dn] = splitPath(dst); const dnode = getNode(dd);
+    if (!dnode || dnode.type !== 'dir') throw new FsError('No such file or directory');
+    const ex = dnode.children[dn]; if (ex && ex.type === 'dir') throw new FsError('Destination is a directory');
+    const [sd, sn] = splitPath(src); delete getNode(sd).children[sn];
+    dnode.children[dn] = n; n.mtime = now(); fsChanged();
+  },
+  copy(src, dst, recursive = false) {
+    const n = getNode(src); if (!n) throw new FsError('No such file or directory');
+    if (n.type === 'dir' && !recursive) throw new FsError('-r not specified; omitting directory');
+    if (fs.isDir(dst)) dst = joinPath(dst, basename(src));
+    if (dst.startsWith(src + '/')) throw new FsError('Cannot copy a directory into itself');
+    const [dd, dn] = splitPath(dst); const dnode = getNode(dd);
+    if (!dnode || dnode.type !== 'dir') throw new FsError('No such file or directory');
+    const c = JSON.parse(JSON.stringify(n)); c.mtime = now(); dnode.children[dn] = c; fsChanged();
+  },
+};
+function fileKind(name, n) {
+  if (!n) return 'text';
+  if (n.type === 'dir') return 'dir';
+  if (isImageNode(name, n) || /\.(png|jpe?g|gif|webp)$/i.test(name)) return 'image';
+  if (/\.sh$/.test(name)) return 'script';
+  return 'text';
+}
+function iconFor(name, n) {
+  const k = fileKind(name, n);
+  if (k === 'dir') return ICONS.folder;
+  if (k === 'image') return isImageNode(name, n) ? `<img src="${esc(n.content)}" alt="">` : ICONS.image;
+  if (k === 'script') return ICONS.script;
+  return ICONS.text;
+}
+function openPath(abs) {
+  const n = getNode(abs); if (!n) { toast('Not found: ' + abs); return; }
+  const k = fileKind(abs, n);
+  if (k === 'dir') launch('files', { path: abs });
+  else if (k === 'image') launch('paint', { path: abs });
+  else launch('editor', { path: abs });
+}
+function uniqueName(dir, base) {
+  const d = getNode(dir); if (!d || !d.children[base]) return base;
+  const m = /^(.*?)(\.[^.]+)?$/.exec(base); let i = 2;
+  while (d.children[`${m[1]} ${i}${m[2] || ''}`]) i++;
+  return `${m[1]} ${i}${m[2] || ''}`;
+}
+
+/* ============================================================
+   Settings
+   ============================================================ */
+const WALLPAPERS = [
+  { name: 'Jammy', css: 'radial-gradient(ellipse at 15% 85%, #e95420cc 0%, transparent 50%), radial-gradient(ellipse at 85% 15%, #9b2c88aa 0%, transparent 55%), linear-gradient(135deg,#2c001e,#5e2750 60%,#300a24)' },
+  { name: 'Aurora', css: 'radial-gradient(ellipse at 30% 0%, #1de9b6aa, transparent 60%), radial-gradient(ellipse at 80% 70%, #651fffaa, transparent 60%), linear-gradient(160deg,#020024,#0a0a5e 50%,#00212b)' },
+  { name: 'Dunes', css: 'radial-gradient(circle at 70% 30%, #fff3 0, transparent 25%), linear-gradient(180deg,#ffb88c 0%,#de6262 50%,#4b1248 100%)' },
+  { name: 'Forest', css: 'radial-gradient(circle at 75% 25%, #a8e06355, transparent 45%), linear-gradient(160deg,#0f2027,#203a43 50%,#2c5364)' },
+  { name: 'Daylight', css: 'radial-gradient(circle at 78% 22%, #ffffff88 0, transparent 30%), linear-gradient(160deg,#89f7fe,#66a6ff)' },
+  { name: 'Graphite', css: 'radial-gradient(circle at 50% 120%, #555a 0, transparent 60%), linear-gradient(135deg,#1c1c1e,#3a3a3f)' },
+  { name: 'Synthwave', css: 'linear-gradient(transparent 60%, #ff2a6d22 60%), repeating-linear-gradient(90deg, transparent 0 59px, #ff2a6d55 59px 60px), radial-gradient(circle at 50% 60%, #ff9e2c 0 12%, transparent 12.2%), linear-gradient(180deg,#0d0221 0%,#3b0a54 55%,#ff2a6d 60%,#0d0221 61%)' },
+  { name: 'Mint', css: 'radial-gradient(ellipse at 20% 20%, #ffffffaa, transparent 50%), linear-gradient(135deg,#a8edea,#fed6e3)' },
+];
+const ACCENTS = ['#e95420', '#3584e4', '#2ec27e', '#9141ac', '#e01b24', '#f5c211', '#00b4d8', '#ff6ec7', '#865e3c'];
+const DEFAULT_SETTINGS = { theme: 'dark', accent: '#e95420', wallpaper: 0, customWall: null, clock24: true, seconds: false };
+let S = Object.assign({}, DEFAULT_SETTINGS, LS.get('settings', {}));
+const desktopEl = $('#desktop');
+function wallpaperCSS() {
+  if (S.wallpaper === 'custom' && S.customWall) {
+    return S.customWall.startsWith('data:') ? `center / cover no-repeat url("${S.customWall}"), #000` : S.customWall;
+  }
+  return (WALLPAPERS[S.wallpaper] || WALLPAPERS[0]).css;
+}
+function applySettings(save = true) {
+  document.body.dataset.theme = S.theme;
+  document.documentElement.style.setProperty('--accent', S.accent);
+  desktopEl.style.background = wallpaperCSS();
+  desktopEl.style.backgroundSize = 'cover'; desktopEl.style.backgroundPosition = 'center';
+  if (save) LS.set('settings', S);
+  emit('settings'); tick();
+}
+
+/* ============================================================
+   Window manager
+   ============================================================ */
+const winLayer = $('#windows'), tasksEl = $('#tasks');
+const WINS = new Map();
+let zTop = 100, winSeq = 0, cascadeN = 0, activeWin = null, restoring = false, sessT = null;
+const layerSize = () => ({ w: winLayer.clientWidth, h: winLayer.clientHeight });
+const setRect = (el, r) => { el.style.left = r.x + 'px'; el.style.top = r.y + 'px'; el.style.width = r.w + 'px'; el.style.height = r.h + 'px'; };
+const rectOf = el => ({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+
+function track(onMove, onUp) {
+  const mv = ev => onMove(ev);
+  const up = ev => {
+    window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+    document.body.classList.remove('dragging'); onUp && onUp(ev);
+  };
+  document.body.classList.add('dragging');
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+}
+
+function createWindow(o) {
+  const id = 'w' + (++winSeq);
+  const L = layerSize(); const r = o.rect || {};
+  const w = Math.round(Math.min(r.w || o.w || 640, L.w - 8)), hh = Math.round(Math.min(r.h || o.h || 420, L.h - 8));
+  const k = (cascadeN++ % 7) * 30;
+  let x = r.x ?? o.x ?? Math.round(Math.max(8, (L.w - w) / 2 - 90 + k));
+  let y = r.y ?? o.y ?? Math.round(Math.max(8, (L.h - hh) / 2 - 70 + k));
+  x = Math.min(Math.max(x, -w + 80), L.w - 80); y = Math.min(Math.max(0, y), L.h - 40);
+  const el = document.createElement('div');
+  el.className = 'win opening'; el.dataset.app = o.app;
+  el.innerHTML = `<div class="frame"><div class="titlebar"><span class="ticon">${o.icon}</span><span class="ttitle"></span><div class="tbtns">
+    <button class="b-min" title="Minimize"><svg viewBox="0 0 10 10"><path d="M1.5 5h7"/></svg></button>
+    <button class="b-max" title="Maximize"><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1"/></svg></button>
+    <button class="b-close" title="Close"><svg viewBox="0 0 10 10"><path d="M2 2l6 6M8 2l-6 6"/></svg></button></div></div>
+    <div class="wbody"></div></div>${['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(d => `<div class="rz ${d}" data-d="${d}"></div>`).join('')}`;
+  setRect(el, { x, y, w, h: hh });
+  winLayer.appendChild(el);
+  const offs = [];
+  const win = {
+    id, pid: 1000 + winSeq, el, app: o.app, args: o.args || {}, title: o.title, icon: o.icon, max: false, min: false, prev: null, z: 0,
+    body: el.querySelector('.wbody'), onClose: null, onFocus: null, onKey: null, getArgs: null,
+    setTitle(t) { this.title = t; el.querySelector('.ttitle').textContent = t; this.task.querySelector('.tlabel').textContent = t; this.task.title = t; },
+    close() { return closeWin(this); },
+    listen(t, f) { bus.addEventListener(t, f); offs.push(() => bus.removeEventListener(t, f)); },
+    onCleanup(f) { offs.push(f); },
+    _offs: offs,
+  };
+  const tbtn = document.createElement('button');
+  tbtn.className = 'task'; tbtn.innerHTML = `<span class="ticon">${o.icon}</span><span class="tlabel"></span>`;
+  tasksEl.appendChild(tbtn); win.task = tbtn;
+  tbtn.onclick = () => { if (win.min) focusWin(win); else if (activeWin === win) minimizeWin(win); else focusWin(win); };
+  win.setTitle(o.title);
+  WINS.set(id, win);
+
+  el.addEventListener('pointerdown', () => { if (activeWin !== win) focusWin(win); }, true);
+  el.querySelector('.b-min').onclick = () => minimizeWin(win);
+  el.querySelector('.b-max').onclick = () => toggleMax(win);
+  el.querySelector('.b-close').onclick = () => closeWin(win);
+
+  // drag by title bar
+  const tb = el.querySelector('.titlebar');
+  tb.addEventListener('dblclick', e => { if (!e.target.closest('.tbtns')) toggleMax(win); });
+  tb.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('.tbtns')) return;
+    e.preventDefault();
+    const sx = e.clientX, sy = e.clientY; const start = { x: el.offsetLeft, y: el.offsetTop }; let moved = false;
+    const lr = winLayer.getBoundingClientRect();
+    track(ev => {
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (!moved) {
+        if (Math.hypot(dx, dy) < 4) return;
+        moved = true;
+        if (win.max) {
+          const ratio = (sx - lr.left) / Math.max(1, el.offsetWidth);
+          toggleMax(win, false, true);
+          start.x = Math.round(sx - lr.left - ratio * el.offsetWidth); start.y = 0;
+        }
+      }
+      const L2 = layerSize();
+      const nx = Math.min(Math.max(start.x + dx, -el.offsetWidth + 80), L2.w - 80);
+      const ny = Math.min(Math.max(start.y + dy, 0), L2.h - 40);
+      el.style.left = nx + 'px'; el.style.top = ny + 'px';
+    }, ev => { if (moved && ev.clientY <= lr.top + 2) toggleMax(win, true); saveSession(); });
+  });
+  // resize
+  const minW = o.minW || 320, minH = o.minH || 200;
+  el.querySelectorAll('.rz').forEach(hd => hd.addEventListener('pointerdown', e => {
+    if (win.max || e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation(); focusWin(win);
+    const d = hd.dataset.d, sx = e.clientX, sy = e.clientY, r0 = rectOf(el);
+    document.body.style.cursor = getComputedStyle(hd).cursor;
+    track(ev => {
+      const dx = ev.clientX - sx, dy = ev.clientY - sy; let { x, y, w, h } = r0;
+      if (d.includes('e')) w = Math.max(minW, r0.w + dx);
+      if (d.includes('s')) h = Math.max(minH, r0.h + dy);
+      if (d.includes('w')) { w = Math.max(minW, r0.w - dx); x = r0.x + (r0.w - w); }
+      if (d.includes('n')) { h = Math.max(minH, r0.h - dy); y = r0.y + (r0.h - h); if (y < 0) { h += y; y = 0; } }
+      setRect(el, { x, y, w, h });
+    }, () => { document.body.style.cursor = ''; saveSession(); });
+  }));
+
+  focusWin(win);
+  if (o.max || isSmall()) toggleMax(win, true, true);
+  if (o.min) minimizeWin(win);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('opening')));
+  saveSession();
+  return win;
+}
+function focusWin(win) {
+  if (win.min) { win.min = false; win.el.classList.remove('min'); }
+  win.z = ++zTop; win.el.style.zIndex = win.z;
+  if (activeWin && activeWin !== win) activeWin.el.classList.remove('active');
+  activeWin = win; win.el.classList.add('active');
+  updateTasks(); win.onFocus && win.onFocus(); saveSession();
+}
+function focusTop() {
+  const list = [...WINS.values()].filter(w => !w.min).sort((a, b) => b.z - a.z);
+  if (list[0]) focusWin(list[0]); else updateTasks();
+}
+function updateTasks() {
+  for (const w of WINS.values()) { w.task.classList.toggle('active', w === activeWin && !w.min); w.task.classList.toggle('minimized', w.min); }
+}
+function minimizeWin(win) {
+  win.min = true; win.el.classList.add('min'); win.el.classList.remove('active');
+  if (activeWin === win) { activeWin = null; focusTop(); }
+  updateTasks(); saveSession();
+}
+function toggleMax(win, state = !win.max, instant = false) {
+  if (state === win.max) return;
+  const el = win.el;
+  if (!instant) { el.classList.add('anim'); setTimeout(() => el.classList.remove('anim'), 230); }
+  if (state) { win.prev = rectOf(el); el.classList.add('max'); }
+  else { el.classList.remove('max'); if (win.prev) setRect(el, win.prev); }
+  win.max = state; el.querySelector('.b-max').title = state ? 'Restore' : 'Maximize';
+  saveSession();
+}
+async function closeWin(win) {
+  if (win.closing) return;
+  if (win.onClose) { const ok = await win.onClose(); if (ok === false) return; }
+  win.closing = true; win.el.classList.add('closing'); win.task.remove(); WINS.delete(win.id);
+  win._offs.forEach(f => { try { f(); } catch (e) {} });
+  setTimeout(() => win.el.remove(), 180);
+  if (activeWin === win) { activeWin = null; focusTop(); }
+  saveSession();
+}
+function saveSession() { if (restoring) return; clearTimeout(sessT); sessT = setTimeout(flushSession, 300); }
+function flushSession() {
+  const arr = [...WINS.values()].sort((a, b) => a.z - b.z).map(w => ({
+    app: w.app, args: w.getArgs ? w.getArgs() : w.args,
+    rect: (w.max && w.prev) ? w.prev : rectOf(w.el), max: w.max, min: w.min, active: w === activeWin,
+  }));
+  LS.set('session', arr);
+}
+window.addEventListener('resize', () => {
+  const L = layerSize();
+  for (const w of WINS.values()) {
+    if (isSmall() && !w.max) { toggleMax(w, true, true); continue; }
+    if (w.max) continue;
+    const r = rectOf(w.el);
+    r.w = Math.min(r.w, L.w); r.h = Math.min(r.h, L.h);
+    r.x = Math.min(Math.max(r.x, -r.w + 80), L.w - 80); r.y = Math.min(Math.max(0, r.y), L.h - 40);
+    setRect(w.el, r);
+  }
+});
+
+/* ---------- dialogs & context menus ---------- */
+function dialog({ title, message = '', input = null, buttons = ['Cancel', 'OK'] }) {
+  return new Promise(res => {
+    const ov = document.createElement('div'); ov.className = 'modal-ov';
+    ov.innerHTML = `<div class="modal" role="dialog"><h3>${esc(title)}</h3>${message ? `<p>${esc(message)}</p>` : ''}${input != null ? `<input class="inp" spellcheck="false" value="${esc(input)}">` : ''}<div class="mbtns">${buttons.map((b, i) => `<button class="btn ${i === buttons.length - 1 ? 'primary' : ''}" data-i="${i}">${esc(b)}</button>`).join('')}</div></div>`;
+    document.body.appendChild(ov);
+    const inp = ov.querySelector('input');
+    const done = i => { ov.remove(); res(input != null ? (i === buttons.length - 1 ? inp.value : null) : i); };
+    ov.querySelectorAll('button').forEach(b => b.onclick = () => done(+b.dataset.i));
+    ov.addEventListener('pointerdown', e => { if (e.target === ov) done(0); });
+    ov.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); done(buttons.length - 1); }
+      if (e.key === 'Escape') { e.preventDefault(); done(0); }
+    });
+    setTimeout(() => {
+      if (inp) { inp.focus(); const v = inp.value, sl = v.lastIndexOf('/') + 1, dot = v.lastIndexOf('.'); inp.setSelectionRange(sl, dot > sl ? dot : v.length); }
+      else ov.querySelector('.primary').focus();
+    });
+  });
+}
+let ctxEl = null;
+function closeCtx() { if (ctxEl) { ctxEl.remove(); ctxEl = null; } }
+function contextMenu(x, y, items) {
+  closeCtx();
+  const m = document.createElement('div'); m.className = 'ctx';
+  for (const it of items) {
+    if (it === '-') { m.appendChild(document.createElement('hr')); continue; }
+    const b = document.createElement('button'); b.textContent = it.label; if (it.danger) b.className = 'danger';
+    b.onclick = () => { closeCtx(); it.action(); }; m.appendChild(b);
+  }
+  document.body.appendChild(m); ctxEl = m;
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.min(x, innerWidth - r.width - 6) + 'px';
+  m.style.top = Math.min(y, innerHeight - r.height - 6) + 'px';
+}
+document.addEventListener('pointerdown', e => {
+  if (ctxEl && !e.target.closest('.ctx')) closeCtx();
+  if (!e.target.closest('#menu') && !e.target.closest('#startBtn')) toggleMenu(false);
+  if (!e.target.closest('#cal') && !e.target.closest('#clock')) toggleCal(false);
+}, true);
+
+/* ============================================================
+   Shell
+   ============================================================ */
+let HISTORY = LS.get('history', []);
+const ALIASES = { ll: 'ls -l', la: 'ls -a', l: 'ls', dir: 'ls', vim: 'edit', vi: 'edit', nano: 'edit', gedit: 'edit', nautilus: 'files', 'xdg-open': 'open' };
+const BOOT = Date.now();
+const DESCR = {
+  help: 'show this help', ls: 'list directory contents (-l, -a)', cd: 'change directory', pwd: 'print working directory',
+  cat: 'print files (-n numbers lines)', echo: 'print text (-n, -e)', mkdir: 'make directories (-p)', touch: 'create empty file',
+  rm: 'remove files (-r, -f)', rmdir: 'remove empty directory', mv: 'move / rename', cp: 'copy (-r)', tree: 'show directory tree',
+  find: 'find files (-name, -type)', grep: 'search text (-i, -n, -v, -c)', wc: 'count lines/words/chars', head: 'first lines (-n N)',
+  tail: 'last lines (-n N)', sort: 'sort lines (-r, -n)', uniq: 'drop repeated lines', clear: 'clear the screen', history: 'command history (-c)',
+  whoami: 'print user name', hostname: 'print host name', uname: 'system info (-a)', date: 'print date and time', cal: 'show calendar',
+  uptime: 'how long the system is up', neofetch: 'system info with logo', ps: 'list processes (windows)', kill: 'close a window by PID',
+  open: 'open a file with its app', edit: 'open file in Text Editor', paint: 'open Paint', files: 'open File Manager', settings: 'open Settings',
+  theme: 'theme dark|light', wallpaper: 'wallpaper <n>', env: 'print environment', export: 'set variable', alias: 'list/define aliases',
+  sh: 'run a shell script', source: 'run a script in this shell', which: 'locate a command', man: 'short manual', cowsay: 'a talking cow',
+  fortune: 'a random fortune', exit: 'close this terminal', reboot: 'reload the desktop',
+};
+function tokenize(line, ctx) {
+  const toks = []; let cur = '', has = false, glob = false, q = null, i = 0;
+  const push = () => { if (has) { toks.push({ t: 'w', v: cur, g: glob }); cur = ''; has = false; glob = false; } };
+  const varAt = j => { const m = /^\$(\?|\w+|\{\w+\})/.exec(line.slice(j)); if (!m) return null; const k = m[1].replace(/[{}]/g, ''); return { len: m[0].length, val: k === '?' ? String(ctx.code) : k === 'PWD' ? ctx.cwd : (ctx.env[k] ?? '') }; };
+  while (i < line.length) {
+    const c = line[i];
+    if (q) {
+      if (c === q) { q = null; i++; continue; }
+      if (q === '"' && c === '$') { const v = varAt(i); if (v) { cur += v.val; i += v.len; continue; } }
+      if (q === '"' && c === '\\' && i + 1 < line.length && '"\\$'.includes(line[i + 1])) { cur += line[i + 1]; i += 2; continue; }
+      cur += c; i++; continue;
+    }
+    if (c === '"' || c === "'") { q = c; has = true; i++; continue; }
+    if (c === '\\' && i + 1 < line.length) { cur += line[i + 1]; has = true; i += 2; continue; }
+    if (/\s/.test(c)) { push(); i++; continue; }
+    if (c === '#' && !has) break;
+    if (c === '>') { push(); if (line[i + 1] === '>') { toks.push({ t: 'op', v: '>>' }); i += 2; } else { toks.push({ t: 'op', v: '>' }); i++; } continue; }
+    if (c === '|') { push(); if (line[i + 1] === '|') { toks.push({ t: 'op', v: '||' }); i += 2; } else { toks.push({ t: 'op', v: '|' }); i++; } continue; }
+    if (c === '&' && line[i + 1] === '&') { push(); toks.push({ t: 'op', v: '&&' }); i += 2; continue; }
+    if (c === ';') { push(); toks.push({ t: 'op', v: ';' }); i++; continue; }
+    if (c === '$') { const v = varAt(i); if (v) { cur += v.val; has = true; i += v.len; continue; } }
+    if (c === '~' && !has && (i + 1 >= line.length || /[\/\s]/.test(line[i + 1]))) { cur += HOME; has = true; i++; continue; }
+    if (c === '*' || c === '?') glob = true;
+    cur += c; has = true; i++;
+  }
+  if (q) throw new Error(`unexpected EOF while looking for matching \`${q}'`);
+  push(); return toks;
+}
+function globRe(p) { return new RegExp('^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$'); }
+function expandGlob(word, cwd) {
+  const i = word.lastIndexOf('/'); const dp = word.slice(0, i + 1), pat = word.slice(i + 1);
+  const n = getNode(resolve(dp || '.', cwd)); if (!n || n.type !== 'dir') return [word];
+  const re = globRe(pat);
+  const m = Object.keys(n.children).filter(k => re.test(k) && (!k.startsWith('.') || pat.startsWith('.'))).sort(cmp);
+  return m.length ? m.map(k => dp + k) : [word];
+}
+function execute(line, ctx) {
+  let toks;
+  try { toks = tokenize(line, ctx); } catch (e) { ctx.printErr('bash: ' + e.message); ctx.code = 2; return; }
+  const lists = []; let seq = [], op = ';';
+  for (const t of toks) {
+    if (t.t === 'op' && (t.v === ';' || t.v === '&&' || t.v === '||')) { lists.push({ op, toks: seq }); seq = []; op = t.v; }
+    else seq.push(t);
+  }
+  lists.push({ op, toks: seq });
+  for (const L of lists) {
+    if (!L.toks.length) continue;
+    if (L.op === '&&' && ctx.code !== 0) continue;
+    if (L.op === '||' && ctx.code === 0) continue;
+    ctx.code = runPipeline(L.toks, ctx);
+  }
+}
+function runPipeline(toks, ctx) {
+  const stages = [[]];
+  for (const t of toks) { if (t.t === 'op' && t.v === '|') stages.push([]); else stages[stages.length - 1].push(t); }
+  let stdin = null, code = 0;
+  for (let si = 0; si < stages.length; si++) {
+    const st = stages[si]; const args = []; let redir = null;
+    for (let j = 0; j < st.length; j++) {
+      const t = st[j];
+      if (t.t === 'op' && (t.v === '>' || t.v === '>>')) {
+        const f = st[j + 1];
+        if (!f || f.t !== 'w') { ctx.printErr("bash: syntax error near unexpected token `newline'"); return 2; }
+        redir = { mode: t.v, path: f.v }; j++;
+      } else if (t.t === 'op') { ctx.printErr(`bash: syntax error near unexpected token \`${t.v}'`); return 2; }
+      else if (t.g) args.push(...expandGlob(t.v, ctx.cwd));
+      else args.push(t.v);
+    }
+    const isLast = si === stages.length - 1;
+    if (!args.length) {
+      if (redir) { try { fs.write(resolve(redir.path, ctx.cwd), '', redir.mode === '>>'); } catch (e) { ctx.printErr(`bash: ${redir.path}: ${e.message}`); return 1; } }
+      continue;
+    }
+    const io = { stdin, out: '', html: null, err: '' };
+    code = runCommand(args, io, ctx, isLast && !redir);
+    if (io.err) ctx.printErr(io.err.replace(/\n$/, ''));
+    if (redir) {
+      try { fs.write(resolve(redir.path, ctx.cwd), io.out, redir.mode === '>>'); }
+      catch (e) { ctx.printErr(`bash: ${redir.path}: ${e.message}`); code = 1; }
+      stdin = '';
+    } else if (isLast) {
+      if (io.html != null) ctx.printHTML(io.html);
+      else if (io.out) ctx.print(io.out.replace(/\n$/, ''));
+    } else stdin = io.out;
+  }
+  return code;
+}
+function runCommand(args, io, ctx, tty) {
+  let [name, ...rest] = args;
+  if (ALIASES[name]) { const a = ALIASES[name].split(/\s+/); name = a[0]; rest = [...a.slice(1), ...rest]; }
+  if (/^[A-Za-z_]\w*=/.test(name) && !rest.length) { const k = name.slice(0, name.indexOf('=')); ctx.env[k] = name.slice(k.length + 1); return 0; }
+  const fn = CMDS[name];
+  if (!fn) {
+    if (name.includes('/')) {
+      const p = resolve(name, ctx.cwd); const n = getNode(p);
+      if (n && n.type === 'file') return runScript(n.content, ctx);
+      if (n && n.type === 'dir') { io.err = `bash: ${name}: Is a directory\n`; return 126; }
+      io.err = `bash: ${name}: No such file or directory\n`; return 127;
+    }
+    io.err = `${name}: command not found\n`; return 127;
+  }
+  try { const r = fn(rest, io, ctx, tty); return r == null ? 0 : r; }
+  catch (e) { io.err += `${name}: ${e.message}\n`; return 1; }
+}
+function runScript(src, ctx) {
+  if ((ctx.depth || 0) > 8) { ctx.printErr('bash: maximum script depth exceeded'); return 1; }
+  ctx.depth = (ctx.depth || 0) + 1;
+  try { for (const line of src.split('\n')) { if (!line.trim() || line.trim().startsWith('#')) continue; execute(line, ctx); } }
+  finally { ctx.depth--; }
+  return ctx.code;
+}
+function opts(args) {
+  const flags = new Set(), rest = []; let end = false, num = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!end && a === '--') { end = true; continue; }
+    if (!end && a === '-n' && /^\d+$/.test(args[i + 1] || '')) { num = +args[++i]; flags.add('n'); continue; }
+    if (!end && /^-\d+$/.test(a)) { num = +a.slice(1); continue; }
+    if (!end && /^-[a-zA-Z]+$/.test(a)) { for (const ch of a.slice(1)) flags.add(ch); }
+    else rest.push(a);
+  }
+  return { flags, rest, num };
+}
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDate(ms) { const d = new Date(ms); return `${MON[d.getMonth()]} ${String(d.getDate()).padStart(2)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+function colorName(k, n) {
+  const kind = fileKind(k, n);
+  const cls = kind === 'dir' ? 'c-dir' : kind === 'image' ? 'c-img' : kind === 'script' ? 'c-exe' : '';
+  return cls ? `<span class="${cls}">${esc(k)}</span>` : esc(k);
+}
+function readInputs(files, io, ctx, name) {
+  if (!files.length) return io.stdin == null ? '' : io.stdin;
+  let s = '';
+  for (const f of files) {
+    try { const c = fs.read(resolve(f, ctx.cwd)); s += c; }
+    catch (e) { io.err += `${name}: ${f}: ${e.message}\n`; }
+  }
+  return s;
+}
+function columns(list, width = 72) {
+  const w = Math.max(...list.map(s => s.length)) + 2; const per = Math.max(1, Math.floor(width / w)); let out = '';
+  list.forEach((s, i) => { out += s.padEnd(w); if ((i + 1) % per === 0) out += '\n'; });
+  return out.trimEnd() + '\n';
+}
+function uptimeStr() { const m = Math.floor((Date.now() - BOOT) / 60000); return m < 60 ? `${m} min${m === 1 ? '' : 's'}` : `${Math.floor(m / 60)}h ${m % 60}m`; }
+const FORTUNES = ['There is no place like 127.0.0.1', 'Talk is cheap. Show me the code. — Linus Torvalds', 'Real programmers count from 0.', 'sudo make me a sandwich', 'In a world without fences and walls, who needs Gates and Windows?', 'Unix is user-friendly. It\'s just picky about who its friends are.', 'rm -rf / : the fastest way to free up disk space.'];
+const TUX = ['    .--.', '   |o_o |', '   |:_/ |', '  //   \\ \\', ' (|     | )', "/'\\_   _/`\\", '\\___)=(___/'];
+
+const CMDS = {
+  help(a, io) {
+    if (a[0] && DESCR[a[0]]) { io.out = `${a[0]}: ${DESCR[a[0]]}\n`; return; }
+    io.out = 'Tux Linux bash, version 5.2.21(1)-web\nAvailable commands:\n\n' +
+      Object.keys(DESCR).sort().map(k => `  ${k.padEnd(10)} ${DESCR[k]}`).join('\n') +
+      '\n\nPipes (|), redirects (> >>), ; && ||, $VARS, globs (*.txt) and Tab completion work.\nKeys: ↑/↓ history, Tab complete, Ctrl+L clear, Ctrl+C cancel.\n';
+  },
+  man(a, io) { if (!a[0]) { io.err = 'What manual page do you want?\n'; return 1; } if (!DESCR[a[0]]) { io.err = `No manual entry for ${a[0]}\n`; return 16; } io.out = `${a[0].toUpperCase()}(1)\n\nNAME\n    ${a[0]} - ${DESCR[a[0]]}\n`; },
+  ls(a, io, ctx, tty) {
+    const { flags, rest } = opts(a); const targets = rest.length ? rest : ['.'];
+    const all = flags.has('a'), long = flags.has('l');
+    const text = [], html = []; let code = 0;
+    targets.forEach((t, ti) => {
+      const p = resolve(t, ctx.cwd); const n = getNode(p);
+      if (!n) { io.err += `ls: cannot access '${t}': No such file or directory\n`; code = 2; return; }
+      let entries;
+      if (n.type === 'file') entries = [[t, n]];
+      else {
+        entries = Object.keys(n.children).filter(k => all || !k.startsWith('.')).sort(cmp).map(k => [k, n.children[k]]);
+        if (all) entries = [['.', n], ['..', getNode(splitPath(p)[0]) || n], ...entries];
+      }
+      if (targets.length > 1 && n.type === 'dir') { text.push(t + ':'); html.push(esc(t) + ':'); }
+      if (long) {
+        text.push('total ' + entries.length); html.push('total ' + entries.length);
+        for (const [k, c] of entries) {
+          const meta = `${c.type === 'dir' ? 'drwxr-xr-x' : (/\.sh$/.test(k) ? '-rwxr-xr-x' : '-rw-r--r--')} 1 ${USER} ${USER} ${String(sizeOf(c)).padStart(7)} ${fmtDate(c.mtime)} `;
+          text.push(meta + k); html.push(esc(meta) + colorName(k, c));
+        }
+      } else if (entries.length) {
+        text.push(entries.map(e => e[0]).join('\n'));
+        html.push(entries.map(([k, c]) => colorName(k, c)).join('  '));
+      }
+      if (targets.length > 1 && ti < targets.length - 1) { text.push(''); html.push(''); }
+    });
+    io.out = text.length ? text.join('\n') + '\n' : '';
+    if (tty && html.length) io.html = html.join('\n');
+    return code;
+  },
+  cd(a, io, ctx) {
+    let t = a[0] || HOME; if (t === '-') t = ctx.env.OLDPWD || ctx.cwd;
+    const p = resolve(t, ctx.cwd); const n = getNode(p);
+    if (!n) { io.err = `cd: ${t}: No such file or directory\n`; return 1; }
+    if (n.type !== 'dir') { io.err = `cd: ${t}: Not a directory\n`; return 1; }
+    ctx.env.OLDPWD = ctx.cwd; ctx.cwd = p;
+  },
+  pwd(a, io, ctx) { io.out = ctx.cwd + '\n'; },
+  cat(a, io, ctx) {
+    const { flags, rest } = opts(a); let code = 0;
+    if (!rest.length) { io.out = io.stdin || ''; }
+    for (const f of rest) {
+      const p = resolve(f, ctx.cwd); const n = getNode(p);
+      if (!n) { io.err += `cat: ${f}: No such file or directory\n`; code = 1; continue; }
+      if (n.type === 'dir') { io.err += `cat: ${f}: Is a directory\n`; code = 1; continue; }
+      if (isImageNode(f, n)) { io.err += `cat: ${f}: binary file (PNG image, ${n.content.length} bytes) — try: open ${f}\n`; code = 1; continue; }
+      io.out += n.content;
+    }
+    if (flags.has('n')) { const lines = io.out.replace(/\n$/, '').split('\n'); io.out = lines.map((l, i) => `${String(i + 1).padStart(6)}  ${l}`).join('\n') + '\n'; }
+    return code;
+  },
+  echo(a, io) {
+    let nl = true, e = false; while (a[0] === '-n' || a[0] === '-e' || a[0] === '-ne' || a[0] === '-en') { const f = a.shift(); if (f.includes('n')) nl = false; if (f.includes('e')) e = true; }
+    let s = a.join(' '); if (e) s = s.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+    io.out = s + (nl ? '\n' : '');
+  },
+  mkdir(a, io, ctx) {
+    const { flags, rest } = opts(a); if (!rest.length) { io.err = 'mkdir: missing operand\n'; return 1; } let code = 0;
+    for (const d of rest) { try { fs.mkdir(resolve(d, ctx.cwd), flags.has('p')); } catch (e) { io.err += `mkdir: cannot create directory '${d}': ${e.message}\n`; code = 1; } }
+    return code;
+  },
+  touch(a, io, ctx) {
+    if (!a.length) { io.err = 'touch: missing file operand\n'; return 1; } let code = 0;
+    for (const f of a) { try { fs.touch(resolve(f, ctx.cwd)); } catch (e) { io.err += `touch: cannot touch '${f}': ${e.message}\n`; code = 1; } }
+    return code;
+  },
+  rm(a, io, ctx) {
+    const { flags, rest } = opts(a); const r = flags.has('r') || flags.has('R'), f = flags.has('f'); let code = 0;
+    if (!rest.length && !f) { io.err = 'rm: missing operand\n'; return 1; }
+    for (const t of rest) {
+      const p = resolve(t, ctx.cwd);
+      if (p === '/' ) { io.err += "rm: it is dangerous to operate recursively on '/'\nrm: use --no-preserve-root to override this failsafe (just kidding, you can't)\n"; code = 1; continue; }
+      if (ctx.cwd === p || ctx.cwd.startsWith(p + '/')) { if (!getNode(p)) continue; }
+      try { fs.remove(p, r); } catch (e) { if (!(f && e.message.startsWith('No such'))) { io.err += `rm: cannot remove '${t}': ${e.message}\n`; code = 1; } }
+    }
+    return code;
+  },
+  rmdir(a, io, ctx) {
+    let code = 0;
+    for (const t of a) {
+      const p = resolve(t, ctx.cwd); const n = getNode(p);
+      if (!n) { io.err += `rmdir: failed to remove '${t}': No such file or directory\n`; code = 1; }
+      else if (n.type !== 'dir') { io.err += `rmdir: failed to remove '${t}': Not a directory\n`; code = 1; }
+      else if (Object.keys(n.children).length) { io.err += `rmdir: failed to remove '${t}': Directory not empty\n`; code = 1; }
+      else fs.remove(p, true);
+    }
+    return code;
+  },
+  mv(a, io, ctx) {
+    const { rest } = opts(a); if (rest.length < 2) { io.err = 'mv: missing destination file operand\n'; return 1; }
+    const dst = resolve(rest.pop(), ctx.cwd); let code = 0;
+    if (rest.length > 1 && !fs.isDir(dst)) { io.err = `mv: target '${dst}' is not a directory\n`; return 1; }
+    for (const s of rest) { try { fs.move(resolve(s, ctx.cwd), dst); } catch (e) { io.err += `mv: cannot move '${s}': ${e.message}\n`; code = 1; } }
+    return code;
+  },
+  cp(a, io, ctx) {
+    const { flags, rest } = opts(a); if (rest.length < 2) { io.err = 'cp: missing destination file operand\n'; return 1; }
+    const dst = resolve(rest.pop(), ctx.cwd); let code = 0;
+    if (rest.length > 1 && !fs.isDir(dst)) { io.err = `cp: target '${dst}' is not a directory\n`; return 1; }
+    for (const s of rest) { try { fs.copy(resolve(s, ctx.cwd), dst, flags.has('r') || flags.has('R')); } catch (e) { io.err += `cp: '${s}': ${e.message}\n`; code = 1; } }
+    return code;
+  },
+  tree(a, io, ctx, tty) {
+    const { flags, rest } = opts(a); const t = rest[0] || '.'; const p = resolve(t, ctx.cwd); const n = getNode(p);
+    if (!n || n.type !== 'dir') { io.err = `tree: ${t}: not a directory\n`; return 1; }
+    let dirs = 0, files = 0; const lines = [[t, colorName(t, n)]];
+    const walk = (node, pre) => {
+      const ks = Object.keys(node.children).filter(k => flags.has('a') || !k.startsWith('.')).sort(cmp);
+      ks.forEach((k, i) => {
+        const c = node.children[k], last = i === ks.length - 1, br = pre + (last ? '└── ' : '├── ');
+        lines.push([br + k, esc(br) + colorName(k, c)]);
+        if (c.type === 'dir') { dirs++; walk(c, pre + (last ? '    ' : '│   ')); } else files++;
+      });
+    };
+    walk(n, '');
+    const sum = `\n${dirs} director${dirs === 1 ? 'y' : 'ies'}, ${files} file${files === 1 ? '' : 's'}`;
+    io.out = lines.map(l => l[0]).join('\n') + sum + '\n';
+    if (tty) io.html = lines.map(l => l[1]).join('\n') + esc(sum);
+  },
+  find(a, io, ctx) {
+    let start = '.', name = null, type = null;
+    for (let i = 0; i < a.length; i++) { if (a[i] === '-name') name = a[++i]; else if (a[i] === '-type') type = a[++i]; else if (i === 0) start = a[i]; }
+    const p = resolve(start, ctx.cwd); const n = getNode(p); if (!n) { io.err = `find: '${start}': No such file or directory\n`; return 1; }
+    const re = name ? globRe(name) : null; const out = [];
+    const walk = (node, disp, nm) => {
+      if ((!re || re.test(nm)) && (!type || (type === 'd') === (node.type === 'dir'))) out.push(disp);
+      if (node.type === 'dir') for (const k of Object.keys(node.children).sort(cmp)) walk(node.children[k], disp === '/' ? '/' + k : disp + '/' + k, k);
+    };
+    walk(n, start, basename(p));
+    io.out = out.join('\n') + (out.length ? '\n' : '');
+  },
+  grep(a, io, ctx) {
+    const { flags, rest } = opts(a); const pat = rest.shift();
+    if (pat == null) { io.err = 'Usage: grep [-invc] PATTERN [FILE]...\n'; return 2; }
+    let re; try { re = new RegExp(pat, flags.has('i') ? 'i' : ''); } catch (e) { re = new RegExp(pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags.has('i') ? 'i' : ''); }
+    const srcs = rest.length ? rest.map(f => { try { return [f, fs.read(resolve(f, ctx.cwd))]; } catch (e) { io.err += `grep: ${f}: ${e.message}\n`; return null; } }).filter(Boolean) : [[null, io.stdin || '']];
+    const out = []; let count = 0;
+    for (const [f, txt] of srcs) {
+      txt.replace(/\n$/, '').split('\n').forEach((l, i) => {
+        if (re.test(l) !== flags.has('v')) { count++; out.push((rest.length > 1 ? f + ':' : '') + (flags.has('n') ? (i + 1) + ':' : '') + l); }
+      });
+    }
+    io.out = flags.has('c') ? count + '\n' : (out.length ? out.join('\n') + '\n' : '');
+    return count ? 0 : 1;
+  },
+  wc(a, io, ctx) {
+    const { flags, rest } = opts(a); const s = readInputs(rest, io, ctx, 'wc');
+    const l = (s.match(/\n/g) || []).length, w = (s.match(/\S+/g) || []).length, c = s.length;
+    const parts = []; if (flags.has('l')) parts.push(l); if (flags.has('w')) parts.push(w); if (flags.has('c')) parts.push(c);
+    io.out = (parts.length ? parts : [l, w, c]).map(v => String(v).padStart(7)).join(' ') + (rest.length === 1 ? ' ' + rest[0] : '') + '\n';
+  },
+  head(a, io, ctx) { const { rest, num } = opts(a); const lines = readInputs(rest, io, ctx, 'head').replace(/\n$/, '').split('\n'); io.out = lines.slice(0, num ?? 10).join('\n') + '\n'; },
+  tail(a, io, ctx) { const { rest, num } = opts(a); const lines = readInputs(rest, io, ctx, 'tail').replace(/\n$/, '').split('\n'); io.out = lines.slice(-(num ?? 10)).join('\n') + '\n'; },
+  sort(a, io, ctx) {
+    const { flags, rest } = opts(a); let lines = readInputs(rest, io, ctx, 'sort').replace(/\n$/, '').split('\n');
+    lines.sort(flags.has('n') ? (x, y) => parseFloat(x) - parseFloat(y) : cmp); if (flags.has('r')) lines.reverse();
+    io.out = lines.join('\n') + '\n';
+  },
+  uniq(a, io, ctx) { const lines = readInputs(opts(a).rest, io, ctx, 'uniq').replace(/\n$/, '').split('\n'); io.out = lines.filter((l, i) => i === 0 || l !== lines[i - 1]).join('\n') + '\n'; },
+  clear(a, io, ctx) { ctx.clear(); },
+  history(a, io) {
+    if (a[0] === '-c') { HISTORY.length = 0; LS.set('history', HISTORY); return; }
+    io.out = HISTORY.map((h, i) => `${String(i + 1).padStart(5)}  ${h}`).join('\n') + '\n';
+  },
+  whoami(a, io) { io.out = USER + '\n'; },
+  hostname(a, io) { io.out = HOST + '\n'; },
+  uname(a, io) { io.out = (a.includes('-a') ? `Linux ${HOST} 6.8.0-web #1 SMP PREEMPT_DYNAMIC JavaScript x86_64 GNU/Linux` : 'Linux') + '\n'; },
+  date(a, io) { io.out = new Date().toString().replace(/ \(.*\)$/, '') + '\n'; },
+  uptime(a, io) { const d = new Date(); io.out = ` ${d.toTimeString().slice(0, 8)} up ${uptimeStr()},  1 user,  load average: 0.${(Math.random() * 90 + 10) | 0}, 0.42, 0.37\n`; },
+  cal(a, io) {
+    const d = new Date(), y = d.getFullYear(), m = d.getMonth(); const title = d.toLocaleString('en', { month: 'long' }) + ' ' + y;
+    let s = title.padStart(10 + Math.ceil(title.length / 2)) + '\nSu Mo Tu We Th Fr Sa\n';
+    const first = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate();
+    let line = '   '.repeat(first);
+    for (let i = 1; i <= days; i++) { line += String(i).padStart(2) + ' '; if ((first + i) % 7 === 0) { s += line.trimEnd() + '\n'; line = ''; } }
+    if (line) s += line.trimEnd() + '\n'; io.out = s;
+  },
+  neofetch(a, io, ctx, tty) {
+    const info = [
+      ['', `${USER}@${HOST}`], ['', '-'.repeat(USER.length + HOST.length + 1)],
+      ['OS', 'Tux Linux 24.04 LTS (Web Edition)'], ['Host', 'Browser Virtual Machine'], ['Kernel', '6.8.0-web'], ['Uptime', uptimeStr()],
+      ['Packages', Object.keys(CMDS).length + ' (builtin)'], ['Shell', 'bash 5.2.21'], ['Resolution', `${screen.width}x${screen.height}`],
+      ['DE', 'TuxDE 1.0'], ['WM', 'tuxwm'], ['Theme', `${S.theme} [${S.accent}]`], ['Terminal', 'tux-terminal'],
+      ['CPU', `${navigator.hardwareConcurrency || 4} × JavaScript vCPU`], ['Memory', `${navigator.deviceMemory ? navigator.deviceMemory * 1024 : 8192} MiB`],
+    ];
+    const art = TUX.map(l => l.padEnd(14));
+    const rows = Math.max(art.length, info.length); const text = [];
+    for (let i = 0; i < rows; i++) { const [k, v] = info[i] || ['', '']; text.push((art[i] || ''.padEnd(14)) + '   ' + (k ? k + ': ' : '') + v); }
+    io.out = text.join('\n') + '\n';
+    if (tty) {
+      const colors = ['#2e3436', '#cc0000', '#4e9a06', '#c4a000', '#3465a4', '#75507b', '#06989a', '#d3d7cf'];
+      io.html = `<div class="nf"><pre>${esc(TUX.join('\n'))}</pre><div>${info.map(([k, v], i) => i === 0 ? `<span class="nfk">${esc(USER)}</span>@<span class="nfk">${esc(HOST)}</span>` : k ? `<span class="nfk">${esc(k)}</span>: ${esc(v)}` : esc(v)).join('\n')}\n\n${colors.map(c => `<span class="blk" style="background:${c}"></span>`).join('')}</div></div>`;
+    }
+  },
+  ps(a, io) {
+    const rows = [['  PID', 'TTY  ', '    TIME', 'CMD'], ['    1', '?    ', '00:00:01', 'init'], ['  412', '?    ', '00:00:03', 'tuxwm'], ['  413', '?    ', '00:00:02', 'tuxde-panel']];
+    for (const w of WINS.values()) rows.push([String(w.pid).padStart(5), 'pts/0', '00:00:00', `${w.app}  [${w.title}]`]);
+    io.out = rows.map(r => r.join(' ')).join('\n') + '\n';
+  },
+  kill(a, io) {
+    const pid = +a.filter(x => !x.startsWith('-'))[0]; if (!pid) { io.err = 'kill: usage: kill PID\n'; return 1; }
+    const w = [...WINS.values()].find(w => w.pid === pid);
+    if (!w) { io.err = `kill: (${pid}) - ${pid < 1000 ? 'Operation not permitted' : 'No such process'}\n`; return 1; }
+    w.onClose = null; closeWin(w);
+  },
+  open(a, io, ctx) {
+    if (!a.length) { io.err = 'open: missing file operand\n'; return 1; }
+    for (const f of a) { const p = resolve(f, ctx.cwd); if (!getNode(p)) { io.err += `open: ${f}: No such file or directory\n`; continue; } openPath(p); }
+  },
+  edit(a, io, ctx) { launch('editor', { path: a[0] ? resolve(a[0], ctx.cwd) : null }); },
+  paint(a, io, ctx) { launch('paint', { path: a[0] ? resolve(a[0], ctx.cwd) : null }); },
+  files(a, io, ctx) { launch('files', { path: resolve(a[0] || '.', ctx.cwd) }); },
+  settings(a, io) { launch('settings', {}); },
+  theme(a, io) {
+    if (!a[0]) { io.out = `current theme: ${S.theme}\nusage: theme dark|light\n`; return; }
+    if (a[0] !== 'dark' && a[0] !== 'light') { io.err = 'theme: expected dark or light\n'; return 1; }
+    S.theme = a[0]; applySettings(); io.out = `theme set to ${a[0]}\n`;
+  },
+  wallpaper(a, io) {
+    const n = parseInt(a[0], 10);
+    if (isNaN(n) || n < 1 || n > WALLPAPERS.length) { io.out = WALLPAPERS.map((w, i) => `${String(i + 1).padStart(2)}  ${w.name}${S.wallpaper === i ? '  *' : ''}`).join('\n') + '\nusage: wallpaper <number>\n'; return; }
+    S.wallpaper = n - 1; applySettings(); io.out = `wallpaper set to ${WALLPAPERS[n - 1].name}\n`;
+  },
+  env(a, io, ctx) { io.out = Object.entries({ ...ctx.env, PWD: ctx.cwd }).map(([k, v]) => `${k}=${v}`).join('\n') + '\n'; },
+  export(a, io, ctx) { for (const x of a) { const i = x.indexOf('='); if (i > 0) ctx.env[x.slice(0, i)] = x.slice(i + 1); } },
+  alias(a, io) {
+    if (!a.length) { io.out = Object.entries(ALIASES).map(([k, v]) => `alias ${k}='${v}'`).join('\n') + '\n'; return; }
+    for (const x of a) { const i = x.indexOf('='); if (i > 0) ALIASES[x.slice(0, i)] = x.slice(i + 1); else if (ALIASES[x]) io.out += `alias ${x}='${ALIASES[x]}'\n`; else { io.err += `alias: ${x}: not found\n`; } }
+  },
+  which(a, io) { let code = 0; for (const c of a) { if (CMDS[c]) io.out += `/bin/${c}\n`; else if (ALIASES[c]) io.out += `${c}: aliased to ${ALIASES[c]}\n`; else code = 1; } return code; },
+  sh(a, io, ctx) {
+    if (!a[0]) { io.err = 'sh: interactive sub-shells are not supported, pass a script\n'; return 1; }
+    const p = resolve(a[0], ctx.cwd); const n = getNode(p);
+    if (!n || n.type !== 'file') { io.err = `sh: ${a[0]}: No such file\n`; return 127; }
+    return runScript(n.content, ctx);
+  },
+  source(a, io, ctx) { return CMDS.sh(a, io, ctx); },
+  cowsay(a, io) {
+    const msg = a.join(' ') || (io.stdin || 'Moo!').trim(); const lines = msg.match(/.{1,38}(\s|$)|\S+/g).map(s => s.trim()); const w = Math.max(...lines.map(l => l.length));
+    let s = ' ' + '_'.repeat(w + 2) + '\n';
+    if (lines.length === 1) s += `< ${lines[0]} >\n`;
+    else lines.forEach((l, i) => { const [o, c] = i === 0 ? ['/', '\\'] : i === lines.length - 1 ? ['\\', '/'] : ['|', '|']; s += `${o} ${l.padEnd(w)} ${c}\n`; });
+    s += ' ' + '-'.repeat(w + 2) + '\n' + '        \\   ^__^\n         \\  (oo)\\_______\n            (__)\\       )\\/\\\n                ||----w |\n                ||     ||\n';
+    io.out = s;
+  },
+  fortune(a, io) { io.out = FORTUNES[(Math.random() * FORTUNES.length) | 0] + '\n'; },
+  exit(a, io, ctx) { ctx.exit(); },
+  reboot(a, io) { flushAll(); setTimeout(() => location.reload(), 300); io.out = 'Rebooting...\n'; },
+  sudo(a, io, ctx, tty) { if (!a.length) { io.err = 'usage: sudo command\n'; return 1; } io.err = `[sudo] password for ${USER}: \nSorry, ${USER} is not in the sudoers file. This incident will be reported.\n`; return 1; },
+};
+function ensureBin() {
+  const b = getNode('/bin'); if (!b || b.type !== 'dir') return;
+  for (const k of Object.keys(DESCR)) if (!b.children[k]) b.children[k] = F(`#!/bin/builtin\n# ${k} - ${DESCR[k]}\n`);
+}
+
+/* ============================================================
+   Apps
+   ============================================================ */
+const APPS = {
+  terminal: { name: 'Terminal', icon: ICONS.terminal, open: openTerminal },
+  files: { name: 'Files', icon: ICONS.files, open: openFiles },
+  editor: { name: 'Text Editor', icon: ICONS.editor, open: openEditor },
+  paint: { name: 'Paint', icon: ICONS.paint, open: openPaint },
+  settings: { name: 'Settings', icon: ICONS.settings, open: openSettings, single: true },
+};
+function launch(app, args = {}, geom = {}) {
+  const A = APPS[app]; if (!A) return null;
+  if (A.single) { const ex = [...WINS.values()].find(w => w.app === app); if (ex) { focusWin(ex); if (args.page && ex.setPage) ex.setPage(args.page); return ex; } }
+  toggleMenu(false);
+  return A.open(args, geom);
+}
+
+/* ---------- Terminal ---------- */
+function openTerminal(args = {}, geom = {}) {
+  const win = createWindow({ app: 'terminal', title: 'Terminal', icon: ICONS.terminal, w: 700, h: 440, minW: 300, minH: 160, ...geom, args });
+  const b = win.body; b.classList.add('term');
+  b.innerHTML = `<div class="tout"></div><div class="tline"><span class="tprompt"></span><input class="tin" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="terminal input"></div>`;
+  const out = $('.tout', b), inp = $('.tin', b), promptEl = $('.tprompt', b);
+  const ctx = {
+    cwd: (args.cwd && fs.isDir(args.cwd)) ? args.cwd : HOME, code: 0, depth: 0,
+    env: { HOME, USER, LOGNAME: USER, SHELL: '/bin/bash', PATH: '/usr/local/bin:/usr/bin:/bin', TERM: 'xterm-256color', HOSTNAME: HOST, LANG: 'en_US.UTF-8' },
+    print: t => add(esc(t)), printHTML: h => add(h), printErr: t => add(`<span class="terr">${esc(t)}</span>`),
+    clear: () => { out.innerHTML = ''; }, exit: () => win.close(), win,
+  };
+  let hi = -1, draft = '';
+  function add(html) { const d = document.createElement('div'); d.innerHTML = html; out.appendChild(d); if (out.childElementCount > 1500) out.firstElementChild.remove(); }
+  const promptHTML = () => `<span class="pu">${USER}@${HOST}</span>:<span class="pd">${esc(prettyPath(ctx.cwd))}</span>$ `;
+  const updPrompt = () => { promptEl.innerHTML = promptHTML(); win.setTitle(`${USER}@${HOST}: ${prettyPath(ctx.cwd)}`); };
+  const scroll = () => { b.scrollTop = b.scrollHeight; };
+  win.getArgs = () => ({ cwd: ctx.cwd });
+  win.onFocus = () => setTimeout(() => { if (!getSelection().toString()) inp.focus({ preventScroll: true }); });
+  b.addEventListener('mouseup', () => { if (!getSelection().toString()) inp.focus({ preventScroll: true }); });
+  function run(line) {
+    add(promptHTML() + esc(line));
+    if (line.trim()) { if (HISTORY[HISTORY.length - 1] !== line) HISTORY.push(line); if (HISTORY.length > 300) HISTORY.splice(0, HISTORY.length - 300); LS.set('history', HISTORY); }
+    hi = -1; draft = '';
+    execute(line, ctx);
+    if (!WINS.has(win.id)) return;
+    updPrompt(); saveSession(); scroll();
+  }
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); const v = inp.value; inp.value = ''; run(v); }
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault(); if (!HISTORY.length) return;
+      if (hi === -1) { draft = inp.value; hi = HISTORY.length; }
+      hi = Math.max(0, hi - 1); inp.value = HISTORY[hi]; setTimeout(() => inp.setSelectionRange(inp.value.length, inp.value.length));
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault(); if (hi === -1) return;
+      hi++; if (hi >= HISTORY.length) { hi = -1; inp.value = draft; } else inp.value = HISTORY[hi];
+    } else if (e.key === 'Tab') { e.preventDefault(); complete(); }
+    else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); out.innerHTML = ''; }
+    else if (e.ctrlKey && (e.key === 'c' || e.key === 'C') && !getSelection().toString()) { e.preventDefault(); add(promptHTML() + esc(inp.value) + '^C'); inp.value = ''; hi = -1; scroll(); }
+    else if (e.ctrlKey && (e.key === 'd' || e.key === 'D') && !inp.value) { e.preventDefault(); win.close(); }
+  });
+  function complete() {
+    const pos = inp.selectionStart, v = inp.value.slice(0, pos), after = inp.value.slice(pos);
+    const word = /(\S*)$/.exec(v)[1], before = v.slice(0, v.length - word.length);
+    const isCmd = !before.trim() || /[|;&]\s*$/.test(before);
+    let cands = [];
+    if (isCmd && !word.includes('/')) cands = [...new Set([...Object.keys(CMDS), ...Object.keys(ALIASES)])].filter(c => c.startsWith(word)).sort().map(c => c + ' ');
+    else {
+      const i = word.lastIndexOf('/'), dp = word.slice(0, i + 1), base = word.slice(i + 1);
+      const n = getNode(resolve(dp || '.', ctx.cwd));
+      if (n && n.type === 'dir') cands = Object.keys(n.children).filter(k => k.startsWith(base) && (base.startsWith('.') || !k.startsWith('.'))).sort(cmp).map(k => dp + k.replace(/ /g, '\\ ') + (n.children[k].type === 'dir' ? '/' : ' '));
+    }
+    if (!cands.length) return;
+    const set = s => { inp.value = before + s + after; const c = (before + s).length; inp.setSelectionRange(c, c); };
+    if (cands.length === 1) { set(cands[0]); return; }
+    let lcp = cands[0]; for (const c of cands) while (!c.startsWith(lcp)) lcp = lcp.slice(0, -1);
+    if (lcp.length > word.length) set(lcp);
+    else { add(promptHTML() + esc(inp.value)); add(esc(columns(cands.map(c => c.trim().split('/').filter(Boolean).pop() + (c.endsWith('/') ? '/' : ''))).trimEnd())); scroll(); }
+  }
+  add(`<span class="tdim">${esc(fs.isFile('/etc/motd') ? fs.read('/etc/motd').trim() : 'Tux Linux')}</span>`);
+  add(`<span class="tdim">Type </span><span class="tacc">help</span><span class="tdim"> to see available commands.</span>`);
+  updPrompt();
+  if (args.run) run(args.run);
+  setTimeout(() => { if (activeWin === win) inp.focus({ preventScroll: true }); }, 50);
+  return win;
+}
+
+/* ---------- Text editor ---------- */
+function openEditor(args = {}, geom = {}) {
+  const win = createWindow({ app: 'editor', title: 'Text Editor', icon: ICONS.editor, w: 700, h: 470, minW: 340, minH: 220, ...geom, args });
+  const b = win.body;
+  b.innerHTML = `<div class="toolbar">
+    <button data-a="new" title="New (Ctrl+N)">${SVG.newfile}New</button>
+    <button data-a="open" title="Open (Ctrl+O)">${SVG.folder}Open…</button>
+    <button data-a="save" class="primary" title="Save (Ctrl+S)">Save</button>
+    <button data-a="saveas">Save As…</button>
+    <span class="grow"></span>
+    <label class="chk"><input type="checkbox" class="wrapchk"> Word wrap</label>
+  </div>
+  <div class="edwrap"><div class="gutter">1</div><textarea spellcheck="false" wrap="off"></textarea></div>
+  <div class="statusbar"><span class="spath"></span><span class="spos">Ln 1, Col 1</span></div>`;
+  const ta = $('textarea', b), gutter = $('.gutter', b), wrapEl = $('.edwrap', b), spath = $('.spath', b), spos = $('.spos', b);
+  const st = { path: null, dirty: false };
+  function load(path) {
+    const n = path ? getNode(path) : null;
+    ta.value = n && n.type === 'file' ? n.content : '';
+    st.path = path || null; st.dirty = false; upd(); ta.scrollTop = 0; ta.setSelectionRange(0, 0);
+  }
+  function upd() {
+    const name = st.path ? basename(st.path) : 'Untitled';
+    win.setTitle(`${st.dirty ? '● ' : ''}${name} — Text Editor`);
+    spath.textContent = st.path ? prettyPath(st.path) + (getNode(st.path) ? '' : ' (new file)') : 'Not saved';
+    updGutter(); updPos();
+  }
+  let lastLines = 0;
+  function updGutter() {
+    const n = ta.value.split('\n').length;
+    if (n !== lastLines) { lastLines = n; let s = ''; for (let i = 1; i <= n; i++) s += i + '\n'; gutter.textContent = s; }
+    gutter.scrollTop = ta.scrollTop;
+  }
+  function updPos() { const v = ta.value.slice(0, ta.selectionStart); const ln = v.split('\n').length; const col = v.length - v.lastIndexOf('\n'); spos.textContent = `Ln ${ln}, Col ${col}  ·  ${ta.value.length} chars`; }
+  async function save(as = false) {
+    let p = st.path;
+    if (as || !p) {
+      const v = await dialog({ title: as ? 'Save As' : 'Save File', message: 'File path:', input: p || HOME + '/Documents/' + uniqueName(HOME + '/Documents', 'untitled.txt'), buttons: ['Cancel', 'Save'] });
+      if (v == null || !v.trim()) return false;
+      p = resolve(v.trim(), HOME);
+      if (fs.isDir(p)) { toast('That path is a directory'); return false; }
+    }
+    try { fs.write(p, ta.value); st.path = p; st.dirty = false; upd(); toast('Saved ' + prettyPath(p)); saveSession(); return true; }
+    catch (e) { toast('Save failed: ' + e.message); return false; }
+  }
+  async function confirmDiscard() {
+    if (!st.dirty) return true;
+    const r = await dialog({ title: 'Unsaved changes', message: `Save changes to “${st.path ? basename(st.path) : 'Untitled'}” before continuing?`, buttons: ['Cancel', 'Discard', 'Save'] });
+    if (r === 2) return await save();
+    return r === 1;
+  }
+  async function openDlg() {
+    if (!(await confirmDiscard())) return;
+    const v = await dialog({ title: 'Open File', message: 'File path:', input: st.path ? splitPath(st.path)[0] + '/' : HOME + '/Documents/', buttons: ['Cancel', 'Open'] });
+    if (v == null) return;
+    const p = resolve(v.trim(), HOME); const n = getNode(p);
+    if (!n) { toast('No such file: ' + prettyPath(p)); return; }
+    if (n.type === 'dir') { launch('files', { path: p }); return; }
+    if (isImageNode(p, n)) { launch('paint', { path: p }); return; }
+    load(p); saveSession();
+  }
+  $('.toolbar', b).addEventListener('click', async e => {
+    const a = e.target.closest('button')?.dataset.a; if (!a) return;
+    if (a === 'new') { if (await confirmDiscard()) { load(null); saveSession(); } }
+    else if (a === 'open') openDlg();
+    else if (a === 'save') save();
+    else if (a === 'saveas') save(true);
+    ta.focus();
+  });
+  $('.wrapchk', b).addEventListener('change', e => { ta.wrap = e.target.checked ? 'soft' : 'off'; wrapEl.classList.toggle('wrapon', e.target.checked); });
+  ta.addEventListener('input', () => { if (!st.dirty) { st.dirty = true; upd(); } else { updGutter(); updPos(); } });
+  ta.addEventListener('scroll', () => { gutter.scrollTop = ta.scrollTop; });
+  ta.addEventListener('keyup', updPos); ta.addEventListener('click', updPos);
+  ta.addEventListener('keydown', e => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (e.key === 'Tab') { e.preventDefault(); ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input')); }
+    else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); save(e.shiftKey); }
+    else if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); openDlg(); }
+  });
+  win.onKey = e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(e.shiftKey); } };
+  win.onFocus = () => setTimeout(() => { if (document.activeElement === document.body) ta.focus({ preventScroll: true }); });
+  win.onClose = confirmDiscard;
+  win.getArgs = () => ({ path: st.path });
+  win.listen('fs', () => {
+    if (st.path && !st.dirty) { const n = getNode(st.path); if (n && n.type === 'file' && n.content !== ta.value) { const s = ta.selectionStart; ta.value = n.content; ta.setSelectionRange(s, s); } upd(); }
+  });
+  load(args.path || null);
+  return win;
+}
+
+/* ---------- File manager ---------- */
+function openFiles(args = {}, geom = {}) {
+  const win = createWindow({ app: 'files', title: 'Files', icon: ICONS.files, w: 760, h: 470, minW: 360, minH: 240, ...geom, args });
+  const b = win.body;
+  b.innerHTML = `<div class="toolbar">
+    <button class="ib" data-a="back" title="Back">${SVG.back}</button><button class="ib" data-a="fwd" title="Forward">${SVG.fwd}</button><button class="ib" data-a="up" title="Parent folder">${SVG.up}</button>
+    <div class="crumbs"></div>
+    <button class="ib" data-a="newdir" title="New folder">${SVG.newdir}</button><button class="ib" data-a="newfile" title="New file">${SVG.newfile}</button><button class="ib" data-a="term" title="Open terminal here">${SVG.term}</button>
+  </div><div class="fm"><nav class="side"></nav><div class="grid" tabindex="0"></div></div>
+  <div class="statusbar"><span class="scount"></span><span class="sinfo"></span></div>`;
+  const grid = $('.grid', b), side = $('.side', b), crumbs = $('.crumbs', b), scount = $('.scount', b), sinfo = $('.sinfo', b);
+  const st = { path: (args.path && fs.isDir(args.path)) ? args.path : HOME, back: [], fwd: [], sel: null, hidden: false };
+  const PLACES = [['Home', HOME, SVG.home], ['Desktop', HOME + '/Desktop', SVG.desk], ['Documents', HOME + '/Documents', SVG.doc], ['Downloads', HOME + '/Downloads', SVG.down], ['Pictures', HOME + '/Pictures', SVG.image], ['Music', HOME + '/Music', SVG.music], ['File System', '/', SVG.disk]];
+  side.innerHTML = PLACES.map(([n, p, ic]) => `<button data-p="${esc(p)}" title="${esc(n)}">${ic}<span>${esc(n)}</span></button>`).join('');
+  function nav(p, push = true) {
+    if (!fs.isDir(p)) { toast('Folder not found'); return; }
+    if (push && p !== st.path) { st.back.push(st.path); st.fwd = []; }
+    st.path = p; st.sel = null; render(); saveSession();
+  }
+  function render() {
+    while (!fs.isDir(st.path)) st.path = splitPath(st.path)[0];
+    const n = getNode(st.path);
+    const names = Object.keys(n.children).filter(k => st.hidden || !k.startsWith('.')).sort((a, c) => {
+      const da = n.children[a].type === 'dir', dc = n.children[c].type === 'dir'; return da === dc ? cmp(a, c) : da ? -1 : 1;
+    });
+    if (st.sel && !n.children[st.sel]) st.sel = null;
+    grid.innerHTML = names.length ? names.map(k => `<div class="fitem${st.sel === k ? ' sel' : ''}" data-n="${esc(k)}" title="${esc(k)}">${iconFor(k, n.children[k])}<div class="fname">${esc(k)}</div></div>`).join('') : '<div class="empty">This folder is empty</div>';
+    const parts = st.path === '/' ? [] : st.path.slice(1).split('/'); let acc = '';
+    crumbs.innerHTML = `<button data-p="/" title="/">${SVG.disk}</button>` + parts.map(s => { acc += '/' + s; return `<span class="cs">/</span><button data-p="${esc(acc)}">${esc(s)}</button>`; }).join('');
+    crumbs.scrollLeft = crumbs.scrollWidth;
+    side.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.p === st.path));
+    $('[data-a=back]', b).disabled = !st.back.length; $('[data-a=fwd]', b).disabled = !st.fwd.length; $('[data-a=up]', b).disabled = st.path === '/';
+    scount.textContent = `${names.length} item${names.length === 1 ? '' : 's'}`;
+    updInfo();
+    win.setTitle(st.path === '/' ? 'File System' : st.path === HOME ? 'Home' : basename(st.path));
+  }
+  function updInfo() {
+    if (!st.sel) { sinfo.textContent = prettyPath(st.path); return; }
+    const c = getNode(joinPath(st.path, st.sel)); if (!c) return;
+    sinfo.textContent = c.type === 'dir' ? `“${st.sel}” — folder, ${Object.keys(c.children).length} items` : `“${st.sel}” — ${fmtSize(sizeOf(c))}, modified ${fmtDate(c.mtime)}`;
+  }
+  function select(name) { st.sel = name; grid.querySelectorAll('.fitem').forEach(x => x.classList.toggle('sel', x.dataset.n === name)); updInfo(); }
+  function openItem(k) { const p = joinPath(st.path, k); if (fs.isDir(p)) nav(p); else openPath(p); }
+  async function rename(k) {
+    const v = await dialog({ title: 'Rename', input: k, buttons: ['Cancel', 'Rename'] });
+    if (v == null || !v.trim() || v === k) return;
+    if (v.includes('/')) { toast('Name cannot contain “/”'); return; }
+    if (getNode(joinPath(st.path, v))) { toast('“' + v + '” already exists'); return; }
+    try { fs.move(joinPath(st.path, k), joinPath(st.path, v.trim())); st.sel = v.trim(); } catch (e) { toast(e.message); }
+  }
+  async function del(k) {
+    const r = await dialog({ title: `Delete “${k}”?`, message: 'This item will be permanently deleted.', buttons: ['Cancel', 'Delete'] });
+    if (r === 1) { try { fs.remove(joinPath(st.path, k), true); } catch (e) { toast(e.message); } }
+  }
+  async function newItem(dir) {
+    const v = await dialog({ title: dir ? 'New Folder' : 'New File', input: uniqueName(st.path, dir ? 'New Folder' : 'untitled.txt'), buttons: ['Cancel', 'Create'] });
+    if (v == null || !v.trim()) return;
+    if (v.includes('/')) { toast('Name cannot contain “/”'); return; }
+    const p = joinPath(st.path, v.trim());
+    if (getNode(p)) { toast('“' + v + '” already exists'); return; }
+    try { if (dir) fs.mkdir(p); else fs.write(p, ''); st.sel = v.trim(); } catch (e) { toast(e.message); }
+  }
+  $('.toolbar', b).addEventListener('click', e => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    if (btn.dataset.p) { nav(btn.dataset.p); return; }
+    const a = btn.dataset.a;
+    if (a === 'back' && st.back.length) { st.fwd.push(st.path); nav(st.back.pop(), false); }
+    else if (a === 'fwd' && st.fwd.length) { st.back.push(st.path); nav(st.fwd.pop(), false); }
+    else if (a === 'up' && st.path !== '/') nav(splitPath(st.path)[0]);
+    else if (a === 'newdir') newItem(true);
+    else if (a === 'newfile') newItem(false);
+    else if (a === 'term') launch('terminal', { cwd: st.path });
+  });
+  side.addEventListener('click', e => { const x = e.target.closest('button'); if (x) nav(x.dataset.p); });
+  grid.addEventListener('pointerdown', e => { const it = e.target.closest('.fitem'); select(it ? it.dataset.n : null); });
+  grid.addEventListener('dblclick', e => { const it = e.target.closest('.fitem'); if (it) openItem(it.dataset.n); });
+  grid.addEventListener('pointerup', e => { if (e.pointerType === 'touch') { const it = e.target.closest('.fitem'); if (it) openItem(it.dataset.n); } });
+  grid.addEventListener('contextmenu', e => {
+    e.preventDefault(); const it = e.target.closest('.fitem');
+    if (it) {
+      const k = it.dataset.n; select(k); const p = joinPath(st.path, k); const isD = fs.isDir(p);
+      contextMenu(e.clientX, e.clientY, [
+        { label: 'Open', action: () => openItem(k) },
+        isD ? { label: 'Open in Terminal', action: () => launch('terminal', { cwd: p }) } : { label: 'Open with Text Editor', action: () => launch('editor', { path: p }) },
+        '-', { label: 'Rename…', action: () => rename(k) }, { label: 'Duplicate', action: () => { try { fs.copy(p, joinPath(st.path, uniqueName(st.path, k)), true); } catch (er) { toast(er.message); } } },
+        '-', { label: 'Delete', danger: true, action: () => del(k) },
+      ]);
+    } else {
+      select(null);
+      contextMenu(e.clientX, e.clientY, [
+        { label: 'New Folder…', action: () => newItem(true) }, { label: 'New File…', action: () => newItem(false) },
+        '-', { label: 'Open Terminal Here', action: () => launch('terminal', { cwd: st.path }) },
+        { label: (st.hidden ? 'Hide' : 'Show') + ' Hidden Files', action: () => { st.hidden = !st.hidden; render(); } },
+      ]);
+    }
+  });
+  grid.addEventListener('keydown', e => {
+    if (e.key === 'Delete' && st.sel) del(st.sel);
+    else if (e.key === 'F2' && st.sel) rename(st.sel);
+    else if (e.key === 'Enter' && st.sel) openItem(st.sel);
+    else if (e.key === 'Backspace') { e.preventDefault(); if (st.path !== '/') nav(splitPath(st.path)[0]); }
+    else if (e.ctrlKey && e.key.toLowerCase() === 'h') { e.preventDefault(); st.hidden = !st.hidden; render(); }
+  });
+  win.getArgs = () => ({ path: st.path });
+  win.listen('fs', render);
+  render();
+  return win;
+}
+const fmtSize = n => n < 1024 ? n + ' bytes' : n < 1048576 ? (n / 1024).toFixed(1) + ' kB' : (n / 1048576).toFixed(1) + ' MB';
+
+/* ---------- Settings ---------- */
+function openSettings(args = {}, geom = {}) {
+  const win = createWindow({ app: 'settings', title: 'Settings', icon: ICONS.settings, w: 760, h: 520, minW: 380, minH: 300, ...geom, args });
+  const b = win.body;
+  const PAGES = [['appearance', 'Appearance', SVG.palette], ['background', 'Background', SVG.image], ['about', 'About', SVG.info]];
+  b.innerHTML = `<div class="set"><nav class="side">${PAGES.map(([id, n, ic]) => `<button data-p="${id}" title="${n}">${ic}<span>${n}</span></button>`).join('')}</nav><div class="spage"></div></div>`;
+  const side = $('.side', b), page = $('.spage', b);
+  let cur = args.page || 'appearance';
+  function render() {
+    side.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.p === cur));
+    if (cur === 'appearance') {
+      page.innerHTML = `<h2>Appearance</h2>
+      <div class="sect"><h4>Style</h4><div class="themes">
+        <button class="tcard ${S.theme === 'light' ? 'on' : ''}" data-theme="light"><div class="tprev light"></div>Light</button>
+        <button class="tcard ${S.theme === 'dark' ? 'on' : ''}" data-theme="dark"><div class="tprev dark"></div>Dark</button></div></div>
+      <div class="sect"><h4>Accent color</h4><div class="swatches">${ACCENTS.map(c => `<button class="sw ${c === S.accent ? 'on' : ''}" data-accent="${c}" style="background:${c}" title="${c}"></button>`).join('')}<input type="color" class="acc-custom" value="${S.accent}" title="Custom accent"></div></div>
+      <div class="sect"><h4>Clock</h4>
+        <label class="row">24-hour time <input type="checkbox" data-k="clock24" ${S.clock24 ? 'checked' : ''}></label>
+        <label class="row">Show seconds <input type="checkbox" data-k="seconds" ${S.seconds ? 'checked' : ''}></label></div>`;
+    } else if (cur === 'background') {
+      const pics = []; const pd = getNode(HOME + '/Pictures');
+      if (pd && pd.type === 'dir') for (const k of Object.keys(pd.children).sort(cmp)) { const n = pd.children[k]; if (isImageNode(k, n)) pics.push([k, n.content]); }
+      const isCustomColor = S.wallpaper === 'custom' && S.customWall && !S.customWall.startsWith('data:');
+      page.innerHTML = `<h2>Background</h2>
+      <div class="sect"><h4>Wallpapers</h4><div class="walls">${WALLPAPERS.map((w, i) => `<button class="wall ${S.wallpaper === i ? 'on' : ''}" data-wall="${i}"><div style="background:${w.css}"></div><span>${w.name}</span></button>`).join('')}</div></div>
+      <div class="sect"><h4>Your pictures (~/Pictures)</h4>${pics.length ? `<div class="walls">${pics.map(([k, src]) => `<button class="wall ${S.wallpaper === 'custom' && S.customWall === src ? 'on' : ''}" data-pic="${esc(k)}"><div style="background:#fff url('${esc(src)}') center/cover"></div><span>${esc(k)}</span></button>`).join('')}</div>` : '<p style="margin:0;color:var(--muted)">Draw something in Paint and save it to ~/Pictures to use it here.</p>'}</div>
+      <div class="sect"><h4>Solid color</h4><div class="swatches"><input type="color" class="wall-color" value="${isCustomColor ? S.customWall : '#2c001e'}"> <span style="color:var(--muted)">${isCustomColor ? 'In use' : 'Pick a color'}</span></div></div>`;
+    } else {
+      let bytes = 0; try { for (const k of Object.keys(localStorage)) if (k.startsWith(PFX)) bytes += (localStorage.getItem(k) || '').length * 2; } catch (e) {}
+      let files = 0, dirs = 0; const walk = n => { for (const c of Object.values(n.children)) { if (c.type === 'dir') { dirs++; walk(c); } else files++; } }; walk(FS);
+      page.innerHTML = `<h2>About</h2>
+      <div class="sect"><div class="about">${ICONS.tux}<div class="kv">
+        <b>OS</b><span>Tux Linux 24.04 LTS (Web Edition)</span><b>Desktop</b><span>TuxDE 1.0 · tuxwm</span><b>Kernel</b><span>6.8.0-web</span>
+        <b>Processor</b><span>${navigator.hardwareConcurrency || 4} × JavaScript vCPU</span><b>Display</b><span>${innerWidth}×${innerHeight} @ ${devicePixelRatio}x</span>
+        <b>Files</b><span>${files} files, ${dirs} folders</span><b>Storage</b><span>${fmtSize(bytes)} used in localStorage</span></div></div></div>
+      <div class="sect"><h4>Reset</h4><p style="margin:0 0 10px;color:var(--muted)">Erase all files, settings and window layout and start fresh.</p><button class="btn" data-reset style="border-color:#e01b24;color:#e01b24">Factory reset…</button></div>`;
+    }
+  }
+  side.addEventListener('click', e => { const x = e.target.closest('button'); if (x) { cur = x.dataset.p; render(); saveSession(); } });
+  page.addEventListener('click', e => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.theme) { S.theme = t.dataset.theme; applySettings(); }
+    else if (t.dataset.accent) { S.accent = t.dataset.accent; applySettings(); }
+    else if (t.dataset.wall != null) { S.wallpaper = +t.dataset.wall; applySettings(); }
+    else if (t.dataset.pic) { const n = getNode(HOME + '/Pictures/' + t.dataset.pic); if (n) { S.wallpaper = 'custom'; S.customWall = n.content; applySettings(); } }
+    else if (t.hasAttribute('data-reset')) factoryReset();
+  });
+  page.addEventListener('change', e => {
+    const t = e.target;
+    if (t.dataset.k) { S[t.dataset.k] = t.checked; applySettings(); }
+    else if (t.classList.contains('acc-custom')) { S.accent = t.value; applySettings(); }
+    else if (t.classList.contains('wall-color')) { S.wallpaper = 'custom'; S.customWall = t.value; applySettings(); }
+  });
+  win.setPage = p => { cur = p; render(); };
+  win.getArgs = () => ({ page: cur });
+  win.listen('settings', render);
+  win.listen('fs', () => { if (cur !== 'appearance') render(); });
+  render();
+  return win;
+}
+async function factoryReset() {
+  const r = await dialog({ title: 'Factory reset?', message: 'All files, settings and windows stored in this browser will be erased.', buttons: ['Cancel', 'Erase everything'] });
+  if (r !== 1) return;
+  resetting = true; LS.clear(); location.reload();
+}
+
+/* ---------- Paint ---------- */
+function openPaint(args = {}, geom = {}) {
+  const win = createWindow({ app: 'paint', title: 'Paint', icon: ICONS.paint, w: 820, h: 560, minW: 420, minH: 300, ...geom, args });
+  const b = win.body;
+  const TOOLS = [['brush', 'Brush (B)', SVG.brush], ['eraser', 'Eraser (E)', SVG.eraser], ['line', 'Line (L)', SVG.line], ['rect', 'Rectangle (R)', SVG.rect], ['ellipse', 'Ellipse (O)', SVG.ellipse], ['fill', 'Fill bucket (F)', SVG.fill]];
+  const COLORS = ['#000000', '#ffffff', '#9a9996', '#e01b24', '#ff7800', '#f6d32d', '#33d17a', '#3584e4', '#9141ac', '#865e3c', '#ff6ec7', '#00c8c8'];
+  b.innerHTML = `<div class="toolbar ptb">
+    <div class="tgroup">${TOOLS.map(([id, n, ic]) => `<button class="ib tool${id === 'brush' ? ' on' : ''}" data-t="${id}" title="${n}">${ic}</button>`).join('')}</div>
+    <span class="sep"></span>
+    <div class="tgroup">${COLORS.map((c, i) => `<button class="pc${i === 3 ? ' on' : ''}" data-c="${c}" style="background:${c}" title="${c}"></button>`).join('')}<input type="color" class="pcol" value="#e01b24" title="Custom color"></div>
+    <span class="sep"></span>
+    <label class="psize" title="Size"><input type="range" min="1" max="60" value="6"><span>6</span></label>
+    <label class="chk"><input type="checkbox" class="pfill"> Filled</label>
+    <span class="grow"></span>
+    <button data-a="undo" title="Undo (Ctrl+Z)">Undo</button><button data-a="clear">Clear</button><button data-a="wall" title="Use as desktop wallpaper">Set wallpaper</button><button data-a="save" class="primary" title="Save (Ctrl+S)">Save</button>
+  </div><div class="pcanvas"><canvas></canvas></div><div class="statusbar"><span class="spath"></span><span class="spos"></span></div>`;
+  const wrap = $('.pcanvas', b), cv = $('canvas', b), g = cv.getContext('2d', { willReadFrequently: true });
+  const colIn = $('.pcol', b), sizeIn = $('.psize input', b), sizeOut = $('.psize span', b), fillIn = $('.pfill', b), spath = $('.spath', b), spos = $('.spos', b);
+  const st = { path: args.path || null, dirty: false, tool: 'brush', color: '#e01b24', size: 6 };
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let W = 0, H = 0;
+  const undo = [];
+  function ensureSize(minW = 0, minH = 0) {
+    const w = Math.max(wrap.clientWidth, minW), h = Math.max(wrap.clientHeight, minH);
+    if (w <= W && h <= H) return;
+    const nw = Math.max(w, W), nh = Math.max(h, H);
+    let tmp = null; if (W) { tmp = document.createElement('canvas'); tmp.width = cv.width; tmp.height = cv.height; tmp.getContext('2d').drawImage(cv, 0, 0); }
+    cv.width = Math.round(nw * dpr); cv.height = Math.round(nh * dpr); cv.style.width = nw + 'px'; cv.style.height = nh + 'px';
+    g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    if (tmp) g.drawImage(tmp, 0, 0);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); W = nw; H = nh;
+  }
+  const ro = new ResizeObserver(() => ensureSize()); ro.observe(wrap); win.onCleanup(() => ro.disconnect());
+  function upd() {
+    win.setTitle(`${st.dirty ? '● ' : ''}${st.path ? basename(st.path) : 'Untitled'} — Paint`);
+    spath.textContent = st.path ? prettyPath(st.path) : 'Not saved';
+  }
+  function setColor(c) { st.color = c; colIn.value = c; b.querySelectorAll('.pc').forEach(x => x.classList.toggle('on', x.dataset.c === c)); }
+  function setTool(t) { st.tool = t; b.querySelectorAll('.tool').forEach(x => x.classList.toggle('on', x.dataset.t === t)); }
+  function pushUndo() { undo.push(g.getImageData(0, 0, cv.width, cv.height)); if (undo.length > 25) undo.shift(); }
+  function doUndo() { const im = undo.pop(); if (!im) return; g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.putImageData(im, 0, 0); g.setTransform(dpr, 0, 0, dpr, 0, 0); markDirty(); }
+  function markDirty() { if (!st.dirty) { st.dirty = true; upd(); } }
+  function pos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) }; }
+  function stroke(a, c) {
+    g.globalCompositeOperation = 'source-over';
+    g.strokeStyle = st.tool === 'eraser' ? '#ffffff' : st.color; g.lineWidth = st.tool === 'eraser' ? st.size * 2 : st.size;
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(c.x, c.y); g.stroke();
+  }
+  function shape(a, c, shift) {
+    g.strokeStyle = st.color; g.fillStyle = st.color; g.lineWidth = st.size; g.lineCap = 'round'; g.lineJoin = 'round';
+    let w = c.x - a.x, h = c.y - a.y;
+    if (shift && st.tool !== 'line') { const m = Math.max(Math.abs(w), Math.abs(h)); w = Math.sign(w || 1) * m; h = Math.sign(h || 1) * m; }
+    g.beginPath();
+    if (st.tool === 'line') { let ex = c.x, ey = c.y; if (shift) { const ang = Math.round(Math.atan2(h, w) / (Math.PI / 4)) * (Math.PI / 4), len = Math.hypot(w, h); ex = a.x + Math.cos(ang) * len; ey = a.y + Math.sin(ang) * len; } g.moveTo(a.x, a.y); g.lineTo(ex, ey); g.stroke(); return; }
+    if (st.tool === 'rect') g.rect(a.x, a.y, w, h);
+    else g.ellipse(a.x + w / 2, a.y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2);
+    if (fillIn.checked) g.fill(); else g.stroke();
+  }
+  function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function flood(p) {
+    const w = cv.width, h = cv.height, x0 = Math.floor(p.x * dpr), y0 = Math.floor(p.y * dpr);
+    if (x0 < 0 || y0 < 0 || x0 >= w || y0 >= h) return;
+    const img = g.getImageData(0, 0, w, h), d = img.data, i0 = (y0 * w + x0) * 4;
+    const tr = d[i0], tg = d[i0 + 1], tb = d[i0 + 2], tA = d[i0 + 3]; const [fr, fg, fb] = hexToRgb(st.color);
+    if (tr === fr && tg === fg && tb === fb && tA === 255) return;
+    const tol = 60, seen = new Uint8Array(w * h);
+    const match = j => Math.abs(d[j] - tr) + Math.abs(d[j + 1] - tg) + Math.abs(d[j + 2] - tb) + Math.abs(d[j + 3] - tA) <= tol;
+    const stack = [x0, y0];
+    while (stack.length) {
+      const y = stack.pop(); let x = stack.pop(); let idx = y * w + x;
+      while (x >= 0 && !seen[idx] && match(idx * 4)) { x--; idx--; }
+      x++; idx++; let up = false, dn = false;
+      while (x < w && !seen[idx] && match(idx * 4)) {
+        seen[idx] = 1; const j = idx * 4; d[j] = fr; d[j + 1] = fg; d[j + 2] = fb; d[j + 3] = 255;
+        if (y > 0) { const u = idx - w; if (!seen[u] && match(u * 4)) { if (!up) { stack.push(x, y - 1); up = true; } } else up = false; }
+        if (y < h - 1) { const v = idx + w; if (!seen[v] && match(v * 4)) { if (!dn) { stack.push(x, y + 1); dn = true; } } else dn = false; }
+        x++; idx++;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }
+  let drawing = false, start = null, last = null, snap = null;
+  cv.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault(); cv.setPointerCapture(e.pointerId);
+    const p = pos(e); pushUndo(); markDirty();
+    if (st.tool === 'fill') { flood(p); return; }
+    drawing = true; start = last = p;
+    if (st.tool === 'brush' || st.tool === 'eraser') stroke(p, p);
+    else snap = g.getImageData(0, 0, cv.width, cv.height);
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = pos(e); spos.textContent = `${Math.round(p.x)}, ${Math.round(p.y)} px  ·  ${W}×${H}`;
+    if (!drawing) return;
+    if (st.tool === 'brush' || st.tool === 'eraser') {
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      for (const ev of (evs.length ? evs : [e])) { const q = pos(ev); stroke(last, q); last = q; }
+    } else { g.putImageData(snap, 0, 0); shape(start, p, e.shiftKey); }
+  });
+  const end = () => { drawing = false; snap = null; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  b.querySelector('.ptb').addEventListener('click', e => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.t) setTool(t.dataset.t);
+    else if (t.dataset.c) { setColor(t.dataset.c); if (st.tool === 'eraser') setTool('brush'); }
+    else if (t.dataset.a === 'undo') doUndo();
+    else if (t.dataset.a === 'clear') { pushUndo(); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.setTransform(dpr, 0, 0, dpr, 0, 0); markDirty(); }
+    else if (t.dataset.a === 'save') save();
+    else if (t.dataset.a === 'wall') { S.wallpaper = 'custom'; S.customWall = exportCanvas('image/jpeg', 0.85); applySettings(); toast('Wallpaper updated'); }
+  });
+  colIn.addEventListener('input', () => setColor(colIn.value));
+  sizeIn.addEventListener('input', () => { st.size = +sizeIn.value; sizeOut.textContent = sizeIn.value; });
+  function exportCanvas(type = 'image/png', q) {
+    const ex = document.createElement('canvas'); ex.width = W; ex.height = H;
+    const eg = ex.getContext('2d'); eg.fillStyle = '#fff'; eg.fillRect(0, 0, W, H); eg.drawImage(cv, 0, 0, W, H);
+    return ex.toDataURL(type, q);
+  }
+  async function save(as = false) {
+    let p = st.path;
+    if (as || !p) {
+      const v = await dialog({ title: 'Save Image', message: 'File path:', input: HOME + '/Pictures/' + uniqueName(HOME + '/Pictures', 'drawing.png'), buttons: ['Cancel', 'Save'] });
+      if (v == null || !v.trim()) return false;
+      p = resolve(v.trim(), HOME); if (!/\.png$/i.test(p)) p += '.png';
+    }
+    try { fs.write(p, exportCanvas()); st.path = p; st.dirty = false; upd(); toast('Saved ' + prettyPath(p)); saveSession(); return true; }
+    catch (e) { toast('Save failed: ' + e.message); return false; }
+  }
+  function loadImage(path) {
+    const n = getNode(path); if (!n || !isImageNode(path, n)) { upd(); return; }
+    const img = new Image();
+    img.onload = () => { ensureSize(img.width, img.height); g.drawImage(img, 0, 0, img.width, img.height); st.dirty = false; upd(); };
+    img.src = n.content;
+  }
+  win.onKey = e => {
+    if (e.target.closest && e.target.closest('input,textarea')) return;
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (mod && k === 'z') { e.preventDefault(); doUndo(); }
+    else if (mod && k === 's') { e.preventDefault(); save(e.shiftKey); }
+    else if (!mod && !e.altKey) { const m = { b: 'brush', e: 'eraser', l: 'line', r: 'rect', o: 'ellipse', f: 'fill' }[k]; if (m) setTool(m); else if (k === '[') { sizeIn.value = Math.max(1, st.size - 2); sizeIn.dispatchEvent(new Event('input')); } else if (k === ']') { sizeIn.value = Math.min(60, st.size + 2); sizeIn.dispatchEvent(new Event('input')); } }
+  };
+  win.onClose = async () => {
+    if (!st.dirty) return true;
+    const r = await dialog({ title: 'Unsaved drawing', message: 'Save your drawing before closing?', buttons: ['Cancel', 'Discard', 'Save'] });
+    if (r === 2) return await save(); return r === 1;
+  };
+  win.getArgs = () => ({ path: st.path });
+  ensureSize();
+  if (st.path) loadImage(st.path); else upd();
+  return win;
+}
+
+/* ============================================================
+   Desktop, taskbar, menu, clock
+   ============================================================ */
+const iconsEl = $('#icons');
+function renderDesktop() {
+  const items = [
+    { label: 'Home', icon: ICONS.home, open: () => launch('files', { path: HOME }) },
+    { label: 'Terminal', icon: ICONS.terminal, open: () => launch('terminal') },
+    { label: 'Text Editor', icon: ICONS.editor, open: () => launch('editor') },
+    { label: 'Paint', icon: ICONS.paint, open: () => launch('paint') },
+    { label: 'Settings', icon: ICONS.settings, open: () => launch('settings') },
+  ];
+  const dd = getNode(HOME + '/Desktop');
+  if (dd && dd.type === 'dir') for (const k of Object.keys(dd.children).sort(cmp)) { const p = HOME + '/Desktop/' + k; items.push({ label: k, icon: iconFor(k, dd.children[k]), open: () => openPath(p), path: p }); }
+  iconsEl.innerHTML = '';
+  for (const it of items) {
+    const d = document.createElement('div'); d.className = 'dicon'; d.innerHTML = `${it.icon}<span>${esc(it.label)}</span>`; d.title = it.label;
+    d.addEventListener('pointerdown', e => { e.stopPropagation(); closeCtx(); toggleMenu(false); $$('.dicon.sel').forEach(x => x.classList.remove('sel')); d.classList.add('sel'); });
+    d.addEventListener('dblclick', it.open);
+    d.addEventListener('pointerup', e => { if (e.pointerType === 'touch') it.open(); });
+    d.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      const menu = [{ label: 'Open', action: it.open }];
+      if (it.path) menu.push('-', { label: 'Rename…', action: async () => { const v = await dialog({ title: 'Rename', input: basename(it.path), buttons: ['Cancel', 'Rename'] }); if (v && v.trim() && !v.includes('/')) { try { fs.move(it.path, joinPath(HOME + '/Desktop', v.trim())); } catch (er) { toast(er.message); } } } },
+        { label: 'Delete', danger: true, action: async () => { const r = await dialog({ title: `Delete “${basename(it.path)}”?`, message: 'This cannot be undone.', buttons: ['Cancel', 'Delete'] }); if (r === 1) fs.remove(it.path, true); } });
+      contextMenu(e.clientX, e.clientY, menu);
+    });
+    iconsEl.appendChild(d);
+  }
+}
+desktopEl.addEventListener('pointerdown', e => { if (e.target === desktopEl || e.target === iconsEl) $$('.dicon.sel').forEach(x => x.classList.remove('sel')); });
+desktopEl.addEventListener('contextmenu', e => {
+  if (e.target !== desktopEl && e.target !== iconsEl) return;
+  e.preventDefault();
+  const dir = HOME + '/Desktop';
+  contextMenu(e.clientX, e.clientY, [
+    { label: 'New Folder…', action: async () => { const v = await dialog({ title: 'New Folder', input: uniqueName(dir, 'New Folder'), buttons: ['Cancel', 'Create'] }); if (v && v.trim() && !v.includes('/')) { try { fs.mkdir(joinPath(dir, v.trim())); } catch (er) { toast(er.message); } } } },
+    { label: 'New Text File…', action: async () => { const v = await dialog({ title: 'New Text File', input: uniqueName(dir, 'untitled.txt'), buttons: ['Cancel', 'Create'] }); if (v && v.trim() && !v.includes('/')) { const p = joinPath(dir, v.trim()); if (getNode(p)) { toast('Already exists'); return; } fs.write(p, ''); launch('editor', { path: p }); } } },
+    '-', { label: 'Open Terminal', action: () => launch('terminal', { cwd: dir }) },
+    { label: 'Change Background…', action: () => launch('settings', { page: 'background' }) },
+    { label: S.theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme', action: () => { S.theme = S.theme === 'dark' ? 'light' : 'dark'; applySettings(); } },
+  ]);
+});
+bus.addEventListener('fs', renderDesktop);
+
+/* start menu */
+const menuEl = $('#menu'), msearch = $('#msearch'), mapps = $('#mapps');
+$('#startBtn').innerHTML = ICONS.tux; $('#msi').outerHTML = SVG.search;
+$('#mpower').innerHTML = SVG.power; $('#mreset').innerHTML = SVG.reset;
+$('#trayIcons').innerHTML = SVG.wifi + SVG.vol + SVG.bat;
+let menuItems = [];
+function renderMenu() {
+  const q = msearch.value.trim().toLowerCase();
+  menuItems = Object.entries(APPS).filter(([, a]) => !q || a.name.toLowerCase().includes(q)).map(([id, a]) => ({ label: a.name, icon: a.icon, run: () => launch(id) }));
+  if (!q || 'home files folder'.includes(q)) menuItems.splice(2, 0, { label: 'Home Folder', icon: ICONS.home, run: () => launch('files', { path: HOME }) });
+  let html = (q ? '<div class="mhead">Applications</div>' : '') + menuItems.map((it, i) => `<button class="mapp${q && i === 0 ? ' hl' : ''}" data-i="${i}">${it.icon}<span>${esc(it.label)}</span></button>`).join('');
+  if (q) {
+    const found = []; const walk = (n, p) => { for (const [k, c] of Object.entries(n.children)) { const cp = joinPath(p, k); if (k.toLowerCase().includes(q) && !k.startsWith('.')) found.push([cp, k, c]); if (c.type === 'dir' && found.length < 12) walk(c, cp); } };
+    walk(FS, '/');
+    const base = menuItems.length;
+    found.slice(0, 8).forEach(([p, k, c]) => menuItems.push({ label: k, icon: iconFor(k, c), run: () => { toggleMenu(false); openPath(p); }, title: p }));
+    if (found.length) html += '<div class="mhead">Files</div>' + menuItems.slice(base).map((it, i) => `<button class="mapp${!base && i === 0 ? ' hl' : ''}" data-i="${base + i}" title="${esc(it.title)}">${it.icon}<span>${esc(it.label)}</span></button>`).join('');
+    if (!menuItems.length) html = '<div class="mhead">No results</div>';
+  }
+  mapps.innerHTML = html;
+}
+function toggleMenu(show = menuEl.classList.contains('hide')) {
+  menuEl.classList.toggle('hide', !show); $('#startBtn').classList.toggle('on', show);
+  if (show) { toggleCal(false); msearch.value = ''; renderMenu(); setTimeout(() => msearch.focus(), 30); }
+}
+$('#startBtn').addEventListener('click', () => toggleMenu());
+mapps.addEventListener('click', e => { const t = e.target.closest('.mapp'); if (t) { const it = menuItems[+t.dataset.i]; toggleMenu(false); it.run(); } });
+msearch.addEventListener('input', renderMenu);
+msearch.addEventListener('keydown', e => { if (e.key === 'Enter' && menuItems[0]) { const it = menuItems[0]; toggleMenu(false); it.run(); } if (e.key === 'Escape') toggleMenu(false); });
+$('#mreset').addEventListener('click', () => { toggleMenu(false); factoryReset(); });
+$('#mpower').addEventListener('click', () => {
+  toggleMenu(false); flushAll();
+  const p = $('#power'); $('#powerMsg').textContent = 'Shutting down…'; p.classList.add('on');
+  setTimeout(() => { $('#powerMsg').textContent = 'System halted. Click anywhere to power on.'; }, 1200);
+  p.onclick = () => { if ($('#powerMsg').textContent.startsWith('System')) { p.classList.remove('on'); toast('Welcome back, ' + USER + '!'); } };
+});
+$('#showDesk').addEventListener('click', () => {
+  const vis = [...WINS.values()].filter(w => !w.min);
+  if (vis.length) { showDeskSaved = vis; vis.forEach(minimizeWin); }
+  else if (showDeskSaved) { showDeskSaved.filter(w => WINS.has(w.id)).forEach(focusWin); showDeskSaved = null; }
+});
+let showDeskSaved = null;
+
+/* clock + calendar */
+const calEl = $('#cal'); let calMonth = null;
+function tick() {
+  const d = new Date();
+  $('#clockT').textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...(S.seconds ? { second: '2-digit' } : {}), hour12: !S.clock24 });
+  $('#clockD').textContent = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+}
+(function loop() { tick(); setTimeout(loop, 1000 - (Date.now() % 1000) + 5); })();
+function renderCal() {
+  const t = new Date(); const m = calMonth || new Date(t.getFullYear(), t.getMonth(), 1);
+  const first = (new Date(m.getFullYear(), m.getMonth(), 1).getDay() + 6) % 7, days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate(), prevDays = new Date(m.getFullYear(), m.getMonth(), 0).getDate();
+  let cells = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<div class="dn">${d}</div>`).join('');
+  for (let i = 0; i < first; i++) cells += `<div class="o">${prevDays - first + 1 + i}</div>`;
+  for (let i = 1; i <= days; i++) { const today = i === t.getDate() && m.getMonth() === t.getMonth() && m.getFullYear() === t.getFullYear(); cells += `<div class="${today ? 't' : ''}">${i}</div>`; }
+  const rem = (7 - (first + days) % 7) % 7; for (let i = 1; i <= rem; i++) cells += `<div class="o">${i}</div>`;
+  calEl.innerHTML = `<div class="big">${t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: !S.clock24 })}</div><div class="sub">${t.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+    <div class="ch"><button data-m="-1">‹</button><b>${m.toLocaleDateString([], { month: 'long', year: 'numeric' })}</b><button data-m="1">›</button></div><div class="cg">${cells}</div>`;
+}
+function toggleCal(show = calEl.classList.contains('hide')) {
+  calEl.classList.toggle('hide', !show); $('#clock').classList.toggle('on', show);
+  if (show) { toggleMenu(false); calMonth = null; renderCal(); }
+}
+$('#clock').addEventListener('click', () => toggleCal());
+calEl.addEventListener('click', e => { const t = e.target.closest('[data-m]'); if (!t) return; const n = new Date(); const m = calMonth || new Date(n.getFullYear(), n.getMonth(), 1); calMonth = new Date(m.getFullYear(), m.getMonth() + +t.dataset.m, 1); renderCal(); });
+
+/* global keys */
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 't') { e.preventDefault(); launch('terminal'); return; }
+  if (e.key === 'Escape') { toggleMenu(false); toggleCal(false); closeCtx(); }
+  if (activeWin && activeWin.onKey && !document.querySelector('.modal-ov')) activeWin.onKey(e);
+});
+
+/* persistence flush */
+let resetting = false;
+function flushAll() { if (resetting) return; clearTimeout(fsSaveT); LS.set('fs', FS); flushSession(); LS.set('settings', S); }
+window.addEventListener('beforeunload', flushAll);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushAll(); });
+
+/* ============================================================
+   Boot
+   ============================================================ */
+ensureBin();
+applySettings(false);
+renderDesktop();
+(function boot() {
+  const sess = LS.get('session', null);
+  if (Array.isArray(sess)) {
+    restoring = true; let act = null;
+    for (const s of sess) { try { const w = launch(s.app, s.args || {}, { rect: s.rect, max: s.max, min: s.min }); if (s.active) act = w; } catch (e) { console.error(e); } }
+    restoring = false;
+    if (act && !act.min && WINS.has(act.id)) focusWin(act);
+    flushSession();
+  } else {
+    const L = layerSize();
+    launch('files', { path: HOME + '/Documents' }, { rect: { x: Math.max(116, Math.round(L.w * 0.1)), y: Math.round(L.h * 0.07), w: Math.min(720, Math.round(L.w * 0.55)), h: Math.min(440, Math.round(L.h * 0.62)) } });
+    launch('terminal', { run: 'neofetch' }, { rect: { x: Math.round(L.w * 0.4), y: Math.round(L.h * 0.27), w: Math.min(700, Math.round(L.w * 0.55)), h: Math.min(430, Math.round(L.h * 0.66)) } });
+    LS.set('fs', FS);
+    setTimeout(() => toast('Welcome to Tux Linux! Right-click the desktop or open the menu to get started.'), 600);
+  }
+})();
+</script>
+</body>
+</html>

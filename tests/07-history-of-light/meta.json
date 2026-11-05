@@ -1,0 +1,30 @@
+{
+  "model": null,
+  "effort": "high",
+  "date": "2026-11-04",
+  "worked": true,
+  "v1_worked": true,
+  "kind": "html",
+  "entry": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+  },
+  "notes": "Scroll-driven longread, 7 pinned canvas scenes morphing by scroll progress, drop caps, spectrum progress bar, per-chapter color temperature. No libraries, no console errors on desktop and mobile.",
+  "v1_issues": "Fire core washed out to a white blob; near gas lamps blown out to huge white glare and near-camera windows rendered as giant flat rectangles; empty black hole in the centre of the laser mandala; progress-bar chapter labels not aligned with the track; 'g' descender clipped in hero title; heavy per-frame shadowBlur (neon) and per-bulb radial gradients (bulb grid) hurt FPS; on mobile the LED labels overlap.",
+  "v2_changes": "Reworked flame particles (warmer sprites, taller tongues, separate hot core); capped and distance-faded gas lamp glows, hid near windows; laser centre filled with rotating conic spectrum + glow, thicker beams on small screens; labels aligned to the track, active-only labels on mobile; neon glow via downsampled bloom instead of shadowBlur; bulb glows via pre-tinted Kelvin sprites and simplified distant bulbs; canvas pixel budget (~3.7 MP) for retina/4K; stage edge fades + film grain; mobile card spacing and typography; hero descender fix.",
+  "usage": {
+    "runs": [
+      {
+        "stage": "v1+v2",
+        "subagent_tokens": 180068,
+        "tool_uses": 50,
+        "duration_ms": 3524787
+      }
+    ],
+    "total_tokens": 180068,
+    "processed_tokens": 5996802,
+    "total_minutes": 58.7,
+    "est_usd": 3.12,
+    "note": "оценка: API-эквивалент по модели tools/cost.py, не реальное списание"
+  }
+}

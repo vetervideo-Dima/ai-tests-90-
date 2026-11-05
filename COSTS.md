@@ -49,3 +49,4 @@
 | 10-remotion-bar-chart | — | high | v1+v2 | 89 436 | 35 | 4.8 | ≈$1.09 | 2026-11-05 |
 | 11-manim-pythagoras | — | high | v1+v2 | 93 329 | 23 | 4.9 | ≈$0.99 | 2026-11-05 |
 | 09-remotion-record-store | — | high | v1+v2 | 128 524 | 48 | 15.9 | ≈$2.05 | 2026-11-05 |
+| 13-tokyo-street-prompts | — | high | v1+v2 | 71 438 | 8 | 2.5 | ≈$0.43 | 2026-11-05 |

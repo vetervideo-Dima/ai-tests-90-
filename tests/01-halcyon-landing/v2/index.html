@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halcyon — Handmade Analog Synthesizers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=IBM+Plex+Mono:wght@300;400;600&family=Zen+Kaku+Gothic+New:wght@300;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --dominant:#ECE6D8;      /* catalogue paper */
+  --accent:#FF4A00;        /* signal orange */
+  --ink:#121110;
+  --ink-2:#121110b3;
+  --rule:#12111033;
+  --display:"Archivo","Helvetica Neue","Nimbus Sans","Liberation Sans",sans-serif;
+  --mono:"IBM Plex Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  --jp:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif;
+  --pad:clamp(16px,3vw,40px);
+  --ease:cubic-bezier(.2,.8,.1,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{background:var(--dominant);color:var(--ink);font-family:var(--display);font-weight:400;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+::selection{background:var(--accent);color:var(--dominant)}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.mono{font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.jp{font-family:var(--jp)}
+
+/* ---------- grain ---------- */
+/* grain lives in static backgrounds (no full-screen blended overlay → no per-frame recomposite) */
+:root{--grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .07  0 0 0 0 .07  0 0 0 0 .06  0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+body{background-image:var(--grain)}
+
+/* ---------- buttons ---------- */
+.btn{position:relative;display:inline-flex;align-items:center;gap:.7em;padding:.95em 1.3em;border:1.5px solid var(--ink);
+  font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;overflow:hidden;
+  box-shadow:4px 4px 0 var(--ink);transition:box-shadow .18s var(--ease),transform .18s var(--ease),color .25s;isolation:isolate;will-change:transform}
+.btn::before{content:"";position:absolute;inset:0;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ease);z-index:-1}
+.btn:hover{color:var(--dominant)}
+.btn:hover::before{transform:scaleX(1)}
+.btn:active{transform:translate(4px,4px)!important;box-shadow:0 0 0 var(--ink)}
+.btn .arr{display:inline-block;transition:transform .3s var(--ease)}
+.btn:hover .arr{transform:translateX(5px)}
+.btn--accent{background:var(--accent);border-color:var(--ink)}
+.btn--accent::before{background:var(--ink)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.btn .led{width:8px;height:8px;border-radius:50%;background:var(--rule);box-shadow:inset 0 0 0 1px var(--ink);transition:background .2s}
+.btn.is-on .led{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+
+/* ---------- nav ---------- */
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:24px;
+  padding:14px var(--pad);border-bottom:1.5px solid var(--ink);background:#ECE6D8f2;transition:transform .45s var(--ease)}
+.nav.hide{transform:translateY(-101%)}
+.nav__logo{font-weight:900;font-size:20px;letter-spacing:-.02em;text-decoration:none;display:flex;align-items:baseline;gap:10px}
+.nav__logo small{font-weight:100;font-size:14px;letter-spacing:.1em}
+.nav__links{display:flex;gap:22px}
+.nav__links a{text-decoration:none;position:relative}
+.nav__links a::after{content:"";position:absolute;left:0;right:0;bottom:-3px;height:1.5px;background:var(--accent);transform:scaleX(0);transform-origin:right;transition:transform .3s var(--ease)}
+.nav__links a:hover::after{transform:scaleX(1);transform-origin:left}
+.rack{padding:.6em .9em;box-shadow:3px 3px 0 var(--ink)}
+.rack b{display:inline-block;min-width:1.4em;text-align:center;background:var(--ink);color:var(--dominant);padding:0 .3em;transition:transform .3s var(--ease)}
+.rack.bump b{animation:bump .45s var(--ease)}
+@keyframes bump{30%{transform:scale(1.6) rotate(-8deg);background:var(--accent)}}
+
+/* ---------- hero ---------- */
+.hero{position:relative;height:100vh;height:100svh;min-height:560px;overflow:hidden;border-bottom:1.5px solid var(--ink);
+  background-color:var(--dominant);
+  background-image:
+    linear-gradient(#12111024 1px,transparent 1px),
+    linear-gradient(90deg,#12111024 1px,transparent 1px),
+    radial-gradient(ellipse at 50% 46%,#fff8 0,#fff0 60%),
+    var(--grain);
+  background-size:calc(100% / 12) calc(100% / 8),calc(100% / 12) calc(100% / 8),100% 100%,180px 180px;background-position:-1px -1px,-1px -1px,0 0,0 0}
+.hero::after{content:"";position:absolute;left:0;right:0;top:46%;height:1px;background:#12111055;pointer-events:none}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+.hero__ui{position:absolute;inset:0;pointer-events:none;display:grid;grid-template-rows:auto 1fr auto;padding:84px var(--pad) clamp(18px,3vh,36px)}
+.hero__top{display:flex;justify-content:space-between;gap:20px}
+.hero__readout{display:grid;grid-template-columns:auto auto;gap:2px 18px;padding:10px 12px;border:1.5px solid var(--ink);background:var(--dominant)}
+.hero__readout span:nth-child(even){text-align:right;color:var(--accent);font-weight:600}
+.hero__title{align-self:end;line-height:.8}
+.hero__title h1{font-size:min(15vw,30vh);font-weight:900;letter-spacing:-.065em;font-stretch:115%;margin-left:-.04em;white-space:nowrap}
+.fit{white-space:nowrap}
+.hero__title .fit{display:inline-block}
+.hero__title h1 span[style]{display:inline-block;transform:translateY(110%);animation:rise 1.1s var(--ease) forwards;animation-delay:calc(var(--i) * 60ms + .2s)}
+.hero__mask{overflow:hidden;display:block;padding-top:.04em}
+@keyframes rise{to{transform:none}}
+.hero__sub{display:grid;grid-template-columns:1fr auto;align-items:end;gap:24px;margin-top:18px;pointer-events:auto}
+.hero__sub p{font-weight:100;font-size:clamp(22px,3.2vw,46px);letter-spacing:-.02em;line-height:1;max-width:16ch}
+.hero__sub p em{font-style:normal;font-weight:900;color:var(--accent)}
+.hero__cta{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.hero__jp{align-self:start;font-size:14px;font-weight:300;letter-spacing:.3em;line-height:1.7;text-align:center;pointer-events:none;padding-top:2px}
+.hero__jp b{font-weight:900}
+@media (max-width:980px){.hero__jp{display:none}}
+.hero__jp b{font-weight:900;color:var(--accent)}
+
+/* ---------- section scaffolding ---------- */
+section{position:relative}
+.sec-head{display:grid;grid-template-columns:120px 1fr auto;gap:24px;align-items:end;padding:72px var(--pad) 28px;border-bottom:1.5px solid var(--ink)}
+.sec-head .num{font-weight:900;font-size:64px;line-height:.8;color:var(--accent)}
+.sec-head h2{font-size:clamp(40px,7vw,110px);line-height:.85;font-weight:100;letter-spacing:-.04em}
+.sec-head h2 b{font-weight:900}
+.sec-head .meta{text-align:right;line-height:1.6}
+
+/* ---------- product grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5px;background:var(--ink);border-bottom:1.5px solid var(--ink)}
+.card{background:var(--dominant) var(--grain);padding:22px;display:flex;flex-direction:column;gap:18px;overflow:hidden}
+/* staggered reveal: the card's paper stays (no black void), its contents print in row by row */
+.card>*{opacity:0;transform:translateY(40px);transition:opacity .7s var(--ease),transform .9s var(--ease);
+  transition-delay:calc(var(--d,0) * 120ms + var(--c,0) * 70ms)}
+.card>:nth-child(2){--c:1}.card>:nth-child(3){--c:2}.card>:nth-child(4){--c:3}.card>:nth-child(5){--c:4}
+.card.in>*{opacity:1;transform:none}
+.card .plate{clip-path:inset(0 0 100% 0);opacity:1;transform:none;transition:clip-path 1s var(--ease);transition-delay:calc(var(--d,0) * 120ms + 60ms)}
+.card.in .plate{clip-path:inset(0 0 0 0)}
+.card__top{display:flex;justify-content:space-between}
+.card__top .tag{background:var(--ink);color:var(--dominant);padding:2px 6px}
+.plate{position:relative;aspect-ratio:16/9;background:linear-gradient(180deg,#d9d4c7,#c4bfb2 48%,#d7d2c5 52%,#bcb7aa);border:1.5px solid var(--ink);
+  display:grid;grid-template-columns:repeat(var(--cols,4),1fr);align-content:center;justify-items:center;gap:10px;padding:14px 16px 26px;overflow:hidden}
+.plate::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,#fff0 0 2px,#ffffff14 2px 3px);pointer-events:none}
+.plate__label{position:absolute;left:10px;bottom:6px;font-family:var(--mono);font-size:9px;letter-spacing:.14em}
+.plate__vu{position:absolute;right:10px;bottom:7px;display:flex;gap:2px;align-items:flex-end;height:12px}
+.plate__vu i{width:3px;height:3px;background:var(--ink);transition:height .08s}
+.card.playing .plate__vu i{background:var(--accent)}
+.knob{--r:-130deg;width:clamp(26px,3.4vw,46px);aspect-ratio:1;border-radius:50%;position:relative;
+  background:radial-gradient(circle at 35% 30%,#3a3836,#0f0e0d 70%);box-shadow:0 3px 0 #0005,0 0 0 3px #0000,0 0 0 4px #1211104d;
+  transform:rotate(var(--r));transition:transform .5s var(--ease)}
+.knob::after{content:"";position:absolute;left:50%;top:8%;width:2px;height:34%;background:var(--dominant);transform:translateX(-50%)}
+.knob.k-acc::after{background:var(--accent)}
+.knob.sm{width:clamp(18px,2.2vw,30px)}
+.jack{width:clamp(12px,1.4vw,18px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#000 35%,#888 40%,#ddd 55%,#777 70%)}
+.card h3{font-size:clamp(32px,3.6vw,52px);font-weight:900;letter-spacing:-.04em;line-height:.9}
+.card h3 small{display:block;font-weight:100;font-size:.5em;letter-spacing:-.01em;margin-top:4px}
+.card p{font-size:15px;line-height:1.45;color:var(--ink-2);font-weight:350;max-width:40ch}
+.card__foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:14px;border-top:1.5px dashed var(--rule)}
+.price{font-weight:900;font-size:24px;letter-spacing:-.03em}
+.price sup{font-weight:200;font-size:.5em}
+.card__btns{display:flex;gap:10px}
+.card__btns .btn{padding:.7em .9em;box-shadow:3px 3px 0 var(--ink)}
+.card__btns .btn:active{transform:translate(3px,3px)!important}
+.btn.added{background:var(--ink);color:var(--dominant)}
+
+/* ---------- timeline ---------- */
+.tl{height:400vh;border-bottom:1.5px solid var(--ink);background:var(--ink);color:var(--dominant)}
+.tl__sticky{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;display:flex;flex-direction:column}
+.tl .sec-head{border-color:#ece6d833;padding-top:90px}
+.tl .sec-head .meta{color:#ece6d899}
+.tl__track{flex:1;display:flex;align-items:stretch;gap:0;will-change:transform;padding:0 var(--pad)}
+.note{flex:0 0 min(46vw,560px);border-left:1.5px solid #ece6d833;padding:32px 34px;display:flex;flex-direction:column;gap:16px;position:relative}
+.note:first-child{border-left:0}
+.note__yr{font-size:clamp(80px,11vw,170px);font-weight:100;line-height:.8;letter-spacing:-.06em}
+.note__yr b{font-weight:900;color:var(--accent)}
+.note__v{display:flex;gap:10px;align-items:center}
+.note__v span{border:1px solid currentColor;padding:2px 6px}
+.note h4{font-size:clamp(22px,2.2vw,32px);font-weight:800;letter-spacing:-.02em;line-height:1}
+.note ul{list-style:none;font-family:var(--mono);font-size:13px;line-height:1.7;color:#ece6d8cc}
+.note li::before{content:"+ ";color:var(--accent)}
+.note li.fix::before{content:"~ "}
+.note li.rm::before{content:"− "}
+.tl__bar{height:4px;background:#ece6d822;margin:0 var(--pad) 22px;position:relative}
+.tl__bar i{position:absolute;inset:0;background:var(--accent);transform-origin:left;transform:scaleX(0)}
+.tl__ctl{display:flex;gap:10px;padding:0 var(--pad) 22px;align-items:center;justify-content:space-between}
+.tl__ctl .btn{border-color:var(--dominant);box-shadow:3px 3px 0 var(--accent);color:var(--dominant)}
+.tl__ctl .btn::before{background:var(--dominant)}
+.tl__ctl .btn:hover{color:var(--ink)}
+
+/* ---------- specs (printed manual) ---------- */
+.manual{padding:0 var(--pad) 80px}
+.manual__wrap{display:grid;grid-template-columns:280px 1fr;gap:48px;padding-top:40px}
+.manual aside{position:sticky;top:90px;align-self:start;display:flex;flex-direction:column;gap:18px}
+.manual aside p{font-size:14px;line-height:1.55;font-weight:300}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1.5px solid var(--ink)}
+.seg button{padding:10px 4px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;border-right:1.5px solid var(--ink);position:relative;transition:background .2s,color .2s}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:#12111014}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--dominant)}
+.seg button[aria-pressed=true]::after{content:"";position:absolute;left:50%;bottom:-7px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg)}
+.sheet{border:1.5px solid var(--ink);background:#f3eee2;padding:28px 30px 18px;position:relative;box-shadow:8px 8px 0 #12111022}
+.sheet__hd{display:flex;justify-content:space-between;border-bottom:3px double var(--ink);padding-bottom:10px;margin-bottom:6px}
+.sheet__hd h3{font-size:28px;font-weight:900;letter-spacing:-.03em}
+.sheet__hd h3 span{font-weight:100}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px}
+th{text-align:left;font-weight:600;font-size:10px;letter-spacing:.14em;padding:10px 8px;border-bottom:1.5px solid var(--ink)}
+td{padding:11px 8px;border-bottom:1px dotted var(--ink);vertical-align:baseline;transition:background .2s}
+td:first-child{width:56px;color:var(--accent);font-weight:600}
+td:nth-child(2){font-family:var(--display);font-weight:600;font-size:14px}
+td:nth-child(3){text-align:right;font-weight:600;white-space:nowrap}
+td:nth-child(4){font-size:11px;color:var(--ink-2);width:30%}
+tr:hover td{background:#ff4a0014}
+tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.sheet__ft{display:flex;justify-content:space-between;margin-top:18px;font-size:10px}
+.scr{display:inline-block}
+
+/* ---------- footer ---------- */
+footer{background:var(--dominant);border-top:1.5px solid var(--ink);overflow:hidden}
+.foot__top{display:grid;grid-template-columns:2fr 1fr 1fr;gap:var(--pad);padding:56px var(--pad) 20px}
+.foot__top h5{font-size:clamp(28px,3vw,44px);font-weight:100;letter-spacing:-.03em;line-height:1;margin-bottom:18px}
+.foot__top h5 b{font-weight:900}
+.sub{display:flex;border:1.5px solid var(--ink);max-width:520px}
+.sub input{flex:1;min-width:0;border:0;background:transparent;padding:14px;font-family:var(--mono);font-size:13px;color:var(--ink);outline:none}
+.sub .btn{box-shadow:none;border:0;border-left:1.5px solid var(--ink)}
+.sub .btn:active{transform:none!important}
+.sub.err{animation:shake .4s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.foot__col{line-height:1.9;display:flex;flex-direction:column;align-items:flex-start}
+.foot__col a{text-decoration:none;display:block;width:max-content}
+.foot__col a:hover{color:var(--accent)}
+.wordmark{display:block;padding:0 var(--pad);margin-top:24px;user-select:none;line-height:0}
+.wordmark .fit{display:inline-block;font-size:17vw;font-weight:900;letter-spacing:-.05em;line-height:.8;font-stretch:112%;
+  color:transparent;-webkit-text-stroke:max(1px,.12vw) var(--ink);padding-bottom:.02em}
+.wordmark span span{display:inline-block;transition:color .35s var(--ease),transform .5s var(--ease),-webkit-text-stroke-color .3s}
+.wordmark span span:hover,.wordmark span span.lit{color:var(--accent);-webkit-text-stroke-color:var(--accent);transform:translateY(-4%)}
+.foot__base{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:16px var(--pad);border-top:1.5px solid var(--ink)}
+
+/* ---------- responsive ---------- */
+@media (max-width:980px){
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .manual__wrap{grid-template-columns:1fr}
+  .manual aside{position:static}
+  .foot__top{grid-template-columns:1fr 1fr}
+  .foot__top>div:first-child{grid-column:1/-1}
+}
+@media (max-width:640px){
+  .nav__links{display:none}
+  .nav{grid-template-columns:1fr auto}
+  .grid{grid-template-columns:1fr}
+  .sec-head{grid-template-columns:1fr;gap:10px}
+  .sec-head .meta{text-align:left}
+  .hero__sub{grid-template-columns:1fr}
+  .hero__cta{justify-content:flex-start}
+  .hero__readout{font-size:10px}
+  .hero__top>div:last-child{font-size:10px}
+  .hero__jp{display:none}
+  .hero__sub p{font-size:28px}
+  .hero__cta .btn{flex:1 1 auto;justify-content:center}
+  .card__btns .btn{padding:.8em 1em}
+  .tl .sec-head{padding-top:78px}
+  .note{flex-basis:84vw;padding:24px 20px}
+  .sheet{padding:18px 14px}
+  td:nth-child(4),th:nth-child(4){display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  .card>*{opacity:1;transform:none}.card .plate{clip-path:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav__logo" href="#top">HALCYON <small class="jp">ハルシオン</small></a>
+  <div class="nav__links mono">
+    <a href="#instruments">Instruments</a>
+    <a href="#patch-notes">Patch notes</a>
+    <a href="#specs">Specs</a>
+    <a href="#contact">Contact</a>
+  </div>
+  <button class="btn rack mono" id="rackBtn" aria-live="polite">Rack <b id="rackCount">0</b></button>
+</nav>
+
+<header class="hero" id="top">
+  <canvas id="scope" aria-label="Animated oscilloscope trace. Move your pointer to change frequency and amplitude."></canvas>
+  <div class="hero__ui">
+    <div class="hero__top mono">
+      <div class="hero__readout" id="readout">
+        <span>CH1</span><span id="roV">2.00 V/div</span>
+        <span>FREQ</span><span id="roF">220.0 Hz</span>
+        <span>WAVE</span><span id="roW">SINE</span>
+        <span>TIME</span><span>5 ms/div</span>
+      </div>
+      <div class="hero__jp jp">手作りの<b>アナログ</b>シンセサイザー<br>一九七四年創業 · 京都</div>
+      <div style="text-align:right;line-height:1.6">Catalogue No. 47<br>Autumn 2026<br>Kyoto · Rotterdam</div>
+    </div>
+    <div></div>
+    <div>
+      <div class="hero__title"><h1 aria-label="Halcyon"><span class="hero__mask"><span class="fit" id="heroFit"><span style="--i:0">H</span><span style="--i:1">A</span><span style="--i:2">L</span><span style="--i:3">C</span><span style="--i:4">Y</span><span style="--i:5">O</span><span style="--i:6">N</span></span></span></h1></div>
+      <div class="hero__sub">
+        <p>Hand-wired <em>analog</em> synthesizers. One solder joint at a time.</p>
+        <div class="hero__cta">
+          <button class="btn btn--accent" id="heroListen" data-wave="sawtooth" data-freq="110"><span class="led"></span>Hear the KUMO-1</button>
+          <a class="btn" href="#instruments" data-magnet>Browse instruments <span class="arr">→</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="instruments">
+  <div class="sec-head">
+    <div class="num">01</div>
+    <h2>The <b>Instruments</b></h2>
+    <div class="meta mono">6 models<br>Built to order · 8–12 weeks</div>
+  </div>
+  <div class="grid" id="grid"></div>
+</section>
+
+<section class="tl" id="patch-notes">
+  <div class="tl__sticky">
+    <div class="sec-head">
+      <div class="num">02</div>
+      <h2>Patch <b>Notes</b></h2>
+      <div class="meta mono">Firmware-free since 1974<br>Scroll ↓ to advance →</div>
+    </div>
+    <div class="tl__track" id="track"></div>
+    <div class="tl__ctl mono">
+      <button class="btn" id="tlPrev"><span class="arr">←</span> Earlier</button>
+      <span id="tlIdx">01 / 08</span>
+      <button class="btn" id="tlNext">Later <span class="arr">→</span></button>
+    </div>
+    <div class="tl__bar"><i id="tlBar"></i></div>
+  </div>
+</section>
+
+<section class="manual" id="specs">
+  <div class="sec-head" style="padding-left:0;padding-right:0">
+    <div class="num">03</div>
+    <h2>Technical <b>Data</b></h2>
+    <div class="meta mono">Owner's manual, p. 14<br>仕様 · Specifications</div>
+  </div>
+  <div class="manual__wrap">
+    <aside>
+      <p class="mono" style="font-size:11px">Fig. 4 — Select model</p>
+      <div class="seg" id="seg" role="group" aria-label="Select model">
+        <button aria-pressed="true" data-m="kumo">KUMO-1</button>
+        <button aria-pressed="false" data-m="nagi">NAGI-4</button>
+        <button aria-pressed="false" data-m="yoru">YORU-16</button>
+      </div>
+      <p>All measurements taken at 23&nbsp;°C after a 20-minute warm-up, as is tradition. Values may drift by ±2&nbsp;cents. That is the point.</p>
+      <button class="btn" id="printBtn">Print this page <span class="arr">⎙</span></button>
+    </aside>
+    <div class="sheet">
+      <div class="sheet__hd"><h3 id="sheetTitle">KUMO-1 <span>Monophonic</span></h3><span class="mono">§ 4.2</span></div>
+      <table>
+        <thead><tr><th>Ref.</th><th>Parameter</th><th style="text-align:right">Value</th><th>Note</th></tr></thead>
+        <tbody id="specBody"></tbody>
+      </table>
+      <div class="sheet__ft mono"><span>Halcyon Denshi Gakki K.K.</span><span>— 14 —</span><span>HX-MAN-047-E</span></div>
+    </div>
+  </div>
+</section>
+
+<footer id="contact">
+  <div class="foot__top">
+    <div>
+      <h5>Join the <b>waiting list.</b><br>We write twice a year.</h5>
+      <form class="sub" id="subForm" novalidate>
+        <input type="email" id="subEmail" placeholder="you@studio.jp" aria-label="Email address" required>
+        <button class="btn btn--accent" type="submit" id="subBtn">Patch me in <span class="arr">→</span></button>
+      </form>
+    </div>
+    <div class="foot__col mono">
+      <a href="#instruments">Instruments</a><a href="#patch-notes">Patch notes</a><a href="#specs">Specifications</a><a href="#top">Service &amp; repair</a>
+    </div>
+    <div class="foot__col mono">
+      <span>Workshop</span><span class="jp" style="text-transform:none">京都市左京区 3-14</span><span>+81 75 000 0047</span>
+      <button class="btn" id="topBtn" style="margin-top:10px">Back to top <span class="arr">↑</span></button>
+    </div>
+  </div>
+  <div class="wordmark" aria-hidden="true"><span class="fit" id="wordFit"><span>H</span><span>A</span><span>L</span><span>C</span><span>Y</span><span>O</span><span>N</span></span></div>
+  <div class="foot__base mono"><span>© 1974–2026 Halcyon Denshi Gakki</span><span>Fictional company · Made for a design study</span></div>
+</footer>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* =========================================================
+   AUDIO — tiny analog-ish voice for button feedback
+   ========================================================= */
+let actx = null;
+const scopeKick = { wave: 'sine', until: 0, freq: 220 };
+function playNote(freq = 110, type = 'sawtooth', dur = 0.9) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const t = actx.currentTime;
+    const o1 = actx.createOscillator(), o2 = actx.createOscillator();
+    const f = actx.createBiquadFilter(), g = actx.createGain();
+    o1.type = type; o2.type = type;
+    o1.frequency.value = freq; o2.frequency.value = freq * 1.005;
+    f.type = 'lowpass'; f.Q.value = 9;
+    f.frequency.setValueAtTime(180, t);
+    f.frequency.exponentialRampToValueAtTime(3200, t + 0.06);
+    f.frequency.exponentialRampToValueAtTime(260, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(actx.destination);
+    o1.start(t); o2.start(t); o1.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
+  } catch (e) { /* audio unavailable: visual feedback still runs */ }
+  scopeKick.wave = type; scopeKick.freq = freq; scopeKick.until = performance.now() + dur * 1000;
+}
+
+/* =========================================================
+   HERO OSCILLOSCOPE
+   ========================================================= */
+const cv = $('#scope'), ctx = cv.getContext('2d');
+let W = 0, H = 0, dpr = 1;
+const mouse = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, inside: false, vx: 0 };
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = cv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+addEventListener('resize', resize);
+function setPointer(e) {
+  const r = cv.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  const nx = (p.clientX - r.left) / r.width;
+  mouse.vx = nx - mouse.tx;
+  mouse.tx = nx; mouse.ty = (p.clientY - r.top) / r.height; mouse.inside = true;
+}
+$('.hero').addEventListener('pointermove', setPointer);
+$('.hero').addEventListener('touchmove', setPointer, { passive: true });
+$('.hero').addEventListener('pointerleave', () => { mouse.inside = false; });
+
+const roF = $('#roF'), roV = $('#roV'), roW = $('#roW');
+let heroVisible = true, last = performance.now(), phase = 0, roTimer = 0;
+new IntersectionObserver(([en]) => { heroVisible = en.isIntersecting; if (heroVisible) { last = performance.now(); requestAnimationFrame(drawScope); } }).observe($('.hero'));
+
+function wave(type, x) {
+  const p = x - Math.floor(x);
+  switch (type) {
+    case 'sawtooth': return 1 - 2 * p;
+    case 'square': return p < 0.5 ? 0.85 : -0.85;
+    case 'triangle': return 1 - 4 * Math.abs(p - 0.5);
+    default: return Math.sin(x * Math.PI * 2);
+  }
+}
+const css = getComputedStyle(document.documentElement);
+const INK = css.getPropertyValue('--ink').trim() || '#121110';
+const ACC = css.getPropertyValue('--accent').trim() || '#FF4A00';
+
+function drawScope(now) {
+  if (!heroVisible) return;
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const k = 1 - Math.pow(0.0015, dt);
+  if (!mouse.inside) { mouse.tx = 0.5 + Math.sin(now * 0.0003) * 0.25; mouse.ty = 0.5 + Math.cos(now * 0.00041) * 0.18; }
+  mouse.x += (mouse.tx - mouse.x) * k; mouse.y += (mouse.ty - mouse.y) * k;
+  mouse.vx *= 0.9;
+
+  const kicking = now < scopeKick.until;
+  const type = kicking ? scopeKick.wave : 'sine';
+  const cycles = 1.5 + mouse.x * 7.5;               // pointer X → frequency
+  const amp = (0.08 + (1 - mouse.y) * 0.26) * H;    // pointer Y → amplitude
+  const freqHz = 55 * Math.pow(2, mouse.x * 4);
+  phase += dt * (0.25 + mouse.x * 0.9) * (reduce ? 0.2 : 1);
+
+  // phosphor persistence: fade the last frame
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = 'rgba(0,0,0,' + (reduce ? 1 : 0.28) + ')';
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+
+  const mid = H * 0.46, mx = mouse.x * W, my = mouse.y * H;
+  const step = Math.max(1.5, W / 700);
+
+  // CH2 — accent, low amplitude harmonic
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += step) {
+    const t = x / W;
+    const y = mid + Math.sin((t * cycles * 2 + phase * 1.7) * Math.PI * 2) * amp * 0.22 + Math.sin(t * 40 + now * 0.004) * 1.2;
+    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = ACC; ctx.globalAlpha = 0.7; ctx.lineWidth = 1.2; ctx.stroke(); ctx.globalAlpha = 1;
+
+  // CH1 — main trace with local pointer deformation
+  ctx.beginPath();
+  const sigma = W * 0.09;
+  for (let x = 0; x <= W; x += step) {
+    const t = x / W;
+    let s = wave(type, t * cycles + phase);
+    if (!kicking) s = s * 0.8 + 0.2 * Math.sin((t * cycles * 3 + phase * 2) * Math.PI * 2);
+    const g = Math.exp(-((x - mx) ** 2) / (2 * sigma * sigma));
+    let y = mid + s * amp;
+    y += (my - y) * g * (mouse.inside ? 0.65 : 0.25);              // trace is attracted to pointer
+    y += Math.sin(t * 90 - now * 0.02) * g * 6 * Math.min(1, Math.abs(mouse.vx) * 40); // jitter on fast moves
+    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = INK; ctx.lineWidth = kicking ? 3 : 2.2; ctx.stroke();
+
+  // pointer cursor marker
+  if (mouse.inside) {
+    ctx.strokeStyle = ACC; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(mx, 0); ctx.lineTo(mx, H); ctx.stroke();
+    ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  if (now - roTimer > 90) {
+    roTimer = now;
+    roF.textContent = (kicking ? scopeKick.freq : freqHz).toFixed(1) + ' Hz';
+    roV.textContent = (0.5 + (1 - mouse.y) * 4.5).toFixed(2) + ' V/div';
+    roW.textContent = type === 'sawtooth' ? 'SAW' : type.toUpperCase();
+  }
+  requestAnimationFrame(drawScope);
+}
+requestAnimationFrame(drawScope);
+
+/* =========================================================
+   PRODUCTS
+   ========================================================= */
+const products = [
+  { id: 'kumo', name: 'KUMO-1', kind: 'Monophonic voice', price: '1,480', tag: 'Flagship', wave: 'sawtooth', freq: 110, cols: 5, k: 'KKKKK J J J', desc: 'Two VCOs, a 24 dB ladder filter that bites, and an envelope you can feel in your teeth.' },
+  { id: 'nagi', name: 'NAGI-4', kind: 'Paraphonic poly', price: '2,940', tag: 'New', wave: 'triangle', freq: 220, cols: 4, k: 'KKKK kkkk', desc: 'Four voices sharing one filter, so every chord breathes as a single organism. Calm water, deep current.' },
+  { id: 'tsuru', name: 'TSURU', kind: 'Analog percussion', price: '1,120', tag: 'Drums', wave: 'sine', freq: 55, cols: 6, k: 'kkkkkk JJJJJJ', desc: 'Six circuit-bent drum voices with individual outs. The kick is a bridged-T that refuses to behave.' },
+  { id: 'mizu', name: 'MIZU', kind: 'Resonant filter bank', price: '860', tag: 'Effect', wave: 'square', freq: 165, cols: 4, k: 'KKKK JJJJ', desc: 'Eight fixed bands of resonance tuned to the harmonic series. Run anything through it. Anything.' },
+  { id: 'yoru', name: 'YORU-16', kind: 'Step sequencer', price: '740', tag: 'Control', wave: 'square', freq: 330, cols: 8, k: 'kkkkkkkk kkkkkkkk', desc: 'Sixteen steps, two rows of CV, a clock that drifts like a tired drummer at 3 a.m. in Shimokitazawa.' },
+  { id: 'kaze', name: 'KAZE', kind: 'Spring reverb tank', price: '590', tag: 'Effect', wave: 'triangle', freq: 82.5, cols: 3, k: 'KKK J J J', desc: 'A real spring, a real tank, real feedback. Kick the case for thunder. We will not cover that under warranty.' },
+];
+const grid = $('#grid');
+grid.innerHTML = products.map((p, i) => {
+  const parts = p.k.split('').filter(c => c !== ' ').map((c, j) =>
+    c === 'K' ? `<span class="knob${j === 0 ? ' k-acc' : ''}"></span>` :
+    c === 'k' ? `<span class="knob sm"></span>` : `<span class="jack"></span>`).join('');
+  return `<article class="card" style="--d:${i % 3}" data-id="${p.id}">
+    <div class="card__top mono"><span>No. ${String(i + 1).padStart(2, '0')}</span><span class="tag">${p.tag}</span></div>
+    <div class="plate" style="--cols:${p.cols}">${parts}
+      <span class="plate__label">HALCYON ${p.name}</span>
+      <span class="plate__vu">${'<i></i>'.repeat(8)}</span></div>
+    <h3>${p.name}<small>${p.kind}</small></h3>
+    <p>${p.desc}</p>
+    <div class="card__foot">
+      <span class="price"><sup>€</sup>${p.price}</span>
+      <div class="card__btns">
+        <button class="btn listen" data-wave="${p.wave}" data-freq="${p.freq}"><span class="led"></span>Listen</button>
+        <button class="btn add">Add <span class="arr">+</span></button>
+      </div>
+    </div></article>`;
+}).join('');
+
+// staggered scroll reveal
+const io = new IntersectionObserver((ents) => {
+  ents.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+}, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
+$$('.card').forEach(c => io.observe(c));
+
+// knobs follow pointer across the card
+$$('.card').forEach(card => {
+  const knobs = $$('.knob', card);
+  card.addEventListener('pointermove', e => {
+    const r = card.getBoundingClientRect();
+    const t = (e.clientX - r.left) / r.width;
+    knobs.forEach((k, i) => k.style.setProperty('--r', (-130 + t * 260 * (0.6 + ((i * 37) % 10) / 25)) + 'deg'));
+  });
+  card.addEventListener('pointerleave', () => knobs.forEach(k => k.style.removeProperty('--r')));
+});
+
+// listen: synth note + VU meter
+function animateVU(card, dur) {
+  const bars = $$('.plate__vu i', card); const t0 = performance.now();
+  card.classList.add('playing');
+  (function f(now) {
+    const p = (now - t0) / dur;
+    if (p >= 1) { bars.forEach(b => b.style.height = '3px'); card.classList.remove('playing'); return; }
+    const lvl = (1 - p) * 12;
+    bars.forEach((b, i) => b.style.height = Math.max(3, Math.min(12, lvl * (0.5 + Math.random() * 0.7) * (1 - i / 14))) + 'px');
+    requestAnimationFrame(f);
+  })(t0);
+}
+function flashLed(btn, ms) { btn.classList.add('is-on'); setTimeout(() => btn.classList.remove('is-on'), ms); }
+grid.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const card = b.closest('.card');
+  if (b.classList.contains('listen')) {
+    playNote(+b.dataset.freq, b.dataset.wave, 0.9);
+    flashLed(b, 900); animateVU(card, 900);
+  } else if (b.classList.contains('add')) {
+    const on = !b.classList.toggle('added') ? false : true;
+    b.innerHTML = on ? 'In rack <span class="arr">✓</span>' : 'Add <span class="arr">+</span>';
+    rack += on ? 1 : -1; updateRack();
+    playNote(on ? 880 : 440, 'square', 0.12);
+  }
+});
+let rack = 0;
+const rackBtn = $('#rackBtn'), rackCount = $('#rackCount');
+function updateRack() {
+  rackCount.textContent = rack;
+  rackBtn.classList.remove('bump'); void rackBtn.offsetWidth; rackBtn.classList.add('bump');
+}
+rackBtn.addEventListener('click', () => {
+  const first = $('.add.added');
+  (first ? first.closest('.card') : $('#instruments')).scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+$('#heroListen').addEventListener('click', e => {
+  const b = e.currentTarget; playNote(+b.dataset.freq, b.dataset.wave, 1.2); flashLed(b, 1200);
+});
+
+/* magnetic buttons (pointer-fine only) */
+if (matchMedia('(pointer:fine)').matches && !reduce) {
+  $$('[data-magnet], .btn--accent').forEach(b => {
+    b.addEventListener('pointermove', e => {
+      const r = b.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      b.style.transform = `translate(${dx * 0.18}px, ${dy * 0.28}px)`;
+    });
+    b.addEventListener('pointerleave', () => { b.style.transform = ''; });
+  });
+}
+
+/* =========================================================
+   PATCH NOTES — horizontal timeline driven by vertical scroll
+   ========================================================= */
+const notes = [
+  ['1974', 'v0.1', 'Garage in Sakyō-ku', ['First VCO on perfboard', 'Tuned against a temple bell', 'rm:Smoke (mostly)']],
+  ['1978', 'v1.0', 'The HX-1 ships', ['Ladder filter, 24 dB/oct', '40 units, numbered by hand', 'fix:Keybed no longer bites back']],
+  ['1983', 'v1.4', 'Digital winter', ['Kept building analog anyway', 'fix:Oscillator drift now “characterful”', 'rm:Marketing department']],
+  ['1991', 'v2.0', 'Rotterdam workshop', ['European service centre', 'CV/Gate + DIN sync', 'Spring reverb KAZE debuts']],
+  ['2004', 'v2.7', 'The quiet years', ['Repair-only, every unit ever made', 'fix:Service manuals reprinted', 'Apprentice programme begins']],
+  ['2015', 'v3.0', 'Eurorack, reluctantly', ['MIZU filter bank in 3U', 'fix:Panel legends now legible', 'rm:Our objection to Eurorack']],
+  ['2022', 'v3.5', 'NAGI-4 arrives', ['Paraphonic, four voices', 'Through-hole only, still', 'fix:Waiting list trimmed to 9 months']],
+  ['2026', 'v4.0', 'Catalogue No. 47', ['YORU-16 sequencer', 'Recycled aluminium faceplates', 'fix:Waiting list trimmed to 8 weeks']],
+];
+const track = $('#track');
+track.innerHTML = notes.map(([yr, v, h, items]) => `
+  <article class="note">
+    <div class="note__yr">${yr.slice(0, 2)}<b>${yr.slice(2)}</b></div>
+    <div class="note__v mono"><span>PATCH ${v}</span><span class="jp" style="text-transform:none">${yr}年</span></div>
+    <h4>${h}</h4>
+    <ul>${items.map(it => { const [c, t] = it.includes(':') ? it.split(':') : ['', it]; return `<li class="${c}">${t}</li>`; }).join('')}</ul>
+  </article>`).join('');
+const tl = $('#patch-notes'), bar = $('#tlBar'), idx = $('#tlIdx');
+let tlMax = 0;
+function measureTL() {
+  tlMax = Math.max(0, track.scrollWidth - innerWidth);
+  tl.style.height = (innerHeight + tlMax) + 'px';
+  updateTL();
+}
+function tlProgress() {
+  const r = tl.getBoundingClientRect();
+  const span = tl.offsetHeight - innerHeight;
+  return span > 0 ? Math.min(1, Math.max(0, -r.top / span)) : 0;
+}
+let tlTicking = false;
+function updateTL() {
+  const p = tlProgress();
+  track.style.transform = `translate3d(${-p * tlMax}px,0,0)`;
+  bar.style.transform = `scaleX(${p})`;
+  idx.textContent = String(Math.round(p * (notes.length - 1)) + 1).padStart(2, '0') + ' / ' + String(notes.length).padStart(2, '0');
+  tlTicking = false;
+}
+addEventListener('scroll', () => { if (!tlTicking) { tlTicking = true; requestAnimationFrame(updateTL); } }, { passive: true });
+addEventListener('resize', measureTL);
+document.fonts && document.fonts.ready.then(measureTL);
+measureTL();
+function jumpTL(dir) {
+  const p = tlProgress(), n = notes.length - 1;
+  const target = Math.min(n, Math.max(0, Math.round(p * n) + dir)) / n;
+  const top = tl.offsetTop + target * (tl.offsetHeight - innerHeight);
+  scrollTo({ top, behavior: 'smooth' });
+}
+$('#tlPrev').addEventListener('click', () => jumpTL(-1));
+$('#tlNext').addEventListener('click', () => jumpTL(1));
+
+/* =========================================================
+   SPECS — printed manual table with scramble swap
+   ========================================================= */
+const specs = {
+  kumo: { t: 'KUMO-1 <span>Monophonic</span>', rows: [
+    ['Oscillators', '2 × VCO', 'Triangle core, saw / pulse / tri'], ['Range', '16 Hz – 18 kHz', 'Over 8 octaves, 1 V/oct'],
+    ['Filter', '24 dB/oct', 'Transistor ladder, self-osc.'], ['Envelopes', '2 × ADSR', 'Times 1 ms – 12 s'],
+    ['LFO', '0.05 – 400 Hz', 'Audio-rate capable'], ['Patch points', '22', '3.5 mm, gold-plated'],
+    ['Power', '18 V DC / 9 W', 'Linear PSU, external'], ['Weight', '4.2 kg', 'Walnut cheeks, steel chassis'] ] },
+  nagi: { t: 'NAGI-4 <span>Paraphonic</span>', rows: [
+    ['Oscillators', '4 × VCO', 'Shared VCF/VCA path'], ['Range', '20 Hz – 16 kHz', 'Auto-tune on power-up'],
+    ['Filter', '12 / 24 dB/oct', 'Switchable OTA state-variable'], ['Envelopes', '3 × ADSR', 'Looping mode on ENV 3'],
+    ['LFO', '2 × 0.01 – 200 Hz', 'Sync to MIDI clock'], ['Patch points', '36', 'Normalled, breakable'],
+    ['Power', '24 V DC / 14 W', 'Linear PSU, external'], ['Weight', '7.8 kg', 'Hinoki side panels'] ] },
+  yoru: { t: 'YORU-16 <span>Sequencer</span>', rows: [
+    ['Steps', '16 × 2', 'Two independent CV rows'], ['CV out', '0 – 10 V', 'Quantiser: chromatic / pent.'],
+    ['Clock', '20 – 300 BPM', 'Drift: 0 – 4 % (adjustable)'], ['Gate', '5 V, 1 – 99 %', 'Per-step length'],
+    ['Sync', 'DIN · Clock · MIDI', 'Simultaneous'], ['Patch points', '40', 'Per-step gate outs'],
+    ['Power', '12 V DC / 4 W', 'Runs on battery pack'], ['Weight', '2.6 kg', 'Folded steel, powder-coat'] ] },
+};
+const body = $('#specBody'), sheetTitle = $('#sheetTitle');
+const GLYPHS = '0123456789ABCDEF/-·×';
+function scramble(el, final) {
+  if (reduce) { el.textContent = final; return; }
+  const start = performance.now(), dur = 520;
+  (function f(now) {
+    const p = Math.min(1, (now - start) / dur);
+    const n = Math.floor(p * final.length);
+    let s = final.slice(0, n);
+    for (let i = n; i < final.length; i++) s += final[i] === ' ' ? ' ' : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+    el.textContent = s;
+    if (p < 1) requestAnimationFrame(f);
+  })(start);
+}
+function renderSpecs(id, animate) {
+  const s = specs[id];
+  sheetTitle.innerHTML = s.t;
+  if (!body.children.length) {
+    body.innerHTML = s.rows.map((r, i) => `<tr><td>4.2.${i + 1}</td><td>${r[0]}</td><td><span class="scr">${r[1]}</span></td><td>${r[2]}</td></tr>`).join('');
+    return;
+  }
+  s.rows.forEach((r, i) => {
+    const tr = body.children[i];
+    tr.children[1].textContent = r[0];
+    tr.children[3].textContent = r[2];
+    const v = tr.querySelector('.scr');
+    animate ? scramble(v, r[1]) : (v.textContent = r[1]);
+  });
+}
+renderSpecs('kumo', false);
+$('#seg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.getAttribute('aria-pressed') === 'true') return;
+  $$('#seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  renderSpecs(b.dataset.m, true);
+  playNote(660, 'triangle', 0.08);
+});
+$('#printBtn').addEventListener('click', () => window.print());
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+$('#subForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.currentTarget, inp = $('#subEmail'), btn = $('#subBtn');
+  if (!/^\S+@\S+\.\S+$/.test(inp.value)) {
+    f.classList.remove('err'); void f.offsetWidth; f.classList.add('err');
+    inp.focus(); playNote(70, 'square', 0.18); return;
+  }
+  btn.innerHTML = 'Patched in <span class="arr">✓</span>'; btn.disabled = true;
+  inp.value = ''; inp.placeholder = 'See you in spring.';
+  playNote(523.25, 'triangle', 0.4); setTimeout(() => playNote(784, 'triangle', 0.5), 120);
+});
+$('#topBtn').addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
+
+/* wordmark: letters light up in sequence when the footer enters */
+const wmLetters = $$('#wordFit > span');
+new IntersectionObserver(([en], obs) => {
+  if (!en.isIntersecting || reduce) return; obs.disconnect();
+  wmLetters.forEach((s, i) => { setTimeout(() => s.classList.add('lit'), i * 90); setTimeout(() => s.classList.remove('lit'), i * 90 + 520); });
+}, { threshold: 0.5 }).observe($('.wordmark'));
+
+/* =========================================================
+   FIT TEXT — the hero title and footer wordmark always span the full width, never wrap
+   ========================================================= */
+function fit(el, maxPx) {
+  el.style.fontSize = '';
+  const cs = getComputedStyle(el.parentElement);
+  const avail = el.parentElement.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const w = el.getBoundingClientRect().width;
+  if (!w || !avail) return;
+  const fs = parseFloat(getComputedStyle(el).fontSize) * (avail / w) * 0.995;
+  el.style.fontSize = Math.min(fs, maxPx || Infinity) + 'px';
+}
+function fitAll() {
+  fit($('#heroFit'), Math.max(64, innerHeight * 0.3));
+  fit($('#wordFit'));
+}
+fitAll();
+document.fonts && document.fonts.ready.then(() => { fitAll(); measureTL(); });
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(fitAll, 60); });
+
+/* nav hides while scrolling down, returns on scroll up */
+const nav = $('.nav'); let lastY = scrollY;
+addEventListener('scroll', () => {
+  const y = scrollY;
+  nav.classList.toggle('hide', y > lastY && y > innerHeight * 0.6);
+  lastY = y;
+}, { passive: true });
+})();
+</script>
+</body>
+</html>

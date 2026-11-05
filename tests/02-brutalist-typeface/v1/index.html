@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GROTESK &amp; SONS — Type Foundry Est. 1911</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #000;
+    --white: #fff;
+    --signal: #ff2a00;
+    --line: 2px solid var(--black);
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --grot: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --col: calc(100% / 12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--white); color: var(--black); }
+  body {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-x: hidden;
+    cursor: crosshair;
+  }
+  ::selection { background: var(--signal); color: var(--black); }
+
+  /* Exposed 12-column grid overlay */
+  .grid-overlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 999;
+    background-image:
+      repeating-linear-gradient(to right, rgba(255,42,0,.35) 0 1px, transparent 1px calc(100vw / 12)),
+      repeating-linear-gradient(to bottom, rgba(0,0,0,.06) 0 1px, transparent 1px 24px);
+    mix-blend-mode: multiply;
+    transition: opacity .2s;
+  }
+  body.no-grid .grid-overlay { opacity: 0; }
+
+  a { color: inherit; }
+  .mono { font-family: var(--mono); text-transform: uppercase; letter-spacing: .02em; }
+  .signal { color: var(--signal); }
+  .bg-signal { background: var(--signal); }
+
+  /* Header */
+  header {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    border-bottom: var(--line);
+    position: sticky; top: 0; z-index: 50;
+    background: var(--white);
+  }
+  header > * { padding: 10px 12px; border-right: var(--line); text-transform: uppercase; }
+  header > *:last-child { border-right: 0; }
+  header .logo { grid-column: span 4; font-family: var(--grot); font-weight: 900; font-stretch: 62%; font-size: 22px; letter-spacing: -.02em; line-height: 1; display: flex; align-items: center; }
+  header nav { grid-column: span 6; display: flex; gap: 0; padding: 0; }
+  header nav a { flex: 1; padding: 10px 12px; text-decoration: none; border-right: var(--line); display: flex; align-items: center; }
+  header nav a:last-child { border-right: 0; }
+  header nav a:hover { background: var(--black); color: var(--white); }
+  header .toggle { grid-column: span 2; background: var(--black); color: var(--white); border: 0; font: inherit; text-transform: uppercase; cursor: pointer; text-align: left; }
+  header .toggle:hover { background: var(--signal); color: var(--black); }
+
+  /* Hero */
+  .hero {
+    border-bottom: var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero h1 {
+    font-family: var(--grot);
+    font-weight: 900;
+    font-stretch: 62%;
+    font-size: clamp(80px, 22vw, 360px);
+    line-height: .78;
+    letter-spacing: -.04em;
+    text-transform: uppercase;
+    padding: 24px 12px 12px;
+    word-break: break-all;
+  }
+  .hero h1 span { display: block; }
+  .hero h1 .amp { color: var(--signal); font-stretch: 125%; font-weight: 100; }
+  .hero-meta {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border-top: var(--line);
+  }
+  .hero-meta div { padding: 10px 12px; border-right: var(--line); text-transform: uppercase; }
+  .hero-meta div:last-child { border-right: 0; }
+  .hero-meta b { display: block; font-weight: 700; }
+
+  .ticker {
+    border-bottom: var(--line);
+    background: var(--black); color: var(--white);
+    overflow: hidden; white-space: nowrap;
+    font-family: var(--grot); font-weight: 800; font-stretch: 100%;
+    font-size: 28px; text-transform: uppercase;
+    padding: 8px 0;
+  }
+  .ticker .track { display: inline-block; animation: tick 30s linear infinite; will-change: transform; }
+  .ticker .track span { padding: 0 24px; }
+  .ticker .track span:nth-child(3n) { color: var(--signal); }
+  @keyframes tick { to { transform: translateX(-50%); } }
+
+  section { border-bottom: var(--line); }
+  .sec-head {
+    display: grid; grid-template-columns: repeat(12, 1fr);
+    border-bottom: var(--line);
+    text-transform: uppercase;
+  }
+  .sec-head > * { padding: 8px 12px; border-right: var(--line); }
+  .sec-head > *:last-child { border-right: 0; }
+  .sec-head .num { grid-column: span 1; background: var(--signal); font-weight: 700; }
+  .sec-head .title { grid-column: span 7; font-weight: 700; }
+  .sec-head .info { grid-column: span 4; text-align: right; }
+
+  /* Tester */
+  .tester { display: grid; grid-template-columns: 3fr 9fr; }
+  .controls { border-right: var(--line); display: flex; flex-direction: column; }
+  .ctrl { border-bottom: var(--line); padding: 12px; }
+  .ctrl label { display: flex; justify-content: space-between; text-transform: uppercase; margin-bottom: 8px; }
+  .ctrl output { font-weight: 700; }
+  .ctrl.presets { display: flex; flex-wrap: wrap; gap: 0; padding: 0; }
+  .ctrl.presets button {
+    flex: 1 1 50%; border: 0; border-right: var(--line); border-bottom: var(--line);
+    background: var(--white); font: inherit; text-transform: uppercase; padding: 10px 12px; cursor: pointer; text-align: left;
+  }
+  .ctrl.presets button:nth-child(2n) { border-right: 0; }
+  .ctrl.presets button:hover, .ctrl.presets button.on { background: var(--black); color: var(--white); }
+  .ctrl.align { display: flex; padding: 0; }
+  .ctrl.align button { flex: 1; border: 0; border-right: var(--line); background: var(--white); font: inherit; padding: 10px; cursor: pointer; text-transform: uppercase; }
+  .ctrl.align button:last-child { border-right: 0; }
+  .ctrl.align button.on { background: var(--signal); }
+  .ctrl.colors { display: flex; padding: 0; }
+  .ctrl.colors button { flex: 1; border: 0; border-right: var(--line); font: inherit; padding: 10px; cursor: pointer; text-transform: uppercase; }
+  .ctrl.colors button:last-child { border-right: 0; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; cursor: ew-resize;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--black); }
+  input[type=range]::-moz-range-track { height: 2px; background: var(--black); }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 24px; margin-top: -11px; background: var(--signal); border: 2px solid var(--black); border-radius: 0;
+  }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 20px; background: var(--signal); border: 2px solid var(--black); border-radius: 0; }
+
+  .stage { position: relative; min-height: 520px; display: flex; flex-direction: column; }
+  .stage.inv { background: var(--black); color: var(--white); }
+  .stage.sig { background: var(--signal); color: var(--black); }
+  .stage-meta {
+    display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: var(--line); text-transform: uppercase;
+  }
+  .stage.inv .stage-meta { border-color: var(--white); }
+  #specimen {
+    flex: 1;
+    font-family: var(--grot);
+    font-size: 120px; font-weight: 700; font-stretch: 100%; letter-spacing: 0;
+    line-height: 1;
+    padding: 24px 12px;
+    outline: none;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    caret-color: var(--signal);
+  }
+  #specimen:focus { box-shadow: inset 0 0 0 4px var(--signal); }
+  .stage-foot { border-top: var(--line); padding: 8px 12px; display: flex; justify-content: space-between; text-transform: uppercase; }
+  .stage.inv .stage-foot { border-color: var(--white); }
+
+  /* Waterfall */
+  .waterfall .row { display: grid; grid-template-columns: 1fr 11fr; border-bottom: 1px solid var(--black); }
+  .waterfall .row:last-child { border-bottom: 0; }
+  .waterfall .row .k { padding: 8px 12px; border-right: var(--line); text-transform: uppercase; }
+  .waterfall .row .v { padding: 4px 12px; font-family: var(--grot); white-space: nowrap; overflow: hidden; text-overflow: clip; line-height: 1.1; }
+
+  /* Glyph grid */
+  .glyphs-wrap { display: grid; grid-template-columns: 9fr 3fr; }
+  .glyphs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    border-right: var(--line);
+  }
+  .glyph {
+    aspect-ratio: 1;
+    border-right: 1px solid var(--black);
+    border-bottom: 1px solid var(--black);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--grot); font-weight: 600; font-size: 40px;
+    position: relative;
+    cursor: pointer;
+    transition: transform .15s steps(3), background .1s;
+    user-select: none;
+  }
+  .glyph::after {
+    content: attr(data-code);
+    position: absolute; left: 4px; top: 3px;
+    font-family: var(--mono); font-size: 9px; opacity: .5;
+  }
+  .glyph:hover {
+    transform: scale(1.9);
+    z-index: 5;
+    background: var(--signal);
+    outline: 2px solid var(--black);
+    font-weight: 900;
+  }
+  .glyph.sel { background: var(--black); color: var(--white); }
+  .inspector { position: sticky; top: 44px; align-self: start; }
+  .inspector .big {
+    font-family: var(--grot); font-weight: 700; font-size: 240px; line-height: 1;
+    height: 320px; display: flex; align-items: center; justify-content: center;
+    border-bottom: var(--line);
+    position: relative;
+    background:
+      linear-gradient(var(--signal), var(--signal)) 0 72% / 100% 1px no-repeat,
+      linear-gradient(var(--black), var(--black)) 0 22% / 100% 1px no-repeat,
+      linear-gradient(var(--black), var(--black)) 0 40% / 100% 1px no-repeat;
+  }
+  .inspector .big::before { content: "CAP"; position: absolute; left: 6px; top: calc(22% - 14px); font-family: var(--mono); font-size: 9px; }
+  .inspector .big::after { content: "BASELINE"; position: absolute; left: 6px; top: calc(72% + 2px); font-family: var(--mono); font-size: 9px; color: var(--signal); }
+  .inspector dl { display: grid; grid-template-columns: 1fr 1fr; }
+  .inspector dt, .inspector dd { padding: 6px 12px; border-bottom: 1px solid var(--black); text-transform: uppercase; }
+  .inspector dt { border-right: 1px solid var(--black); }
+  .inspector dd { font-weight: 700; }
+
+  /* Families */
+  .families .fam {
+    display: grid; grid-template-columns: 1fr 7fr 2fr 2fr;
+    border-bottom: var(--line);
+    align-items: stretch;
+    text-decoration: none;
+  }
+  .families .fam:last-child { border-bottom: 0; }
+  .families .fam > * { padding: 12px; border-right: var(--line); display: flex; align-items: center; text-transform: uppercase; }
+  .families .fam > *:last-child { border-right: 0; }
+  .families .fam .name { font-family: var(--grot); font-size: clamp(36px, 7vw, 96px); line-height: .9; letter-spacing: -.02em; text-transform: none; }
+  .families .fam:hover { background: var(--black); color: var(--white); }
+  .families .fam:hover .buy { background: var(--signal); color: var(--black); }
+
+  /* Footer */
+  footer { display: grid; grid-template-columns: repeat(12, 1fr); }
+  footer > div { padding: 12px; border-right: var(--line); text-transform: uppercase; }
+  footer > div:last-child { border-right: 0; }
+  footer .f1 { grid-column: span 6; font-family: var(--grot); font-weight: 900; font-stretch: 62%; font-size: clamp(40px, 9vw, 140px); line-height: .85; text-transform: uppercase; }
+  footer .f2 { grid-column: span 3; }
+  footer .f3 { grid-column: span 3; display: flex; flex-direction: column; justify-content: space-between; }
+  footer input { width: 100%; border: var(--line); padding: 8px; font: inherit; background: var(--white); border-radius: 0; margin: 8px 0; }
+  footer input:focus { outline: 0; border-color: var(--signal); }
+  footer button { border: var(--line); background: var(--black); color: var(--white); padding: 8px; font: inherit; text-transform: uppercase; cursor: pointer; width: 100%; }
+  footer button:hover { background: var(--signal); color: var(--black); }
+
+  .cursor-coords {
+    position: fixed; bottom: 0; right: 0; z-index: 1000;
+    background: var(--black); color: var(--white);
+    padding: 4px 8px; font-size: 11px; pointer-events: none;
+  }
+
+  @media (max-width: 860px) {
+    header .logo { grid-column: span 8; }
+    header nav { display: none; }
+    header .toggle { grid-column: span 4; }
+    .hero-meta { grid-template-columns: 1fr 1fr; }
+    .hero-meta div:nth-child(2) { border-right: 0; }
+    .hero-meta div:nth-child(-n+2) { border-bottom: var(--line); }
+    .tester { grid-template-columns: 1fr; }
+    .controls { border-right: 0; border-bottom: var(--line); }
+    .glyphs-wrap { grid-template-columns: 1fr; }
+    .glyphs { border-right: 0; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); }
+    .inspector { display: none; }
+    .families .fam { grid-template-columns: 1fr 1fr; }
+    .families .fam .name { grid-column: 1 / -1; order: -1; border-right: 0; border-bottom: var(--line); }
+    .sec-head .title { grid-column: span 11; }
+    .sec-head .info { display: none; }
+    footer > div { grid-column: 1 / -1 !important; border-right: 0; border-bottom: var(--line); }
+    #specimen { font-size: 64px; }
+    .cursor-coords { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-overlay" aria-hidden="true"></div>
+
+<header>
+  <div class="logo">Grotesk&nbsp;<span class="signal">&amp;</span>&nbsp;Sons</div>
+  <nav>
+    <a href="#tester">01/Tester</a>
+    <a href="#glyphs">02/Glyphs</a>
+    <a href="#families">03/Families</a>
+    <a href="#contact">04/Contact</a>
+  </nav>
+  <button class="toggle" id="gridToggle">[x] Grid: On</button>
+</header>
+
+<section class="hero">
+  <h1><span>Grotesk</span><span class="amp">&amp;</span><span>Sons</span></h1>
+  <div class="hero-meta">
+    <div><b>Est.</b>1911 — Rotterdam / Leeds</div>
+    <div><b>Specialty</b>Industrial Grotesques</div>
+    <div><b>Families</b>004 / Styles 128</div>
+    <div><b>Status</b><span class="signal">&#9632;</span> Foundry open</div>
+  </div>
+</section>
+
+<div class="ticker" aria-hidden="true"><div class="track" id="ticker"></div></div>
+
+<section id="tester">
+  <div class="sec-head">
+    <div class="num">01</div>
+    <div class="title">Live Type Tester — "Grotesk Variable"</div>
+    <div class="info">Axes: wght 100–900 / wdth 62–125</div>
+  </div>
+  <div class="tester">
+    <div class="controls">
+      <div class="ctrl">
+        <label for="size"><span>Size</span><output id="sizeOut">120px</output></label>
+        <input type="range" id="size" min="12" max="320" value="120">
+      </div>
+      <div class="ctrl">
+        <label for="weight"><span>Weight [wght]</span><output id="weightOut">700</output></label>
+        <input type="range" id="weight" min="100" max="900" value="700">
+      </div>
+      <div class="ctrl">
+        <label for="width"><span>Width [wdth]</span><output id="widthOut">100%</output></label>
+        <input type="range" id="width" min="62" max="125" value="100">
+      </div>
+      <div class="ctrl">
+        <label for="track"><span>Tracking</span><output id="trackOut">0.00em</output></label>
+        <input type="range" id="track" min="-0.15" max="0.5" step="0.01" value="0">
+      </div>
+      <div class="ctrl">
+        <label for="lead"><span>Leading</span><output id="leadOut">1.00</output></label>
+        <input type="range" id="lead" min="0.7" max="2" step="0.01" value="1">
+      </div>
+      <div class="ctrl align">
+        <button data-align="left" class="on">Left</button>
+        <button data-align="center">Ctr</button>
+        <button data-align="right">Right</button>
+      </div>
+      <div class="ctrl colors">
+        <button data-theme="" style="background:#fff;color:#000">B/W</button>
+        <button data-theme="inv" style="background:#000;color:#fff">W/B</button>
+        <button data-theme="sig" style="background:var(--signal);color:#000">SIG</button>
+      </div>
+      <div class="ctrl presets">
+        <button data-text="Grotesk &amp; Sons">Name</button>
+        <button data-text="ABCDEFGHIJKLMNOPQRSTUVWXYZ">A–Z</button>
+        <button data-text="Sphinx of black quartz, judge my vow.">Pangram</button>
+        <button data-text="0123456789 €$£¥ %‰ #@&amp;">Numerals</button>
+        <button data-text="CONCRETE DOESN'T APOLOGISE">Manifesto</button>
+        <button id="animBtn">Animate ▶</button>
+      </div>
+    </div>
+    <div class="stage" id="stage">
+      <div class="stage-meta">
+        <span>Specimen / Editable</span>
+        <span id="liveMeta">wght 700 · wdth 100 · 120px · 0.00em</span>
+      </div>
+      <div id="specimen" contenteditable="true" spellcheck="false">Concrete type for loud ideas.</div>
+      <div class="stage-foot">
+        <span id="charCount">29 chars</span>
+        <span>Click text to edit — CSS: <span id="cssOut">font-variation-settings: "wght" 700, "wdth" 100</span></span>
+      </div>
+    </div>
+  </div>
+  <div class="waterfall" id="waterfall"></div>
+</section>
+
+<section id="glyphs">
+  <div class="sec-head">
+    <div class="num">02</div>
+    <div class="title">Glyph Set — Hover to Zoom / Click to Inspect</div>
+    <div class="info" id="glyphCount">— glyphs</div>
+  </div>
+  <div class="glyphs-wrap">
+    <div class="glyphs" id="glyphGrid"></div>
+    <aside class="inspector">
+      <div class="big" id="inspBig">R</div>
+      <dl>
+        <dt>Char</dt><dd id="iChar">R</dd>
+        <dt>Unicode</dt><dd id="iCode">U+0052</dd>
+        <dt>Dec</dt><dd id="iDec">82</dd>
+        <dt>Name</dt><dd id="iName">Latin Capital R</dd>
+        <dt>Weight</dt><dd id="iW">700</dd>
+        <dt>Class</dt><dd id="iClass">Uppercase</dd>
+      </dl>
+    </aside>
+  </div>
+</section>
+
+<section id="families">
+  <div class="sec-head">
+    <div class="num">03</div>
+    <div class="title">Families — Retail &amp; Custom Licences</div>
+    <div class="info">Desktop / Web / App / Broadcast</div>
+  </div>
+  <div class="families">
+    <a class="fam" href="#tester" data-w="900" data-s="62">
+      <span>GS—01</span><span class="name" style="font-weight:900;font-stretch:62%">Grotesk Condensed</span><span>18 Styles</span><span class="buy">€ 240 →</span>
+    </a>
+    <a class="fam" href="#tester" data-w="400" data-s="100">
+      <span>GS—02</span><span class="name" style="font-weight:400;font-stretch:100%">Grotesk Regular</span><span>24 Styles</span><span class="buy">€ 320 →</span>
+    </a>
+    <a class="fam" href="#tester" data-w="200" data-s="125">
+      <span>GS—03</span><span class="name" style="font-weight:200;font-stretch:125%">Grotesk Extended</span><span>36 Styles</span><span class="buy">€ 360 →</span>
+    </a>
+    <a class="fam" href="#tester" data-w="800" data-s="85">
+      <span>GS—04</span><span class="name" style="font-weight:800;font-stretch:85%">Sons Display</span><span>50 Styles</span><span class="buy">€ 480 →</span>
+    </a>
+  </div>
+</section>
+
+<footer id="contact">
+  <div class="f1">Type is<br><span class="signal">load</span>‑bearing.</div>
+  <div class="f2">
+    Grotesk &amp; Sons Ltd.<br>
+    Unit 7, Foundry Yard<br>
+    Leeds LS9 0AA<br><br>
+    T: +44 113 000 1911<br>
+    E: lead@grotesk-sons.test<br><br>
+    © 1911–<span id="year"></span>
+  </div>
+  <div class="f3">
+    <div>
+      Newsletter / 4× a year<br>
+      <input type="email" placeholder="YOU@DOMAIN.COM" aria-label="Email">
+      <button>Subscribe ■</button>
+    </div>
+    <div class="mono" id="clock">00:00:00 UTC</div>
+  </div>
+</footer>
+
+<div class="cursor-coords" id="coords">X 0000 / Y 0000</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+  // Grid toggle
+  const gt = $('#gridToggle');
+  gt.addEventListener('click', () => {
+    document.body.classList.toggle('no-grid');
+    gt.textContent = document.body.classList.contains('no-grid') ? '[ ] Grid: Off' : '[x] Grid: On';
+  });
+
+  // Ticker
+  const words = ['Grotesk & Sons', 'Since 1911', 'Variable fonts', 'No serifs', 'No apologies', 'Est. Rotterdam', 'Type is infrastructure', 'Hot metal / cold logic'];
+  const tick = $('#ticker');
+  const html = words.map(w => `<span>${w} ■</span>`).join('');
+  tick.innerHTML = html + html;
+
+  // Tester
+  const spec = $('#specimen'), stage = $('#stage');
+  const ctrls = {
+    size: $('#size'), weight: $('#weight'), width: $('#width'), track: $('#track'), lead: $('#lead')
+  };
+  const state = { size: 120, weight: 700, width: 100, track: 0, lead: 1 };
+  let raf = 0;
+  function apply() {
+    raf = 0;
+    spec.style.fontSize = state.size + 'px';
+    spec.style.fontWeight = state.weight;
+    spec.style.fontStretch = state.width + '%';
+    spec.style.fontVariationSettings = `"wght" ${state.weight}, "wdth" ${state.width}`;
+    spec.style.letterSpacing = state.track + 'em';
+    spec.style.lineHeight = state.lead;
+    $('#sizeOut').textContent = state.size + 'px';
+    $('#weightOut').textContent = state.weight;
+    $('#widthOut').textContent = state.width + '%';
+    $('#trackOut').textContent = (+state.track).toFixed(2) + 'em';
+    $('#leadOut').textContent = (+state.lead).toFixed(2);
+    $('#liveMeta').textContent = `wght ${state.weight} · wdth ${state.width} · ${state.size}px · ${(+state.track).toFixed(2)}em`;
+    $('#cssOut').textContent = `font-variation-settings: "wght" ${state.weight}, "wdth" ${state.width}`;
+    updateWaterfall();
+  }
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(apply); };
+  Object.entries(ctrls).forEach(([k, el]) => {
+    el.addEventListener('input', () => { state[k] = +el.value; schedule(); });
+  });
+
+  $$('.ctrl.align button').forEach(b => b.addEventListener('click', () => {
+    $$('.ctrl.align button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    spec.style.textAlign = b.dataset.align;
+  }));
+  $$('.ctrl.colors button').forEach(b => b.addEventListener('click', () => {
+    stage.className = 'stage ' + b.dataset.theme;
+  }));
+  $$('.ctrl.presets button[data-text]').forEach(b => b.addEventListener('click', () => {
+    spec.textContent = b.dataset.text;
+    countChars(); updateWaterfall();
+  }));
+
+  function countChars() { $('#charCount').textContent = spec.textContent.length + ' chars'; }
+  spec.addEventListener('input', () => { countChars(); updateWaterfall(); });
+  spec.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); spec.blur(); } });
+
+  // Animate axes
+  let animating = false, t0 = 0;
+  const animBtn = $('#animBtn');
+  animBtn.addEventListener('click', () => {
+    animating = !animating;
+    animBtn.textContent = animating ? 'Stop ■' : 'Animate ▶';
+    animBtn.classList.toggle('on', animating);
+    if (animating) { t0 = performance.now(); requestAnimationFrame(loop); }
+  });
+  function loop(t) {
+    if (!animating) return;
+    const p = (t - t0) / 1000;
+    state.weight = Math.round(500 + 400 * Math.sin(p * 1.3));
+    state.width = Math.round(93.5 + 31.5 * Math.sin(p * 0.9 + 1));
+    ctrls.weight.value = state.weight; ctrls.width.value = state.width;
+    apply();
+    requestAnimationFrame(loop);
+  }
+
+  // Waterfall
+  const wf = $('#waterfall');
+  const sizes = [12, 18, 24, 36, 48, 72];
+  wf.innerHTML = sizes.map(s => `<div class="row"><div class="k">${s}px</div><div class="v" style="font-size:${s}px"></div></div>`).join('');
+  const wfRows = $$('.v', wf);
+  function updateWaterfall() {
+    const txt = spec.textContent || ' ';
+    wfRows.forEach(r => {
+      r.textContent = txt;
+      r.style.fontWeight = state.weight;
+      r.style.fontStretch = state.width + '%';
+      r.style.letterSpacing = state.track + 'em';
+    });
+  }
+
+  // Glyph grid
+  const sets = [
+    ['Uppercase', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'],
+    ['Lowercase', 'abcdefghijklmnopqrstuvwxyz'],
+    ['Figures', '0123456789'],
+    ['Punctuation', '&@#?!%*()[]{}/\\«»‹›“”‘’.,:;—–-_'],
+    ['Currency', '€$£¥¢₿'],
+    ['Diacritics', 'ÄÖÜßÆØÅÉÈÑÇäöüæøåéèñç'],
+    ['Symbols', '→←↑↓■□●○+×÷=≠±§¶†']
+  ];
+  const grid = $('#glyphGrid');
+  const frag = document.createDocumentFragment();
+  let total = 0;
+  sets.forEach(([cls, chars]) => {
+    [...chars].forEach(ch => {
+      const d = document.createElement('div');
+      d.className = 'glyph';
+      d.textContent = ch;
+      const cp = ch.codePointAt(0);
+      d.dataset.code = cp.toString(16).toUpperCase().padStart(4, '0');
+      d.dataset.cls = cls;
+      frag.appendChild(d);
+      total++;
+    });
+  });
+  grid.appendChild(frag);
+  $('#glyphCount').textContent = total + ' glyphs shown / 812 in family';
+
+  function inspect(el) {
+    const ch = el.textContent, cp = ch.codePointAt(0);
+    $('#inspBig').textContent = ch;
+    $('#inspBig').style.fontWeight = state.weight;
+    $('#iChar').textContent = ch;
+    $('#iCode').textContent = 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+    $('#iDec').textContent = cp;
+    $('#iName').textContent = (el.dataset.cls === 'Uppercase' ? 'Latin Capital ' : el.dataset.cls === 'Lowercase' ? 'Latin Small ' : '') + ch;
+    $('#iW').textContent = state.weight;
+    $('#iClass').textContent = el.dataset.cls;
+  }
+  grid.addEventListener('mouseover', e => { const g = e.target.closest('.glyph'); if (g) inspect(g); });
+  grid.addEventListener('click', e => {
+    const g = e.target.closest('.glyph'); if (!g) return;
+    $$('.glyph.sel', grid).forEach(x => x.classList.remove('sel'));
+    g.classList.add('sel');
+    inspect(g);
+    spec.textContent += g.textContent; countChars(); updateWaterfall();
+  });
+
+  // Family rows -> push to tester
+  $$('.fam').forEach(f => f.addEventListener('click', () => {
+    state.weight = +f.dataset.w; state.width = +f.dataset.s;
+    ctrls.weight.value = state.weight; ctrls.width.value = state.width;
+    apply();
+  }));
+
+  // Coordinates readout
+  const coords = $('#coords');
+  let mx = 0, my = 0, cr = 0;
+  window.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    if (!cr) cr = requestAnimationFrame(() => {
+      cr = 0;
+      const col = Math.floor(mx / (innerWidth / 12)) + 1;
+      coords.textContent = `X ${String(mx).padStart(4, '0')} / Y ${String(my).padStart(4, '0')} / COL ${String(col).padStart(2, '0')}`;
+    });
+  }, { passive: true });
+
+  // Clock
+  $('#year').textContent = new Date().getFullYear();
+  const clock = $('#clock');
+  const upd = () => { clock.textContent = new Date().toISOString().slice(11, 19) + ' UTC'; };
+  upd(); setInterval(upd, 1000);
+
+  apply(); countChars();
+})();
+</script>
+</body>
+</html>

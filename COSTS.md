@@ -33,3 +33,4 @@
 | 04-photo-portfolio-3d | — | high | v1+v2 | 150 143 | 68 | 14.7 | ≈$2.88 | 2026-11-05 |
 | 18-kinetic-typography | — | high | v1+v2 | 118 470 | 40 | 10.8 | ≈$1.72 | 2026-11-05 |
 | 22-pelican-animated | — | high | v1+v2 | 90 907 | 19 | 5.6 | ≈$0.90 | 2026-11-05 |
+| 23-pelican-bicycle | — | high | v1+v2 | 78 871 | 14 | 4.1 | ≈$0.63 | 2026-11-05 |

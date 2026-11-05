@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coffee Pirates — 20s Canvas Loop</title>
+<style>
+  html,body{margin:0;height:100%;background:#120a06;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#f3e6d3}
+  canvas{display:block;width:100vw;height:100vh}
+  #title{position:fixed;left:18px;top:14px;font-size:12px;letter-spacing:.32em;text-transform:uppercase;opacity:.8;pointer-events:none;text-shadow:0 1px 3px #000}
+  #title b{font-weight:700;color:#ffd9a8}
+  #ui{position:fixed;left:16px;bottom:16px;display:flex;gap:12px;align-items:center;user-select:none}
+  #rec{display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,220,180,.35);
+       background:rgba(30,16,8,.72);color:#f6e7d2;font:600 13px/1 inherit;letter-spacing:.06em;cursor:pointer;backdrop-filter:blur(6px)}
+  #rec:hover{background:rgba(60,30,14,.85)}
+  #rec .dot{width:10px;height:10px;border-radius:50%;background:#e4412f;box-shadow:0 0 8px #e4412f}
+  #rec.on .dot{animation:blink 1s infinite}
+  #rec[disabled]{opacity:.5;cursor:not-allowed}
+  @keyframes blink{50%{opacity:.25}}
+  #bar{width:140px;height:4px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}
+  #bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd9a8,#e4412f)}
+  #tc{font:12px/1 ui-monospace,Menlo,Consolas,monospace;opacity:.75;min-width:52px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="title"><b>Coffee Pirates</b> · 20s loop</div>
+<div id="ui">
+  <button id="rec"><span class="dot"></span><span id="recl">Record .webm</span></button>
+  <div id="bar"><i></i></div>
+  <span id="tc">00.00s</span>
+</div>
+<script>
+(() => {
+"use strict";
+const TAU = Math.PI * 2, LOOP = 20;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const E = 42 * Math.PI / 180, K = Math.sin(E), C = Math.cos(E); // camera elevation (3/4 view from above)
+const DEPTH = 0.12, SR = 0.95;                                    // coffee depth below rim, surface radius
+let W, H, DPR, S, cx, cy, cyS, bodyH;
+
+// ---------- utils ----------
+function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const mod = (x, m) => ((x % m) + m) % m;
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const lerp = (a, b, t) => a + (b - a) * t;
+function hash2(x, y){ let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+function vnoise(x, y){ const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  const sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; }
+function fbm(x, y){ let s = 0, a = 0.5; for (let o = 0; o < 4; o++){ s += a * vnoise(x, y); x *= 2.03; y *= 2.03; a *= 0.5; } return s / 0.9375; }
+
+// ---------- procedural waves (all periods divide LOOP => seamless) ----------
+const WAVES = [[7, 1.2, 3, 0.010, 0.3], [9, -0.6, 4, 0.008, 2.1], [12, 2.4, 6, 0.005, 4.0], [5.5, -2.2, 2, 0.009, 1.1]]
+  .map(([k, d, m, a, p]) => ({ kx: k * Math.cos(d), kw: k * Math.sin(d), om: TAU * m / LOOP, a, p }));
+function wave(u, w, t){ let h = 0, gu = 0, gw = 0;
+  for (const q of WAVES){ const ph = q.kx * u + q.kw * w - q.om * t + q.p; h += q.a * Math.sin(ph); const c = q.a * Math.cos(ph); gu += c * q.kx; gw += c * q.kw; }
+  return { h, gu, gw }; }
+
+// ---------- curl-noise field (analytic curl of periodic stream function) ----------
+const CURL = []; { const r = rng(7); const ms = [1, -1, 2, -2, 1];
+  for (let i = 0; i < 5; i++){ const k = 2 + r() * 3.5, a = r() * TAU; CURL.push({ kx: k * Math.cos(a), kw: k * Math.sin(a), om: TAU * ms[i] / LOOP, p: r() * TAU, amp: 0.09 / k }); } }
+
+// ---------- latte pattern (static, gets swirled every frame) ----------
+const M = 256, PAT = new Float32Array(M * M);
+(function buildPattern(){
+  const r = rng(11);
+  for (let j = 0; j < M; j++) for (let i = 0; i < M; i++){
+    const u = -1.2 + 2.4 * i / (M - 1), w = 1.2 - 2.4 * j / (M - 1);
+    const rr = Math.hypot(u, w);
+    const n1 = fbm(u * 5 + 11, w * 5 + 3), n2 = fbm(u * 13 + 1, w * 13 + 9);
+    let m = 0.22 + 0.28 * n1 + 0.12 * n2;
+    const ring = 0.5 + 0.5 * Math.sin(rr * 30 + n1 * 5);
+    const band = smooth(0.5, 0.58, rr) * (1 - smooth(0.76, 0.84, rr));
+    m = Math.max(m, band * (0.55 + 0.4 * smooth(0.35, 0.8, ring)));
+    const x = u / 0.40, y = (w - 0.04) / 0.40;
+    const q = x * x + y * y - 1, hh = q * q * q - x * x * y * y * y;
+    const inside = 1 - smooth(-0.02, 0.03, hh);
+    if (inside > 0){
+      let hm = 0.97;
+      const stripe = Math.sin((y + Math.abs(x) * 0.9) * 15);
+      hm -= 0.38 * smooth(0.55, 0.95, stripe) * smooth(0.15, 0.5, Math.abs(x) + 0.2);
+      if (Math.abs(x) < 0.05 && y < 0.9) hm -= 0.25 * (1 - Math.abs(x) / 0.05);
+      m = m * (1 - inside) + hm * inside;
+    }
+    if (Math.abs(u) < 0.012 && w < -0.38 && w > -0.62) m = Math.max(m, 0.85);
+    const hb = r(); if (hb > 0.992) m += 0.3; else if (hb < 0.01) m -= 0.2;
+    m *= 1 - 0.55 * smooth(0.84, 0.98, rr);
+    PAT[j * M + i] = Math.min(1, Math.max(0, m));
+  }
+})();
+// palette LUT: dark coffee -> crema -> milk foam
+const LUT = new Float32Array(256 * 3);
+for (let i = 0; i < 256; i++){ const v = i / 255; let c;
+  const c1 = [58, 30, 14], c2 = [150, 92, 48], c3 = [247, 236, 216];
+  if (v < 0.45){ const s = smooth(0, 0.45, v); c = c1.map((x, k) => lerp(x, c2[k], s)); }
+  else { const s = smooth(0.45, 0.85, v); c = c2.map((x, k) => lerp(x, c3[k], s)); }
+  LUT[i * 3] = c[0]; LUT[i * 3 + 1] = c[1]; LUT[i * 3 + 2] = c[2]; }
+
+// ---------- foam render target ----------
+const N = 192, foamC = document.createElement('canvas'); foamC.width = foamC.height = N;
+const fctx = foamC.getContext('2d'), fimg = fctx.createImageData(N, N), fdat = fimg.data;
+const PU = new Float32Array(N * N), PW = new Float32Array(N * N), PR = new Float32Array(N * N);
+for (let j = 0; j < N; j++) for (let i = 0; i < N; i++){ const k = j * N + i; PU[k] = (i + 0.5) / N * 2 - 1; PW[k] = 1 - (j + 0.5) / N * 2; PR[k] = Math.hypot(PU[k], PW[k]); }
+const CT = new Float64Array(CURL.length);
+
+function renderFoam(t, rip){
+  const ph = TAU * t / LOOP;
+  for (let c = 0; c < CURL.length; c++) CT[c] = -CURL[c].om * t + CURL[c].p;
+  const nc = CURL.length;
+  for (let k = 0; k < N * N; k++){
+    const r = PR[k], o = k * 4;
+    if (r > 1.02){ fdat[o + 3] = 0; continue; }
+    const u = PU[k], w = PW[k];
+    // differential swirl (one full turn per loop)
+    const th = ph + 0.75 * Math.sin(2 * ph - r * 4.0) * (1 - r);
+    const cs = Math.cos(th), sn = Math.sin(th);
+    let qu = cs * u + sn * w, qw = -sn * u + cs * w;
+    // curl-noise advection (2 steps)
+    for (let s = 0; s < 2; s++){
+      let vu = 0, vw = 0;
+      for (let c = 0; c < nc; c++){ const q = CURL[c]; const cc = Math.cos(q.kx * qu + q.kw * qw + CT[c]) * q.amp; vu += cc * q.kw; vw -= cc * q.kx; }
+      qu += vu * 0.5; qw += vw * 0.5;
+    }
+    // bilinear sample
+    let gx = (qu + 1.2) / 2.4 * (M - 1), gy = (1.2 - qw) / 2.4 * (M - 1);
+    gx = gx < 0 ? 0 : gx > M - 1.001 ? M - 1.001 : gx; gy = gy < 0 ? 0 : gy > M - 1.001 ? M - 1.001 : gy;
+    const ix = gx | 0, iy = gy | 0, fx = gx - ix, fy = gy - iy, b = iy * M + ix;
+    const m = (PAT[b] * (1 - fx) + PAT[b + 1] * fx) * (1 - fy) + (PAT[b + M] * (1 - fx) + PAT[b + M + 1] * fx) * fy;
+    // wave normals
+    let gu = 0, gw = 0;
+    for (let i = 0; i < WAVES.length; i++){ const q = WAVES[i]; const cc = q.a * Math.cos(q.kx * u + q.kw * w - q.om * t + q.p); gu += cc * q.kx; gw += cc * q.kw; }
+    for (let i = 0; i < rip.length; i++){ const rp = rip[i]; const du = u - rp.u, dw = w - rp.w; const d = Math.sqrt(du * du + dw * dw) + 1e-4;
+      const r0 = 0.03 + rp.b * 0.28, x = (d - r0) / 0.045;
+      if (x > -3 && x < 3){ const env = Math.exp(-x * x) * (1 - rp.b / 2.2) * 0.35; const dd = Math.cos(d * 70 - rp.b * 14) * env; gu += dd * du / d; gw += dd * dw / d; } }
+    const sl = 0.62 * gu - 0.5 * gw;
+    let sh = 1 + sl * 1.3;
+    const spec = sl > 0.05 ? Math.min(60, (sl - 0.05) * (sl - 0.05) * 900) : 0;
+    const dl = (-0.6 * u + 0.8 * w) / (r + 1e-6);
+    sh *= 1 - 0.55 * smooth(0.78, 0.99, r) * (0.4 + 0.6 * Math.max(0, dl));
+    const li = (m * 255 | 0) * 3;
+    fdat[o] = LUT[li] * sh + spec; fdat[o + 1] = LUT[li + 1] * sh + spec; fdat[o + 2] = LUT[li + 2] * sh + spec * 0.9;
+    const a = (1 - r) * N * 0.5 + 0.5; fdat[o + 3] = a >= 1 ? 255 : a <= 0 ? 0 : a * 255;
+  }
+  fctx.putImageData(fimg, 0, 0);
+}
+
+// ---------- projection ----------
+// surface coords: u right, w away from viewer, y up (units of cup radius)
+const projW = (u, w, y) => [cx + u * S, cyS - w * K * S - y * C * S];
+
+// ---------- ships ----------
+const L = 0.165, B = 0.052, HD = 0.036;
+const HULL_TOP = [], HULL_BOT = [];
+for (let i = 0; i < 18; i++){ const a = i / 18 * TAU, ca = Math.cos(a), sa = Math.sin(a);
+  let f = L * ca, s = B * sa;
+  if (ca > 0) s *= 1 - 0.6 * ca * ca * ca; else { f *= 0.88; s *= 1 - 0.1 * ca * ca; }
+  HULL_TOP.push([f, s, HD + 0.012 * (f / L) * (f / L)]); HULL_BOT.push([f * 0.9, s * 0.78, -0.004]); }
+const CASTLE_B = [[-0.9 * L, -0.78 * B, HD], [-0.45 * L, -0.8 * B, HD], [-0.45 * L, 0.8 * B, HD], [-0.9 * L, 0.78 * B, HD]];
+const CASTLE_T = CASTLE_B.map(p => [p[0], p[1], HD + 0.03]);
+const MASTS = [{ f: 0.42 * L, h: 0.24, b: HD }, { f: 0.0, h: 0.30, b: HD }, { f: -0.65 * L, h: 0.19, b: HD + 0.03 }];
+const SHIPS = [
+  { hull: [96, 54, 28], deck: [168, 118, 70], sail: [242, 230, 206], trim: '#d9a441', flag: '#111' },
+  { hull: [52, 34, 30], deck: [128, 92, 62], sail: [168, 44, 36], trim: '#c9c9c0', flag: '#0b0b0b', skull: true }
+];
+
+// ---------- cannon shots (deterministic schedule) ----------
+const SHOT_T = 0.9;
+const SHOTS = [];
+for (let i = 0; i < 16; i++){ const r = rng(100 + i * 13);
+  const drops = []; for (let k = 0; k < 16; k++) drops.push({ a: r() * TAU, vh: 0.06 + r() * 0.16, vy: 0.25 + r() * 0.22, s: 0.5 + r() * 0.5 });
+  const debris = []; for (let k = 0; k < 10; k++) debris.push({ a: r() * TAU, vh: 0.08 + r() * 0.18, vy: 0.2 + r() * 0.25, rot: r() * 20 - 10 });
+  SHOTS.push({ t0: 0.4 + i * 1.25, who: i % 2, port: [-0.35, 0.1, -0.1, 0.3][i % 4], hit: i % 4 === 3, mu: r() - 0.5, mw: r() - 0.5, drops, debris }); }
+
+function basePose(idx, t){
+  const ph = TAU * t / LOOP + idx * Math.PI + 0.4;
+  const ro = 0.43 + 0.03 * Math.sin(2 * TAU * t / LOOP + idx * 1.9);
+  return { ph, u: ro * Math.cos(ph), w: ro * Math.sin(ph), hx: -Math.sin(ph), hw: Math.cos(ph) };
+}
+function shipState(idx, t){
+  const s = basePose(idx, t), wv = wave(s.u, s.w, t);
+  s.y = wv.h * 2.2 + 0.004;
+  const gf = wv.gu * s.hx + wv.gw * s.hw, gs = -wv.gu * s.hw + wv.gw * s.hx;
+  s.pitch = gf * 1.6; s.roll = gs * 2.0;
+  for (const sh of SHOTS){ const a = mod(t - sh.t0, LOOP);
+    if (sh.who === idx && a < 1.6) s.roll += -0.35 * Math.exp(-a * 3.5) * Math.sin(a * 12);
+    if (sh.who !== idx && sh.hit){ const b = a - SHOT_T; if (b >= 0 && b < 1.6) s.roll += 0.5 * Math.exp(-b * 3) * Math.sin(b * 14); } }
+  return s;
+}
+const toWorld = (st, f, s, y) => [st.u + f * st.hx - s * st.hw, st.w + f * st.hw + s * st.hx, st.y + y + st.pitch * f + st.roll * s];
+const P = (st, f, s, y) => { const q = toWorld(st, f, s, y); return projW(q[0], q[1], q[2]); };
+
+function area(pts){ let a = 0; for (let i = 0; i < pts.length; i++){ const p = pts[i], q = pts[(i + 1) % pts.length]; a += p[0] * q[1] - q[0] * p[1]; } return a; }
+function poly(pts, fill){ ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = fill; ctx.lineWidth = 0.6; ctx.stroke(); }
+const rgb = (c, k) => `rgb(${c[0] * k | 0},${c[1] * k | 0},${c[2] * k | 0})`;
+
+function prism(st, bot, top, col, topCol, trim){
+  const tp = top.map(p => P(st, p[0], p[1], p[2])), bp = bot.map(p => P(st, p[0], p[1], p[2]));
+  const sg = area(tp), n = top.length, vis = [];
+  for (let i = 0; i < n; i++){ const j = (i + 1) % n; const quad = [tp[i], tp[j], bp[j], bp[i]];
+    if (area(quad) * sg < 0){
+      const ef = top[j][0] - top[i][0], es = top[j][1] - top[i][1], ln = Math.hypot(ef, es) || 1;
+      const nf = es / ln, ns = -ef / ln; const nu = nf * st.hx - ns * st.hw, nw = nf * st.hw + ns * st.hx;
+      const lit = 0.55 + 0.5 * Math.max(0, -0.8 * nu - 0.3 * nw);
+      poly(quad, rgb(col, lit)); vis.push(i); } }
+  if (trim){ ctx.strokeStyle = trim; ctx.lineWidth = Math.max(1, S * 0.004); ctx.beginPath();
+    for (const i of vis){ const j = (i + 1) % n; const a = P(st, top[i][0], top[i][1], top[i][2] - 0.006), b = P(st, top[j][0], top[j][1], top[j][2] - 0.006); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    ctx.stroke(); }
+  poly(tp, topCol);
+  return tp;
+}
+
+function drawSail(st, f, wd, yb, yt, col, skull){
+  const bul = 0.022, ym = (yb + yt) / 2;
+  const TL = P(st, f, -wd, yt), TR = P(st, f, wd, yt), BR = P(st, f, wd, yb), BL = P(st, f, -wd, yb);
+  const cR = P(st, f + bul, wd * 1.05, ym), cB = P(st, f + bul * 1.4, 0, yb), cL = P(st, f + bul, -wd * 1.05, ym);
+  const lit = 0.78 + 0.22 * Math.max(0, -0.6 * st.hx + 0.8 * st.hw);
+  ctx.beginPath(); ctx.moveTo(TL[0], TL[1]); ctx.lineTo(TR[0], TR[1]);
+  ctx.quadraticCurveTo(cR[0], cR[1], BR[0], BR[1]); ctx.quadraticCurveTo(cB[0], cB[1], BL[0], BL[1]); ctx.quadraticCurveTo(cL[0], cL[1], TL[0], TL[1]);
+  const g = ctx.createLinearGradient(TL[0], TL[1], BR[0], BR[1]);
+  g.addColorStop(0, rgb(col, lit)); g.addColorStop(1, rgb(col, lit * 0.78));
+  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(40,25,15,.55)'; ctx.lineWidth = 0.8; ctx.stroke();
+  ctx.strokeStyle = '#3a2414'; ctx.lineWidth = Math.max(1, S * 0.005); ctx.beginPath(); ctx.moveTo(TL[0], TL[1]); ctx.lineTo(TR[0], TR[1]); ctx.stroke();
+  if (skull){ const c = P(st, f + bul * 1.1, 0, ym); ctx.fillStyle = 'rgba(245,240,230,.9)'; ctx.beginPath(); ctx.arc(c[0], c[1], S * 0.011, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(245,240,230,.9)'; ctx.lineWidth = S * 0.004; ctx.beginPath(); ctx.moveTo(c[0] - S * 0.016, c[1] + S * 0.018); ctx.lineTo(c[0] + S * 0.016, c[1] + S * 0.006); ctx.moveTo(c[0] + S * 0.016, c[1] + S * 0.018); ctx.lineTo(c[0] - S * 0.016, c[1] + S * 0.006); ctx.stroke(); }
+}
+
+function drawShip(idx, st, t){
+  const cfg = SHIPS[idx];
+  prism(st, HULL_BOT, HULL_TOP, cfg.hull, rgb(cfg.deck, 1), cfg.trim);
+  // deck planks
+  ctx.strokeStyle = 'rgba(60,35,20,.45)'; ctx.lineWidth = 0.7; ctx.beginPath();
+  for (let k = -2; k <= 2; k++){ const s = k * 0.22 * B; const a = P(st, -0.75 * L, s, HD), b = P(st, 0.7 * L, s * 0.6, HD + 0.003); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+  ctx.stroke();
+  // gun ports + barrels on both sides
+  for (const side of [1, -1]){
+    if (side * st.hx >= 0) continue; // face pointing away from camera
+    for (const pf of [-0.45, -0.15, 0.15, 0.42]){ const f = pf * L, s = side * B * 0.9 * (1 - 0.3 * pf * pf);
+      poly([P(st, f - 0.009, s, 0.010), P(st, f + 0.009, s, 0.010), P(st, f + 0.009, s, 0.024), P(st, f - 0.009, s, 0.024)], '#1a0d06');
+      const a = P(st, f, s, 0.017), b = P(st, f, s * 1.28, 0.017); ctx.strokeStyle = '#2b2b2b'; ctx.lineWidth = Math.max(1, S * 0.006); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); } }
+  prism(st, CASTLE_B, CASTLE_T, cfg.hull.map(x => x * 1.12), rgb(cfg.deck, 0.92), cfg.trim);
+  // bowsprit
+  { const a = P(st, 0.95 * L, 0, HD + 0.012), b = P(st, 1.5 * L, 0, HD + 0.05); ctx.strokeStyle = '#3a2414'; ctx.lineWidth = Math.max(1, S * 0.006); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+  // stern lantern
+  { const p = P(st, -0.92 * L, 0, HD + 0.06), fl = 0.8 + 0.2 * Math.sin(TAU * t * 35 / LOOP + idx);
+    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], S * 0.035 * fl); g.addColorStop(0, 'rgba(255,230,150,.95)'); g.addColorStop(0.3, 'rgba(255,170,60,.45)'); g.addColorStop(1, 'rgba(255,140,40,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], S * 0.035 * fl, 0, TAU); ctx.fill(); }
+  // masts sorted far->near
+  const ms = MASTS.slice().sort((a, b) => b.f * st.hw - a.f * st.hw);
+  for (const m of ms){
+    const a = P(st, m.f, 0, m.b), b = P(st, m.f, 0, m.b + m.h);
+    ctx.strokeStyle = '#3d2615'; ctx.lineWidth = Math.max(1.2, S * 0.008); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    drawSail(st, m.f, m.h * 0.30, m.b + m.h * 0.30, m.b + m.h * 0.62, cfg.sail, cfg.skull && m.f === 0);
+    drawSail(st, m.f, m.h * 0.23, m.b + m.h * 0.66, m.b + m.h * 0.90, cfg.sail, false);
+    if (m.f === 0){ // flag
+      const top = m.b + m.h; ctx.beginPath(); const pts = [];
+      for (let k = 0; k <= 6; k++){ const d = k / 6 * 0.065; pts.push(P(st, m.f + d, 0.012 * Math.sin(TAU * t * 30 / LOOP - k * 0.9) * (k / 6), top)); }
+      for (let k = 6; k >= 0; k--){ const d = k / 6 * 0.065; pts.push(P(st, m.f + d, 0.012 * Math.sin(TAU * t * 30 / LOOP - k * 0.9 + 0.4) * (k / 6), top - 0.035)); }
+      poly(pts, cfg.flag);
+      const c = P(st, m.f + 0.03, 0, top - 0.017); ctx.fillStyle = '#eee'; ctx.beginPath(); ctx.arc(c[0], c[1], S * 0.006, 0, TAU); ctx.fill();
+    }
+  }
+}
+
+function shipShadowAndWake(idx, st, t){
+  // wake
+  for (let j = 14; j >= 1; j--){ const p = basePose(idx, t - j * 0.12); const q = projW(p.u, p.w, 0);
+    ctx.save(); ctx.translate(q[0], q[1]); ctx.scale(1, K); ctx.fillStyle = `rgba(255,248,235,${0.22 * (1 - j / 15)})`;
+    ctx.beginPath(); ctx.arc(0, 0, S * (0.025 + j * 0.006), 0, TAU); ctx.fill(); ctx.restore(); }
+  // soft shadow
+  const q = projW(st.u + 0.03, st.w - 0.02, 0);
+  ctx.save(); ctx.translate(q[0], q[1]); ctx.scale(1, K); ctx.rotate(-Math.atan2(st.hw, st.hx)); ctx.scale(L * S * 1.25, B * S * 2.2);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1); g.addColorStop(0, 'rgba(25,12,4,.45)'); g.addColorStop(1, 'rgba(25,12,4,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill(); ctx.restore();
+}
+
+// ---------- effects ----------
+function puff(x, y, r, a, g){ if (a <= 0.003 || r <= 0) return; const gr = ctx.createRadialGradient(x, y - r * 0.2, 0, x, y, r);
+  gr.addColorStop(0, `rgba(${g},${g},${g},${a})`); gr.addColorStop(0.55, `rgba(${g - 30},${g - 30},${g - 35},${a * 0.6})`); gr.addColorStop(1, `rgba(${g - 50},${g - 50},${g - 55},0)`);
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
+
+function shotGeom(sh){
+  const sA = shipState(sh.who, sh.t0), tgtIdx = 1 - sh.who, sB = shipState(tgtIdx, sh.t0 + SHOT_T);
+  const m = toWorld(sA, sh.port * L, B * 1.3, 0.017);
+  let tg;
+  if (sh.hit) tg = toWorld(sB, sh.mu * 0.8 * L, B * 0.9, 0.02);
+  else { let du = sB.u - sA.u, dw = sB.w - sA.w; const ln = Math.hypot(du, dw) || 1; du /= ln; dw /= ln;
+    const off = 0.06 + 0.07 * (sh.mw + 0.5), side = sh.mu * 0.14;
+    tg = [sB.u + du * off - dw * side, sB.w + dw * off + du * side, 0]; }
+  return { m, tg };
+}
+
+function collectEffects(t, list, ripples){
+  for (const sh of SHOTS){
+    const a = mod(t - sh.t0, LOOP); if (a > 4) continue;
+    const { m, tg } = shotGeom(sh);
+    const dirU = tg[0] - m[0], dirW = tg[1] - m[1], dl = Math.hypot(dirU, dirW) || 1;
+    // muzzle flash + smoke
+    list.push({ d: m[1], fn: () => {
+      if (a < 0.16){ const p = projW(m[0], m[1], m[2]); const r = S * (0.05 * (1 - a / 0.16) + 0.015);
+        const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r); g.addColorStop(0, 'rgba(255,250,220,1)'); g.addColorStop(0.35, 'rgba(255,170,60,.85)'); g.addColorStop(1, 'rgba(255,90,20,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, TAU); ctx.fill(); }
+      if (a < 3.5){ const life = 1 - a / 3.5;
+        for (let k = 0; k < 7; k++){ const sp = 0.015 + 0.06 * (1 - Math.exp(-a * 3)) * (0.4 + k / 7);
+          const u = m[0] + dirU / dl * sp + Math.sin(k * 2.3) * 0.015 * (1 + a), w = m[1] + dirW / dl * sp + Math.cos(k * 1.7) * 0.015 * (1 + a), y = m[2] + a * 0.03 + k * 0.004;
+          const p = projW(u, w, y); puff(p[0], p[1], S * (0.016 + 0.05 * (1 - Math.exp(-a * 2)) * (0.6 + 0.08 * k)), 0.55 * Math.pow(life, 1.5), 235); } }
+    } });
+    // cannonball
+    if (a < SHOT_T){ const s = a / SHOT_T; const u = lerp(m[0], tg[0], s), w = lerp(m[1], tg[1], s), y = lerp(m[2], tg[2], s) + 0.44 * s * (1 - s);
+      list.push({ d: w, fn: () => { const sp = projW(u, w, 0); ctx.fillStyle = 'rgba(20,10,4,.25)'; ctx.beginPath(); ctx.ellipse(sp[0], sp[1], S * 0.01, S * 0.01 * K, 0, 0, TAU); ctx.fill();
+        const p = projW(u, w, y); ctx.fillStyle = '#151515'; ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(1.5, S * 0.008), 0, TAU); ctx.fill(); } }); }
+    else {
+      const b = a - SHOT_T;
+      if (!sh.hit){
+        if (b < 2.2) ripples.push({ u: tg[0], w: tg[1], b });
+        if (b < 1.3) list.push({ d: tg[1], fn: () => {
+          // crown ring
+          const c = projW(tg[0], tg[1], 0); ctx.strokeStyle = `rgba(255,250,240,${0.7 * (1 - b / 1.3)})`; ctx.lineWidth = Math.max(1, S * 0.006);
+          ctx.beginPath(); ctx.ellipse(c[0], c[1], S * (0.02 + 0.12 * b), S * (0.02 + 0.12 * b) * K, 0, 0, TAU); ctx.stroke();
+          // milk column
+          if (b < 0.7){ const hc = 0.11 * Math.sin(Math.PI * b / 0.7), wd = 0.016 * (1 + b);
+            const l = projW(tg[0] - wd, tg[1], 0), r = projW(tg[0] + wd, tg[1], 0), tp = projW(tg[0], tg[1], hc);
+            ctx.fillStyle = 'rgba(250,244,232,.95)'; ctx.beginPath(); ctx.moveTo(l[0], l[1]); ctx.quadraticCurveTo(c[0] - S * wd * 0.2, (c[1] + tp[1]) / 2, tp[0], tp[1]);
+            ctx.quadraticCurveTo(c[0] + S * wd * 0.2, (c[1] + tp[1]) / 2, r[0], r[1]); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.arc(tp[0], tp[1], S * 0.009, 0, TAU); ctx.fill(); }
+          // droplets
+          for (const dr of sh.drops){ const y = dr.vy * b - 0.6 * b * b; if (y < -0.004) continue;
+            const p = projW(tg[0] + Math.cos(dr.a) * dr.vh * b, tg[1] + Math.sin(dr.a) * dr.vh * b, y);
+            ctx.fillStyle = 'rgba(255,249,238,.95)'; ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(1, S * 0.008 * dr.s), 0, TAU); ctx.fill(); }
+        } });
+      } else if (b < 3.2){
+        list.push({ d: tg[1] - 0.05, fn: () => {
+          const c = projW(tg[0], tg[1], tg[2]);
+          if (b < 0.3){ const r = S * (0.03 + 0.08 * (b / 0.3)); const g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], r);
+            g.addColorStop(0, `rgba(255,255,230,${1 - b / 0.3})`); g.addColorStop(0.4, `rgba(255,150,40,${0.8 * (1 - b / 0.3)})`); g.addColorStop(1, 'rgba(200,60,10,0)');
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, TAU); ctx.fill(); }
+          for (let k = 0; k < 5; k++){ const p = projW(tg[0] + Math.sin(k * 2.1) * 0.02 * (1 + b), tg[1] + Math.cos(k * 1.3) * 0.02, tg[2] + b * 0.05 + k * 0.006);
+            puff(p[0], p[1], S * (0.02 + 0.035 * b), 0.5 * Math.max(0, 1 - b / 3.2), 110); }
+          if (b < 1.2) for (const dr of sh.debris){ const y = tg[2] + dr.vy * b - 0.6 * b * b; if (y < -0.004) continue;
+            const p = projW(tg[0] + Math.cos(dr.a) * dr.vh * b, tg[1] + Math.sin(dr.a) * dr.vh * b, y);
+            ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(dr.rot * b); ctx.fillStyle = '#4a2c16'; ctx.fillRect(-S * 0.006, -S * 0.002, S * 0.012, S * 0.004); ctx.restore(); }
+        } });
+      }
+    }
+  }
+}
+
+// ---------- steam ----------
+const STEAM = []; { const r = rng(5); for (let i = 0; i < 26; i++){ const a = r() * TAU, rr = Math.sqrt(r()) * 0.75; STEAM.push({ u: rr * Math.cos(a), w: rr * Math.sin(a), ph: r(), sw: r() * TAU, sz: 0.7 + r() * 0.6 }); } }
+function drawSteam(t){
+  ctx.save(); ctx.globalCompositeOperation = 'screen';
+  for (const s of STEAM){ const life = mod(t / (LOOP / 4) + s.ph, 1);
+    const y = 0.05 + life * 1.5, u = s.u + Math.sin(life * 3.2 + s.sw) * 0.14 * life + life * 0.12, w = s.w + Math.cos(life * 2.1 + s.sw) * 0.05;
+    const p = projW(u, w, y), r = S * (0.08 + life * 0.28) * s.sz, a = Math.pow(Math.sin(Math.PI * life), 1.5) * 0.075;
+    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r); g.addColorStop(0, `rgba(255,250,242,${a})`); g.addColorStop(1, 'rgba(255,250,242,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+
+// ---------- static background (table, beans, saucer shadow) ----------
+const bgC = document.createElement('canvas');
+function buildBg(){
+  bgC.width = Math.round(W * DPR); bgC.height = Math.round(H * DPR);
+  const b = bgC.getContext('2d'); b.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const g = b.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#24130a'); g.addColorStop(1, '#4a2a16'); b.fillStyle = g; b.fillRect(0, 0, W, H);
+  const r = rng(42);
+  for (let i = 0; i < 140; i++){ const y0 = r() * H * 1.1;
+    b.strokeStyle = `rgba(${20 + r() * 40 | 0},${10 + r() * 20 | 0},5,${0.08 + r() * 0.15})`; b.lineWidth = 0.5 + r() * 2.5; b.beginPath();
+    for (let x = -20; x <= W + 20; x += 20){ const y = y0 + Math.sin(x * 0.004 + i) * 8 + Math.sin(x * 0.013 + i * 3) * 3; if (x === -20) b.moveTo(x, y); else b.lineTo(x, y); }
+    b.stroke(); }
+  const lx = cx - 0.9 * S, ly = cy - 1.0 * S, lg = b.createRadialGradient(lx, ly, 0, lx, ly, Math.max(W, H) * 0.9);
+  lg.addColorStop(0, 'rgba(255,190,120,.22)'); lg.addColorStop(1, 'rgba(255,190,120,0)'); b.fillStyle = lg; b.fillRect(0, 0, W, H);
+  b.save(); b.translate(cx + 0.35 * S, cy + bodyH + 0.22 * S); b.scale(1, K);
+  const sg = b.createRadialGradient(0, 0, S * 0.8, 0, 0, S * 2.0); sg.addColorStop(0, 'rgba(0,0,0,.55)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+  b.fillStyle = sg; b.beginPath(); b.arc(0, 0, S * 2.0, 0, TAU); b.fill(); b.restore();
+  let placed = 0, tries = 0;
+  while (placed < 14 && tries++ < 400){
+    const x = r() * W, y = r() * H, ex = (x - cx) / (1.85 * S), ey = (y - (cy + bodyH)) / (1.85 * S * K);
+    if (ex * ex + ey * ey < 1 || (Math.abs(x - cx) < 1.2 * S && y < cy + bodyH)) continue;
+    placed++; const rot = r() * TAU, sc = S * (0.06 + r() * 0.02);
+    b.save(); b.translate(x, y); b.rotate(rot);
+    b.fillStyle = 'rgba(0,0,0,.35)'; b.beginPath(); b.ellipse(sc * 0.2, sc * 0.25, sc, sc * 0.68, 0, 0, TAU); b.fill();
+    const bg = b.createRadialGradient(-sc * 0.3, -sc * 0.3, 0, 0, 0, sc); bg.addColorStop(0, '#7a4424'); bg.addColorStop(1, '#2a140a');
+    b.fillStyle = bg; b.beginPath(); b.ellipse(0, 0, sc, sc * 0.68, 0, 0, TAU); b.fill();
+    b.strokeStyle = '#1a0b05'; b.lineWidth = sc * 0.12; b.beginPath(); b.moveTo(-sc * 0.8, 0); b.bezierCurveTo(-sc * 0.3, -sc * 0.25, sc * 0.3, sc * 0.25, sc * 0.8, 0); b.stroke();
+    b.restore(); }
+}
+
+// ---------- cup ----------
+function drawCup(){
+  // saucer
+  const sy = cy + bodyH + 0.04 * S, sr = 1.55 * S;
+  ctx.fillStyle = '#9d9184'; ctx.beginPath(); ctx.ellipse(cx, sy + 0.05 * S, sr, sr * K, 0, 0, TAU); ctx.fill();
+  let g = ctx.createLinearGradient(cx - sr, sy - sr * K, cx + sr, sy + sr * K); g.addColorStop(0, '#fbf8f2'); g.addColorStop(0.55, '#e6ddd0'); g.addColorStop(1, '#b3a695');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, sy, sr, sr * K, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,100,80,.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(cx, sy + 0.01 * S, 0.95 * S, 0.95 * S * K, 0, 0, TAU); ctx.stroke();
+  ctx.save(); ctx.translate(cx + 0.3 * S, sy + 0.04 * S); ctx.scale(1, K);
+  g = ctx.createRadialGradient(0, 0, 0.3 * S, 0, 0, 1.0 * S); g.addColorStop(0, 'rgba(60,40,25,.35)'); g.addColorStop(1, 'rgba(60,40,25,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, S, 0, TAU); ctx.fill(); ctx.restore();
+  // body
+  const br = 0.66 * S, by = cy + bodyH;
+  ctx.beginPath(); ctx.moveTo(cx - S, cy);
+  ctx.bezierCurveTo(cx - S, cy + bodyH * 0.6, cx - 0.8 * S, by, cx - br, by);
+  ctx.ellipse(cx, by, br, br * K, 0, Math.PI, 0, true);
+  ctx.bezierCurveTo(cx + 0.8 * S, by, cx + S, cy + bodyH * 0.6, cx + S, cy);
+  ctx.ellipse(cx, cy, S, S * K, 0, 0, Math.PI, false);
+  ctx.closePath();
+  g = ctx.createLinearGradient(cx - S, 0, cx + S, 0);
+  g.addColorStop(0, '#d9cfc1'); g.addColorStop(0.12, '#fbf8f2'); g.addColorStop(0.35, '#f1eadf'); g.addColorStop(0.75, '#c9bcaa'); g.addColorStop(0.94, '#a39582'); g.addColorStop(1, '#c4b7a5');
+  ctx.fillStyle = g; ctx.fill();
+  // handle
+  ctx.lineCap = 'round';
+  const hp = () => { ctx.beginPath(); ctx.moveTo(cx + 0.96 * S, cy + 0.12 * S); ctx.bezierCurveTo(cx + 1.5 * S, cy + 0.02 * S, cx + 1.45 * S, cy + 0.55 * S, cx + 0.82 * S, cy + 0.5 * S); };
+  hp(); ctx.strokeStyle = '#a89a87'; ctx.lineWidth = 0.15 * S; ctx.stroke();
+  hp(); ctx.strokeStyle = '#e9e0d3'; ctx.lineWidth = 0.1 * S; ctx.stroke();
+  hp(); ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.025 * S; ctx.stroke();
+  ctx.lineCap = 'butt';
+  // interior wall
+  g = ctx.createLinearGradient(0, cy - S * K, 0, cy + S * K); g.addColorStop(0, '#d8cdbd'); g.addColorStop(1, '#f4eee5');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy, S, S * K, 0, 0, TAU); ctx.fill();
+}
+function rimPath(){ ctx.beginPath(); ctx.ellipse(cx, cy, S * 0.985, S * 0.985 * K, 0, 0, TAU); }
+function drawSurface(t, ripples, states){
+  ctx.save(); rimPath(); ctx.clip();
+  ctx.fillStyle = '#3a1e0e'; ctx.beginPath(); ctx.ellipse(cx, cyS, SR * S, SR * S * K, 0, 0, TAU); ctx.fill();
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(foamC, cx - SR * S, cyS - SR * S * K, 2 * SR * S, 2 * SR * S * K);
+  ctx.strokeStyle = 'rgba(70,35,15,.55)'; ctx.lineWidth = Math.max(1, S * 0.012); ctx.beginPath(); ctx.ellipse(cx, cyS, SR * S, SR * S * K, 0, 0, TAU); ctx.stroke();
+  for (let i = 0; i < 2; i++) shipShadowAndWake(i, states[i], t);
+  for (const rp of ripples){ const c = projW(rp.u, rp.w, 0); const rr = S * (0.03 + rp.b * 0.28);
+    ctx.strokeStyle = `rgba(255,248,235,${0.35 * (1 - rp.b / 2.2)})`; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(c[0], c[1], rr, rr * K, 0, 0, TAU); ctx.stroke(); }
+  ctx.globalCompositeOperation = 'screen';
+  const hx = cx - 0.35 * S, hy = cyS - 0.4 * S * K;
+  ctx.save(); ctx.translate(hx, hy); ctx.scale(1, K * 0.7);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.55 * S); g.addColorStop(0, 'rgba(255,240,220,.16)'); g.addColorStop(1, 'rgba(255,240,220,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 0.55 * S, 0, TAU); ctx.fill(); ctx.restore();
+  ctx.restore();
+  // rim lip
+  ctx.strokeStyle = '#fffdf8'; ctx.lineWidth = Math.max(2, S * 0.03); ctx.beginPath(); ctx.ellipse(cx, cy, S * 0.985, S * 0.985 * K, 0, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = 'rgba(150,130,110,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(cx, cy, S * 0.97, S * 0.97 * K, 0, 0, TAU); ctx.stroke();
+}
+
+function zoomAt(t){ const p = t / LOOP; return p < 0.85 ? 1 + 0.22 * smooth(0, 0.85, p) : 1 + 0.22 * (1 - smooth(0.85, 1, p)); }
+
+// ---------- resize ----------
+function resize(){
+  W = innerWidth; H = innerHeight; DPR = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  S = Math.min(W * 0.3, H * 0.34); cx = W / 2; cy = H * 0.47; bodyH = 0.6 * S; cyS = cy + DEPTH * C * S;
+  buildBg();
+}
+addEventListener('resize', resize); resize();
+
+// ---------- main loop ----------
+let start = performance.now();
+const tcEl = document.getElementById('tc'), barEl = document.querySelector('#bar i');
+function frame(now){
+  const t = mod((now - start) / 1000, LOOP);
+  const states = [shipState(0, t), shipState(1, t)];
+  const list = [], ripples = [];
+  collectEffects(t, list, ripples);
+  renderFoam(t, ripples);
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#120a06'; ctx.fillRect(0, 0, W, H);
+  const z = zoomAt(t), fx = cx, fy = cyS - 0.05 * S;
+  ctx.translate(fx, fy); ctx.scale(z, z); ctx.translate(-fx, -fy);
+  ctx.drawImage(bgC, 0, 0, W, H);
+  drawCup();
+  drawSurface(t, ripples, states);
+  for (let i = 0; i < 2; i++){ const st = states[i]; list.push({ d: st.w, fn: () => drawShip(i, st, t) }); }
+  list.sort((a, b) => b.d - a.d);
+  for (const it of list) it.fn();
+  drawSteam(t);
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const vg = ctx.createRadialGradient(W / 2, H * 0.48, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.6)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+  tcEl.textContent = (t < 10 ? '0' : '') + t.toFixed(2) + 's';
+  barEl.style.width = (t / LOOP * 100).toFixed(2) + '%';
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- recording ----------
+const recBtn = document.getElementById('rec'), recL = document.getElementById('recl');
+let recording = false;
+if (!window.MediaRecorder || !cv.captureStream){ recBtn.disabled = true; recL.textContent = 'Recording unsupported'; }
+recBtn.addEventListener('click', () => {
+  if (recording) return;
+  const stream = cv.captureStream(60);
+  const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  const mime = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  let rec;
+  try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 12e6 } : {}); }
+  catch (e) { recL.textContent = 'Recorder error'; return; }
+  const chunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = () => {
+    const blob = new Blob(chunks, { type: 'video/webm' }), url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'coffee-pirates-20s.webm'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    stream.getTracks().forEach(tr => tr.stop());
+    recording = false; recBtn.classList.remove('on'); recL.textContent = 'Record .webm';
+  };
+  start = performance.now(); // restart the loop so the file is exactly one cycle
+  recording = true; recBtn.classList.add('on'); rec.start(250);
+  const t0 = performance.now();
+  const tick = () => { if (!recording) return; const left = Math.max(0, LOOP - (performance.now() - t0) / 1000); recL.textContent = 'REC ' + left.toFixed(1) + 's'; if (left > 0) setTimeout(tick, 100); };
+  tick();
+  setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, LOOP * 1000 + 120);
+});
+})();
+</script>
+</body>
+</html>

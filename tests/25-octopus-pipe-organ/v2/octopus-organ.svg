@@ -1,0 +1,447 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet" style="background:#0e0719;width:100%;height:100%">
+  <title>An octopus operating a pipe organ</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#140b26"/>
+      <stop offset="1" stop-color="#3b2550"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a4424"/>
+      <stop offset="1" stop-color="#3d1f0f"/>
+    </linearGradient>
+    <linearGradient id="woodDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a2512"/>
+      <stop offset="1" stop-color="#26120a"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a3420"/>
+      <stop offset="1" stop-color="#2a170c"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7a5a14"/>
+      <stop offset="0.3" stop-color="#f8e39a"/>
+      <stop offset="0.55" stop-color="#d1aa45"/>
+      <stop offset="1" stop-color="#5e4410"/>
+    </linearGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4b4a5a"/>
+      <stop offset="0.35" stop-color="#b9b8c8"/>
+      <stop offset="1" stop-color="#3a3946"/>
+    </linearGradient>
+    <radialGradient id="octo" cx="0.4" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ff9cb3"/>
+      <stop offset="0.5" stop-color="#d9466f"/>
+      <stop offset="1" stop-color="#8e1f45"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe9b0" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ffe9b0" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- keyboard patterns: 7 white keys per octave, key width 340/35 -->
+    <pattern id="keysUpper" patternUnits="userSpaceOnUse" x="230" y="364" width="68" height="18">
+      <rect width="68" height="18" fill="#f6f1e2"/>
+      <g stroke="#9c9480" stroke-width="0.8">
+        <line x1="9.71" y1="0" x2="9.71" y2="18"/><line x1="19.43" y1="0" x2="19.43" y2="18"/>
+        <line x1="29.14" y1="0" x2="29.14" y2="18"/><line x1="38.86" y1="0" x2="38.86" y2="18"/>
+        <line x1="48.57" y1="0" x2="48.57" y2="18"/><line x1="58.29" y1="0" x2="58.29" y2="18"/>
+        <line x1="68" y1="0" x2="68" y2="18"/>
+      </g>
+      <g fill="#1a1414">
+        <rect x="6.5" y="0" width="6" height="11"/><rect x="16.2" y="0" width="6" height="11"/>
+        <rect x="35.6" y="0" width="6" height="11"/><rect x="45.3" y="0" width="6" height="11"/>
+        <rect x="55" y="0" width="6" height="11"/>
+      </g>
+    </pattern>
+    <pattern id="keysLower" patternUnits="userSpaceOnUse" x="230" y="388" width="68" height="24">
+      <rect width="68" height="24" fill="#f6f1e2"/>
+      <g stroke="#9c9480" stroke-width="0.8">
+        <line x1="9.71" y1="0" x2="9.71" y2="24"/><line x1="19.43" y1="0" x2="19.43" y2="24"/>
+        <line x1="29.14" y1="0" x2="29.14" y2="24"/><line x1="38.86" y1="0" x2="38.86" y2="24"/>
+        <line x1="48.57" y1="0" x2="48.57" y2="24"/><line x1="58.29" y1="0" x2="58.29" y2="24"/>
+        <line x1="68" y1="0" x2="68" y2="24"/>
+      </g>
+      <g fill="#1a1414">
+        <rect x="6.5" y="0" width="6" height="14"/><rect x="16.2" y="0" width="6" height="14"/>
+        <rect x="35.6" y="0" width="6" height="14"/><rect x="45.3" y="0" width="6" height="14"/>
+        <rect x="55" y="0" width="6" height="14"/>
+      </g>
+    </pattern>
+    <pattern id="pedals" patternUnits="userSpaceOnUse" x="240" y="0" width="20" height="600">
+      <rect width="20" height="600" fill="#2a160b"/>
+      <rect x="3" width="14" height="600" fill="#d8c49a"/>
+    </pattern>
+    <pattern id="planks" patternUnits="userSpaceOnUse" width="120" height="40">
+      <rect width="120" height="40" fill="none"/>
+      <line x1="0" y1="40" x2="120" y2="40" stroke="#1f1008" stroke-width="2"/>
+      <line x1="60" y1="0" x2="60" y2="40" stroke="#1f1008" stroke-width="1.5"/>
+    </pattern>
+
+    <!-- pipe foot and mouth, shared -->
+    <g id="foot">
+      <polygon points="0,300 24,300 15,338 9,338" fill="url(#gold)"/>
+      <path d="M5,292 L19,292 L16,280 Q12,276 8,280 Z" fill="#2b1d08"/>
+      <rect x="0" y="296" width="24" height="4" fill="#6b4f12"/>
+    </g>
+
+    <clipPath id="windowClip">
+      <path d="M0,330 V140 Q35,80 70,140 V330 Z"/>
+    </clipPath>
+    <g id="stainedWindow">
+      <g clip-path="url(#windowClip)">
+        <rect x="0" y="80" width="35" height="125" fill="#2f63c9"/>
+        <rect x="35" y="80" width="35" height="125" fill="#c9302f"/>
+        <rect x="0" y="205" width="35" height="125" fill="#e0b52d"/>
+        <rect x="35" y="205" width="35" height="125" fill="#2f9c5a"/>
+        <circle cx="35" cy="180" r="20" fill="#9b42c9"/>
+        <circle cx="35" cy="180" r="9" fill="#ffd36b"/>
+        <g stroke="#120a14" stroke-width="3" fill="none">
+          <line x1="35" y1="80" x2="35" y2="330"/>
+          <line x1="0" y1="205" x2="70" y2="205"/>
+          <line x1="0" y1="265" x2="70" y2="265"/>
+          <circle cx="35" cy="180" r="20"/>
+        </g>
+      </g>
+      <path d="M0,330 V140 Q35,80 70,140 V330 Z" fill="none" stroke="#6e5a44" stroke-width="5"/>
+    </g>
+
+    <!-- tentacle paths -->
+    <!-- tentacle paths (pathLength=100 lets the stroke taper in steps); tips animate as they press keys -->
+    <path id="t1" pathLength="100" d="M332,336 C310,345 300,358 285,366 C275,371 272,378 280,380">
+      <animate attributeName="d" dur="1.2s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines=".5 0 .5 1;.5 0 .5 1"
+        values="M332,336 C310,345 300,358 285,366 C275,371 272,378 280,380;M332,336 C310,343 300,352 287,357 C277,361 274,367 282,369;M332,336 C310,345 300,358 285,366 C275,371 272,378 280,380"/>
+    </path>
+    <path id="t2" pathLength="100" d="M355,350 C350,372 335,382 318,392 C306,399 304,407 314,408">
+      <animate attributeName="d" dur="1.2s" begin="-0.6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines=".5 0 .5 1;.5 0 .5 1"
+        values="M355,350 C350,372 335,382 318,392 C306,399 304,407 314,408;M355,350 C350,368 335,375 318,383 C306,388 304,395 314,396;M355,350 C350,372 335,382 318,392 C306,399 304,407 314,408"/>
+    </path>
+    <path id="t3" pathLength="100" d="M445,350 C450,372 465,382 482,392 C494,399 496,407 486,408">
+      <animate attributeName="d" dur="0.9s" begin="-0.3s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines=".5 0 .5 1;.5 0 .5 1"
+        values="M445,350 C450,372 465,382 482,392 C494,399 496,407 486,408;M445,350 C450,368 465,375 482,383 C494,388 496,395 486,396;M445,350 C450,372 465,382 482,392 C494,399 496,407 486,408"/>
+    </path>
+    <path id="t4" pathLength="100" d="M468,336 C490,345 500,358 515,366 C525,371 528,378 520,380">
+      <animate attributeName="d" dur="0.9s" begin="-0.75s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines=".5 0 .5 1;.5 0 .5 1"
+        values="M468,336 C490,345 500,358 515,366 C525,371 528,378 520,380;M468,336 C490,343 500,352 513,357 C523,361 526,367 518,369;M468,336 C490,345 500,358 515,366 C525,371 528,378 520,380"/>
+    </path>
+    <path id="t5" pathLength="100" d="M318,318 C270,310 235,335 222,366 C217,378 204,382 203,372">
+      <animate attributeName="d" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.15;0.85;1" keySplines=".5 0 .5 1;0 0 1 1;.5 0 .5 1"
+        values="M318,318 C270,310 235,335 222,366 C217,378 204,382 203,372;M318,318 C270,308 228,332 214,362 C209,374 196,378 195,368;M318,318 C270,308 228,332 214,362 C209,374 196,378 195,368;M318,318 C270,310 235,335 222,366 C217,378 204,382 203,372"/>
+    </path>
+    <path id="t6" pathLength="100" d="M482,318 C530,310 572,345 585,390 C589,402 601,406 600,396"/>
+    <path id="t7" pathLength="100" d="M322,282 C285,272 262,242 242,222 C232,212 216,214 211,208">
+      <animateTransform attributeName="transform" type="rotate" values="0 322 282;-3 322 282;0 322 282" dur="5s" repeatCount="indefinite"/>
+    </path>
+    <path id="t8" pathLength="100" d="M405,470 C410,490 430,498 440,505 C448,511 442,519 434,515">
+      <animate attributeName="d" dur="2.4s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines=".5 0 .5 1;.5 0 .5 1"
+        values="M405,470 C410,490 430,498 440,505 C448,511 442,519 434,515;M405,470 C410,488 430,492 440,497 C448,502 442,510 434,507;M405,470 C410,490 430,498 440,505 C448,511 442,519 434,515"/>
+    </path>
+
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffcf7a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffcf7a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vignette" gradientUnits="userSpaceOnUse" cx="400" cy="290" r="560">
+      <stop offset="0.55" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#05020a" stop-opacity="0.85"/>
+    </radialGradient>
+    <radialGradient id="flame" cx="0.5" cy="0.65" r="0.6">
+      <stop offset="0" stop-color="#fffbe0"/>
+      <stop offset="0.5" stop-color="#ffc640"/>
+      <stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="noteGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <style>
+      .ol, .arm { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .ol  { stroke: #5e1130; }
+      .arm { stroke: #cc3f68; }
+      .w1 { stroke-width: 9; }
+      .w2 { stroke-width: 12.5; stroke-dasharray: 82 200; }
+      .w3 { stroke-width: 16; stroke-dasharray: 60 200; }
+      .ol.w1 { stroke-width: 12.5; } .ol.w2 { stroke-width: 16; } .ol.w3 { stroke-width: 19.5; }
+      .hl  { fill: none; stroke: #f59ab0; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 70 200; opacity: 0.55; }
+      .sk  { fill: none; stroke: #ffd0da; stroke-width: 4.2; stroke-linecap: round; stroke-dasharray: 0 8; stroke-dashoffset: -4; }
+      .note { font-family: Georgia, 'Times New Roman', serif; fill: #ffe7a3; }
+      .stopTxt { font-family: Georgia, serif; font-size: 4px; fill: #3a2a1a; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <!-- ===== Background: cathedral ===== -->
+  <rect x="-1200" y="-1200" width="3200" height="1670" fill="#140b26"/>
+  <rect x="-1200" y="0" width="3200" height="470" fill="url(#bg)"/>
+  <g opacity="0.25" stroke="#0b0614" stroke-width="2">
+    <line x1="-1200" y1="60" x2="2000" y2="60"/>
+    <line x1="-1200" y1="130" x2="2000" y2="130"/>
+    <line x1="-1200" y1="200" x2="2000" y2="200"/>
+    <line x1="-1200" y1="270" x2="2000" y2="270"/>
+    <line x1="-1200" y1="340" x2="2000" y2="340"/>
+    <line x1="-1200" y1="410" x2="2000" y2="410"/>
+  </g>
+  <use href="#stainedWindow" xlink:href="#stainedWindow" x="20" y="0"/>
+  <use href="#stainedWindow" xlink:href="#stainedWindow" x="710" y="0"/>
+
+  <!-- floor -->
+  <rect x="-1200" y="470" width="3200" height="130" fill="url(#floor)"/>
+  <rect x="-1200" y="600" width="3200" height="1200" fill="#2a170c"/>
+  <rect x="-1200" y="470" width="3200" height="1200" fill="url(#planks)" opacity="0.6"/>
+
+  <!-- ===== Organ case ===== -->
+  <path d="M110,470 V120 Q110,40 400,26 Q690,40 690,120 V470 Z" fill="url(#wood)" stroke="#2a140a" stroke-width="4"/>
+  <path d="M130,340 V128 Q132,62 400,48 Q668,62 670,128 V340 Z" fill="#1d0f08"/>
+  <!-- crown ornament -->
+  <path d="M370,30 Q400,0 430,30" fill="none" stroke="#d1aa45" stroke-width="5"/>
+  <circle cx="400" cy="14" r="7" fill="#d1aa45"/>
+
+  <!-- back row of pipes (silver, darker) -->
+  <g opacity="0.75">
+    <rect x="158" y="135" width="18" height="190" fill="url(#silver)"/>
+    <rect x="189" y="120" width="18" height="205" fill="url(#silver)"/>
+    <rect x="220" y="125" width="18" height="200" fill="url(#silver)"/>
+    <rect x="251" y="140" width="18" height="185" fill="url(#silver)"/>
+    <rect x="282" y="155" width="18" height="170" fill="url(#silver)"/>
+    <rect x="313" y="120" width="18" height="205" fill="url(#silver)"/>
+    <rect x="344" y="95" width="18" height="230" fill="url(#silver)"/>
+    <rect x="375" y="70" width="18" height="255" fill="url(#silver)"/>
+    <rect x="406" y="70" width="18" height="255" fill="url(#silver)"/>
+    <rect x="437" y="95" width="18" height="230" fill="url(#silver)"/>
+    <rect x="468" y="120" width="18" height="205" fill="url(#silver)"/>
+    <rect x="499" y="155" width="18" height="170" fill="url(#silver)"/>
+    <rect x="530" y="140" width="18" height="185" fill="url(#silver)"/>
+    <rect x="561" y="125" width="18" height="200" fill="url(#silver)"/>
+    <rect x="592" y="120" width="18" height="205" fill="url(#silver)"/>
+    <rect x="623" y="135" width="18" height="190" fill="url(#silver)"/>
+  </g>
+
+  <!-- front row of gold pipes -->
+  <g>
+    <g transform="translate(140,0)"><rect y="120" width="24" height="180" fill="url(#gold)"/><ellipse cx="12" cy="120" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(171,0)"><rect y="100" width="24" height="200" fill="url(#gold)"/><ellipse cx="12" cy="100" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(202,0)"><rect y="85" width="24" height="215" fill="url(#gold)"/><ellipse cx="12" cy="85" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(233,0)"><rect y="100" width="24" height="200" fill="url(#gold)"/><ellipse cx="12" cy="100" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(264,0)"><rect y="125" width="24" height="175" fill="url(#gold)"/><ellipse cx="12" cy="125" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(295,0)"><rect y="150" width="24" height="150" fill="url(#gold)"/><ellipse cx="12" cy="150" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(326,0)"><rect y="170" width="24" height="130" fill="url(#gold)"/><ellipse cx="12" cy="170" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(357,0)"><rect y="140" width="24" height="160" fill="url(#gold)"/><ellipse cx="12" cy="140" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(388,0)"><rect y="62" width="24" height="238" fill="url(#gold)"/><ellipse cx="12" cy="62" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(419,0)"><rect y="140" width="24" height="160" fill="url(#gold)"/><ellipse cx="12" cy="140" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(450,0)"><rect y="170" width="24" height="130" fill="url(#gold)"/><ellipse cx="12" cy="170" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(481,0)"><rect y="150" width="24" height="150" fill="url(#gold)"/><ellipse cx="12" cy="150" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(512,0)"><rect y="125" width="24" height="175" fill="url(#gold)"/><ellipse cx="12" cy="125" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(543,0)"><rect y="100" width="24" height="200" fill="url(#gold)"/><ellipse cx="12" cy="100" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(574,0)"><rect y="85" width="24" height="215" fill="url(#gold)"/><ellipse cx="12" cy="85" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(605,0)"><rect y="100" width="24" height="200" fill="url(#gold)"/><ellipse cx="12" cy="100" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+    <g transform="translate(636,0)"><rect y="120" width="24" height="180" fill="url(#gold)"/><ellipse cx="12" cy="120" rx="12" ry="3" fill="#2b1d08"/><use href="#foot" xlink:href="#foot"/></g>
+  </g>
+
+  <!-- warm light pulsing with the music -->
+  <ellipse cx="400" cy="170" rx="300" ry="150" fill="url(#glow)" style="mix-blend-mode:screen">
+    <animate attributeName="opacity" values="0.35;0.6;0.35" dur="2.4s" repeatCount="indefinite"/>
+  </ellipse>
+  <!-- impost beam -->
+  <rect x="118" y="336" width="564" height="18" fill="url(#woodDark)" stroke="#2a140a" stroke-width="2"/>
+
+  <!-- ===== Octopus ===== -->
+  <ellipse cx="400" cy="240" rx="150" ry="130" fill="#000" opacity="0.35" filter="url(#soft)"/>
+  <!-- arm 7: balancing a teacup on its tip, behind the head -->
+  <g>
+    <use href="#t7" xlink:href="#t7" class="ol w3"/>
+    <use href="#t7" xlink:href="#t7" class="ol w2"/>
+    <use href="#t7" xlink:href="#t7" class="ol w1"/>
+    <use href="#t7" xlink:href="#t7" class="arm w3"/>
+    <use href="#t7" xlink:href="#t7" class="arm w2"/>
+    <use href="#t7" xlink:href="#t7" class="arm w1"/>
+    <use href="#t7" xlink:href="#t7" class="hl"/>
+    <use href="#t7" xlink:href="#t7" class="sk"/>
+  </g>
+  <g>
+    <animateTransform attributeName="transform" type="rotate" values="0 322 282;-3 322 282;0 322 282" dur="5s" repeatCount="indefinite"/>
+    <ellipse cx="210" cy="207" rx="22" ry="4.5" fill="#f4f0ff" stroke="#6b5b8a" stroke-width="2"/>
+    <path d="M193,181 H227 L222,203 Q210,209 198,203 Z" fill="#f4f0ff" stroke="#6b5b8a" stroke-width="2"/>
+    <path d="M226,186 Q237,187 233,196 Q230,201 223,199" fill="none" stroke="#6b5b8a" stroke-width="2.5"/>
+    <ellipse cx="210" cy="182" rx="16" ry="3" fill="#7a4a24"/>
+    <path d="M198,190 Q210,194 223,190" fill="none" stroke="#c9302f" stroke-width="2"/>
+    <g fill="none" stroke="#e8e2ff" stroke-width="2" stroke-linecap="round">
+      <path d="M203,175 Q198,166 204,159 Q210,152 204,144" opacity="0.2">
+        <animate attributeName="opacity" values="0;0.8;0" dur="3s" repeatCount="indefinite"/>
+      </path>
+      <path d="M216,175 Q211,166 217,159 Q223,152 217,144" opacity="0.6">
+        <animate attributeName="opacity" values="0.8;0;0.8" dur="3s" repeatCount="indefinite"/>
+      </path>
+    </g>
+  </g>
+
+  <g transform="translate(400,334)"><g>
+  <animateTransform attributeName="transform" type="scale" values="1 1;1.015 1.025;1 1" dur="3.2s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines=".5 0 .5 1;.5 0 .5 1"/>
+  <g transform="translate(-400,-334)">
+  <!-- mantle -->
+  <ellipse cx="400" cy="336" rx="88" ry="22" fill="#a62a52"/>
+  <path d="M400,130 C472,130 506,190 498,250 C494,290 478,312 470,332 L330,332 C322,312 306,290 302,250 C294,190 328,130 400,130 Z"
+        fill="url(#octo)" stroke="#6e1634" stroke-width="4"/>
+  <!-- skin spots -->
+  <g fill="#8e1f45" opacity="0.35">
+    <circle cx="360" cy="168" r="7"/><circle cx="440" cy="160" r="9"/><circle cx="412" cy="148" r="4"/>
+    <circle cx="470" cy="210" r="6"/><circle cx="330" cy="215" r="5"/><circle cx="385" cy="152" r="3"/>
+    <circle cx="455" cy="185" r="3"/><circle cx="342" cy="190" r="3.5"/>
+  </g>
+  <!-- shine -->
+  <ellipse cx="368" cy="170" rx="22" ry="12" fill="#fff" opacity="0.18" transform="rotate(-25 368 170)"/>
+
+  <!-- face -->
+  <g>
+    <ellipse cx="368" cy="230" rx="19" ry="23" fill="#fff" stroke="#6e1634" stroke-width="3"/>
+    <ellipse cx="432" cy="230" rx="19" ry="23" fill="#fff" stroke="#6e1634" stroke-width="3"/>
+    <circle cx="371" cy="239" r="9.5" fill="#1a0a12"/>
+    <circle cx="429" cy="239" r="9.5" fill="#1a0a12"/>
+    <circle cx="374" cy="235" r="3" fill="#fff"/>
+    <circle cx="432" cy="235" r="3" fill="#fff"/>
+    <!-- concentrating brows -->
+    <path d="M350,200 Q366,192 384,201" fill="none" stroke="#6e1634" stroke-width="4" stroke-linecap="round"/>
+    <path d="M416,201 Q434,192 450,200" fill="none" stroke="#6e1634" stroke-width="4" stroke-linecap="round"/>
+    <!-- cheeks -->
+    <ellipse cx="342" cy="268" rx="12" ry="6" fill="#ff7b9c" opacity="0.6"/>
+    <ellipse cx="458" cy="268" rx="12" ry="6" fill="#ff7b9c" opacity="0.6"/>
+    <!-- happy, singing mouth -->
+    <path d="M384,276 Q400,296 416,276 Q400,284 384,276 Z" fill="#5a0f28" stroke="#6e1634" stroke-width="2" stroke-linejoin="round"/>
+    <!-- blinking lids -->
+    <g fill="#d24a72" stroke="#6e1634" stroke-width="3">
+      <path d="M349,230 A19,23 0 0 1 387,230 Z" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;0" keyTimes="0;0.93;0.96;1" dur="4.5s" repeatCount="indefinite"/>
+      </path>
+      <path d="M413,230 A19,23 0 0 1 451,230 Z" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;0" keyTimes="0;0.93;0.96;1" dur="4.5s" repeatCount="indefinite"/>
+      </path>
+    </g>
+  </g>
+  </g></g></g>
+
+  <!-- ===== Console ===== -->
+  <rect x="182" y="348" width="436" height="12" rx="3" fill="#5a2e17" stroke="#2a140a" stroke-width="2"/>
+  <rect x="188" y="358" width="424" height="116" fill="url(#wood)" stroke="#2a140a" stroke-width="3"/>
+  <!-- stop jambs -->
+  <rect x="190" y="360" width="38" height="96" fill="#4a2512"/>
+  <rect x="572" y="360" width="38" height="96" fill="#4a2512"/>
+  <!-- upper manual -->
+  <rect x="228" y="360" width="344" height="4" fill="#1e0f07"/>
+  <rect x="230" y="364" width="340" height="18" fill="url(#keysUpper)" stroke="#1e0f07" stroke-width="1"/>
+  <rect x="228" y="382" width="344" height="6" fill="#2b150a"/>
+  <!-- lower manual -->
+  <rect x="230" y="388" width="340" height="24" fill="url(#keysLower)" stroke="#1e0f07" stroke-width="1"/>
+  <rect x="228" y="412" width="344" height="6" fill="#2b150a"/>
+  <!-- pressed keys (shaded) -->
+  <g fill="#000" opacity="0.28">
+    <rect x="278.6" y="364" width="9.7" height="18"><animate attributeName="opacity" values="1;0;1" dur="1.2s" begin="0s" repeatCount="indefinite"/></rect>
+    <rect x="307.7" y="388" width="9.7" height="24"><animate attributeName="opacity" values="1;0;1" dur="1.2s" begin="-0.6s" repeatCount="indefinite"/></rect>
+    <rect x="482.6" y="388" width="9.7" height="24"><animate attributeName="opacity" values="1;0;1" dur="0.9s" begin="-0.3s" repeatCount="indefinite"/></rect>
+    <rect x="512.3" y="364" width="9.7" height="18"><animate attributeName="opacity" values="1;0;1" dur="0.9s" begin="-0.75s" repeatCount="indefinite"/></rect>
+  </g>
+  <!-- front panel -->
+  <rect x="236" y="426" width="150" height="40" rx="3" fill="none" stroke="#2a140a" stroke-width="2"/>
+  <rect x="414" y="426" width="150" height="40" rx="3" fill="none" stroke="#2a140a" stroke-width="2"/>
+  <rect x="362" y="438" width="76" height="16" rx="2" fill="url(#gold)" stroke="#5e4410"/>
+  <text x="400" y="450" font-family="Georgia, serif" font-size="9" text-anchor="middle" fill="#3a2608" font-style="italic">Octavius</text>
+
+  <!-- stop knobs -->
+  <g>
+    <g fill="#f3ead2" stroke="#2a140a" stroke-width="1.5">
+      <circle cx="209" cy="372" r="7"/><circle cx="209" cy="392" r="7"/><circle cx="209" cy="412" r="7"/><circle cx="209" cy="432" r="7"/>
+      <circle cx="591" cy="372" r="7"/><circle cx="591" cy="392" r="7"/><circle cx="591" cy="412" r="7"/><circle cx="591" cy="432" r="7"/>
+    </g>
+    <circle cx="209" cy="392" r="4" fill="#c9302f"/>
+    <circle cx="209" cy="432" r="4" fill="#2f63c9"/>
+    <circle cx="591" cy="412" r="4" fill="#2f9c5a"/>
+    <circle cx="591" cy="432" r="4" fill="#c9302f"/>
+    <text class="stopTxt" x="209" y="413.5">Flute</text>
+    <text class="stopTxt" x="591" y="373.5">Reed</text>
+    <text class="stopTxt" x="591" y="393.5">Vox</text>
+  </g>
+
+  <!-- music stand with sheet music -->
+  <g>
+    <rect x="336" y="318" width="128" height="36" fill="#3d1f0f" stroke="#2a140a" stroke-width="2"/>
+    <path d="M340,321 H398 V351 H340 Z" fill="#fbf6e6"/>
+    <path d="M402,321 H460 V351 H402 Z" fill="#fbf6e6"/>
+    <g stroke="#555" stroke-width="0.6">
+      <line x1="344" y1="327" x2="394" y2="327"/><line x1="344" y1="330" x2="394" y2="330"/><line x1="344" y1="333" x2="394" y2="333"/>
+      <line x1="344" y1="339" x2="394" y2="339"/><line x1="344" y1="342" x2="394" y2="342"/><line x1="344" y1="345" x2="394" y2="345"/>
+      <line x1="406" y1="327" x2="456" y2="327"/><line x1="406" y1="330" x2="456" y2="330"/><line x1="406" y1="333" x2="456" y2="333"/>
+      <line x1="406" y1="339" x2="456" y2="339"/><line x1="406" y1="342" x2="456" y2="342"/><line x1="406" y1="345" x2="456" y2="345"/>
+    </g>
+    <g fill="#222">
+      <ellipse cx="350" cy="331" rx="1.8" ry="1.3"/><ellipse cx="358" cy="328" rx="1.8" ry="1.3"/><ellipse cx="368" cy="332" rx="1.8" ry="1.3"/>
+      <ellipse cx="380" cy="329" rx="1.8" ry="1.3"/><ellipse cx="352" cy="343" rx="1.8" ry="1.3"/><ellipse cx="366" cy="340" rx="1.8" ry="1.3"/>
+      <ellipse cx="412" cy="329" rx="1.8" ry="1.3"/><ellipse cx="424" cy="332" rx="1.8" ry="1.3"/><ellipse cx="438" cy="327" rx="1.8" ry="1.3"/>
+      <ellipse cx="416" cy="344" rx="1.8" ry="1.3"/><ellipse cx="432" cy="341" rx="1.8" ry="1.3"/><ellipse cx="448" cy="343" rx="1.8" ry="1.3"/>
+    </g>
+  </g>
+
+  <!-- candles -->
+  <g>
+    <g id="candle">
+      <circle cx="196" cy="300" r="60" fill="url(#glow)">
+        <animate attributeName="r" values="58;64;56;62;58" dur="1.7s" repeatCount="indefinite"/>
+      </circle>
+      <rect x="186" y="342" width="20" height="7" rx="2" fill="url(#gold)"/>
+      <rect x="191" y="312" width="10" height="31" fill="#f3ead2" stroke="#b8a888" stroke-width="1"/>
+      <line x1="196" y1="312" x2="196" y2="307" stroke="#222" stroke-width="1.2"/>
+      <ellipse cx="196" cy="300" rx="5" ry="10" fill="url(#flame)">
+        <animate attributeName="ry" values="10;12;9;11;10" dur="0.9s" repeatCount="indefinite"/>
+        <animate attributeName="cx" values="196;195.3;196.6;196" dur="1.3s" repeatCount="indefinite"/>
+      </ellipse>
+    </g>
+    <use href="#candle" xlink:href="#candle" transform="translate(408,0)"/>
+  </g>
+  <ellipse cx="400" cy="488" rx="250" ry="12" fill="#000" opacity="0.55" filter="url(#soft)"/>
+  <!-- pedalboard -->
+  <polygon points="240,486 560,486 584,526 216,526" fill="url(#pedals)" stroke="#1e0f07" stroke-width="2"/>
+  <polygon points="240,486 560,486 562,490 238,490" fill="#1e0f07"/>
+
+  <!-- ===== Playing tentacles ===== -->
+  <g>
+    <use href="#t1" xlink:href="#t1" class="ol w3"/><use href="#t2" xlink:href="#t2" class="ol w3"/><use href="#t3" xlink:href="#t3" class="ol w3"/><use href="#t4" xlink:href="#t4" class="ol w3"/><use href="#t5" xlink:href="#t5" class="ol w3"/><use href="#t6" xlink:href="#t6" class="ol w3"/><use href="#t8" xlink:href="#t8" class="ol w3"/>
+    <use href="#t1" xlink:href="#t1" class="ol w2"/><use href="#t2" xlink:href="#t2" class="ol w2"/><use href="#t3" xlink:href="#t3" class="ol w2"/><use href="#t4" xlink:href="#t4" class="ol w2"/><use href="#t5" xlink:href="#t5" class="ol w2"/><use href="#t6" xlink:href="#t6" class="ol w2"/><use href="#t8" xlink:href="#t8" class="ol w2"/>
+    <use href="#t1" xlink:href="#t1" class="ol w1"/><use href="#t2" xlink:href="#t2" class="ol w1"/><use href="#t3" xlink:href="#t3" class="ol w1"/><use href="#t4" xlink:href="#t4" class="ol w1"/><use href="#t5" xlink:href="#t5" class="ol w1"/><use href="#t6" xlink:href="#t6" class="ol w1"/><use href="#t8" xlink:href="#t8" class="ol w1"/>
+    <use href="#t1" xlink:href="#t1" class="arm w3"/><use href="#t2" xlink:href="#t2" class="arm w3"/><use href="#t3" xlink:href="#t3" class="arm w3"/><use href="#t4" xlink:href="#t4" class="arm w3"/><use href="#t5" xlink:href="#t5" class="arm w3"/><use href="#t6" xlink:href="#t6" class="arm w3"/><use href="#t8" xlink:href="#t8" class="arm w3"/>
+    <use href="#t1" xlink:href="#t1" class="arm w2"/><use href="#t2" xlink:href="#t2" class="arm w2"/><use href="#t3" xlink:href="#t3" class="arm w2"/><use href="#t4" xlink:href="#t4" class="arm w2"/><use href="#t5" xlink:href="#t5" class="arm w2"/><use href="#t6" xlink:href="#t6" class="arm w2"/><use href="#t8" xlink:href="#t8" class="arm w2"/>
+    <use href="#t1" xlink:href="#t1" class="arm w1"/><use href="#t2" xlink:href="#t2" class="arm w1"/><use href="#t3" xlink:href="#t3" class="arm w1"/><use href="#t4" xlink:href="#t4" class="arm w1"/><use href="#t5" xlink:href="#t5" class="arm w1"/><use href="#t6" xlink:href="#t6" class="arm w1"/><use href="#t8" xlink:href="#t8" class="arm w1"/>
+    <use href="#t1" xlink:href="#t1" class="hl"/><use href="#t2" xlink:href="#t2" class="hl"/><use href="#t3" xlink:href="#t3" class="hl"/><use href="#t4" xlink:href="#t4" class="hl"/><use href="#t5" xlink:href="#t5" class="hl"/><use href="#t6" xlink:href="#t6" class="hl"/><use href="#t8" xlink:href="#t8" class="hl"/>
+    <use href="#t1" xlink:href="#t1" class="sk"/><use href="#t2" xlink:href="#t2" class="sk"/><use href="#t3" xlink:href="#t3" class="sk"/><use href="#t4" xlink:href="#t4" class="sk"/><use href="#t5" xlink:href="#t5" class="sk"/><use href="#t6" xlink:href="#t6" class="sk"/><use href="#t8" xlink:href="#t8" class="sk"/>
+  </g>
+
+  <!-- ===== Light beams from the windows ===== -->
+  <polygon points="90,140 90,330 380,600 250,600" fill="url(#beam)" opacity="0.6"/>
+  <polygon points="90,140 90,330 380,600 250,600" fill="url(#beam)" opacity="0.45" transform="translate(800,0) scale(-1,1)"/>
+
+  <!-- ===== Music notes rising from the pipes ===== -->
+  <g class="note" filter="url(#noteGlow)">
+    <text x="210" y="80" font-size="30">♪
+      <animateTransform attributeName="transform" type="translate" values="0 0; -25 -70" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="4s" repeatCount="indefinite"/>
+    </text>
+    <text x="580" y="80" font-size="34">♫
+      <animateTransform attributeName="transform" type="translate" values="0 0; 25 -70" dur="4.5s" begin="1s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="4.5s" begin="1s" repeatCount="indefinite"/>
+    </text>
+    <text x="330" y="60" font-size="24">♩
+      <animateTransform attributeName="transform" type="translate" values="0 0; -15 -55" dur="3.5s" begin="0.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="3.5s" begin="0.5s" repeatCount="indefinite"/>
+    </text>
+    <text x="460" y="55" font-size="28">♪
+      <animateTransform attributeName="transform" type="translate" values="0 0; 20 -50" dur="3.8s" begin="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="3.8s" begin="2s" repeatCount="indefinite"/>
+    </text>
+    <text x="150" y="110" font-size="22">♫
+      <animateTransform attributeName="transform" type="translate" values="0 0; -30 -60" dur="5s" begin="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="5s" begin="1.5s" repeatCount="indefinite"/>
+    </text>
+    <text x="640" y="110" font-size="24">♩
+      <animateTransform attributeName="transform" type="translate" values="0 0; 30 -60" dur="4.2s" begin="0.2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="4.2s" begin="0.2s" repeatCount="indefinite"/>
+    </text>
+  </g>
+  <!-- vignette -->
+  <rect x="-1200" y="-1200" width="3200" height="3000" fill="url(#vignette)" pointer-events="none"/>
+</svg>

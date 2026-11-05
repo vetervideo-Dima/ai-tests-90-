@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Make the thing. Break the thing. Make it better.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --K:#0a0a0a; --Y:#dfff1f;
+    --display:"Archivo Black","Arial Black","Helvetica Neue",Helvetica,Arial,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;color:var(--Y);overflow:hidden;font-family:var(--mono)}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+  #stage{
+    --bg:#0a0a0a; --fg:#dfff1f; --u:10px;
+    position:relative;overflow:hidden;background:var(--bg);color:var(--fg);
+    font-family:var(--display);text-transform:uppercase;user-select:none;cursor:pointer;
+  }
+  #bg{position:absolute;inset:0;width:100%;height:100%;mix-blend-mode:difference;pointer-events:none}
+  #cam{position:absolute;inset:0;will-change:transform}
+  #light{position:absolute;inset:0;pointer-events:none;z-index:4;
+         background:radial-gradient(120% 90% at 50% 45%, rgba(255,255,255,.06) 0%, rgba(0,0,0,0) 45%, rgba(0,0,0,.42) 100%)}
+  #grain{position:absolute;left:-64px;top:-64px;right:-64px;bottom:-64px;pointer-events:none;z-index:5;opacity:.065;will-change:transform}
+  .echo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .echo .word{color:transparent;-webkit-text-stroke:max(1px,calc(var(--u)*.18)) var(--fg);opacity:0}
+  .scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;isolation:isolate}
+  .word{display:inline-block;line-height:.86;letter-spacing:-.03em;white-space:nowrap;will-change:transform}
+  .ch{display:inline-block;will-change:transform}
+  .m{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .01em}
+
+  /* intro */
+  #s-intro{flex-direction:column;gap:calc(var(--u)*3)}
+  .count{display:flex;gap:calc(var(--u)*7);font-size:calc(var(--u)*12)}
+  .count span{display:inline-block;opacity:.18;width:1ch;text-align:center}
+  .introbar{width:calc(var(--u)*60);height:calc(var(--u)*.5);background:var(--fg);transform-origin:left;transform:scaleX(0)}
+  .label{font-family:var(--mono);font-size:calc(var(--u)*1.5);letter-spacing:.3em;opacity:.8}
+
+  #s-make1 .word{font-size:calc(var(--u)*22)}
+  #s-make1 .ch{transform-origin:50% 100%}
+  #s-the1 .word{font-size:calc(var(--u)*28)}
+  #s-thing1 .wipe{position:relative;display:inline-block}
+  #s-thing1 .w{display:inline-block;font-size:calc(var(--u)*19);line-height:.86;letter-spacing:-.03em;clip-path:inset(0% 100% 0% 0%)}
+  #s-thing1 .sweep{position:absolute;top:-6%;bottom:-6%;left:-6%;width:calc(var(--u)*3);background:var(--fg)}
+
+  #s-break .slices{position:relative;display:inline-block;font-size:calc(var(--u)*21);line-height:.86;letter-spacing:-.03em}
+  #s-break .ghost{visibility:hidden}
+  #s-break .strip{position:absolute;inset:0;isolation:isolate}
+  #s-break .hl{position:absolute;inset:-4% -3%;background:var(--fg);opacity:0}
+  #s-break .t{position:relative;display:block;mix-blend-mode:difference;color:var(--fg)}
+
+  #s-the2 .word{font-size:calc(var(--u)*28)}
+  #s-thing2 .word{font-size:calc(var(--u)*19)}
+
+  #s-rebuild{flex-direction:column;gap:calc(var(--u)*1.6);font-family:var(--mono)}
+  #s-rebuild .lbl{font-size:calc(var(--u)*2.2);letter-spacing:.35em;font-weight:700}
+  #s-rebuild .track{width:calc(var(--u)*50);height:calc(var(--u)*1.2);border:2px solid var(--fg);padding:2px}
+  #s-rebuild .fill{height:100%;background:var(--fg);transform-origin:left;transform:scaleX(0)}
+  #s-rebuild .pct{font-size:calc(var(--u)*6);font-weight:700}
+
+  #s-make2 .wrap{position:relative;display:inline-block}
+  #s-make2 .word{font-size:calc(var(--u)*22)}
+  #s-make2 .ul{position:absolute;left:0;right:0;bottom:calc(var(--u)*-3);height:calc(var(--u)*1.4);background:var(--fg);transform-origin:left;transform:scaleX(0)}
+  #s-it .word{font-size:calc(var(--u)*54);letter-spacing:-.05em}
+
+  #s-better .bwrap{position:relative;display:inline-block;isolation:isolate;padding:0 calc(var(--u)*1.5)}
+  #s-better .block{position:absolute;inset:-6% 0;background:var(--fg);transform-origin:left;transform:scaleX(0)}
+  #s-better .bt{position:relative;display:inline-block;mix-blend-mode:difference;color:var(--fg);font-size:calc(var(--u)*16);line-height:.9;letter-spacing:-.03em;padding-right:.06em}
+
+  #s-lock{flex-direction:column;align-items:flex-start;padding-left:calc(var(--u)*8);justify-content:center}
+  #s-lock .ln{display:block;overflow:hidden;font-size:calc(var(--u)*8.2);line-height:.95;letter-spacing:-.03em}
+  #s-lock .ln > span{display:inline-block;position:relative;padding:.04em .08em 0 0}
+  #s-lock .l3{position:relative;isolation:isolate}
+  #s-lock .l3 .block{position:absolute;inset:4% -1.5%;background:var(--fg);transform-origin:left;transform:scaleX(0)}
+  #s-lock .l3 .tx{position:relative;mix-blend-mode:difference;color:var(--fg)}
+  #s-lock .sig{margin-top:calc(var(--u)*3);font-family:var(--mono);font-size:calc(var(--u)*1.4);letter-spacing:.3em;opacity:0}
+
+  #hud{position:absolute;left:calc(var(--u)*2);right:calc(var(--u)*2);top:calc(var(--u)*1.6);display:flex;justify-content:space-between;
+       font-family:var(--mono);font-size:max(10px,calc(var(--u)*1.1));letter-spacing:.2em;opacity:.7;pointer-events:none}
+  #prog{position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--fg);transform-origin:left;transform:scaleX(0);pointer-events:none}
+
+  #overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+           background:rgba(10,10,10,.82);backdrop-filter:blur(3px);z-index:10;cursor:pointer}
+  #overlay .big{font-family:var(--display);font-size:calc(var(--u)*7);color:var(--Y);letter-spacing:-.02em}
+  #overlay .small{font-family:var(--mono);font-size:max(11px,calc(var(--u)*1.3));letter-spacing:.3em;color:var(--Y);opacity:.75}
+  #overlay .btn{width:calc(var(--u)*9);height:calc(var(--u)*9);min-width:56px;min-height:56px;border-radius:50%;background:var(--Y);
+                display:flex;align-items:center;justify-content:center}
+  #overlay .btn::after{content:"";margin-left:12%;border-style:solid;border-width:calc(var(--u)*1.8) 0 calc(var(--u)*1.8) calc(var(--u)*3);
+                border-color:transparent transparent transparent var(--K)}
+
+  #controls{display:flex;align-items:center;gap:14px;height:56px;padding:0 4px}
+  #play,#fs{width:44px;height:44px;border-radius:50%;border:0;background:var(--Y);color:var(--K);font:700 16px var(--mono);cursor:pointer;flex:none;
+        transition:transform .12s}
+  #play:active,#fs:active{transform:scale(.92)}
+  #fs{background:transparent;color:var(--Y);border:2px solid rgba(223,255,31,.5);font-size:18px}
+  #beats{display:flex;gap:4px;flex:none}
+  #beats i{width:8px;height:8px;background:rgba(223,255,31,.2);transition:background .06s}
+  #beats i.on{background:var(--Y)}
+  @media (max-width:640px){
+    #labels{display:none}
+    #controls{gap:10px}
+    #time{min-width:0;font-size:11px}
+    #beats,#fs{display:none}
+    #scrub::-webkit-slider-thumb{width:18px;height:26px;margin-top:-12px}
+  }
+  #track{position:relative;flex:1;height:44px}
+  #ticks{position:absolute;left:0;right:0;top:24px;height:10px;pointer-events:none;
+         background:
+           repeating-linear-gradient(90deg, rgba(223,255,31,.75) 0 2px, transparent 2px calc(100%/10)),
+           repeating-linear-gradient(90deg, rgba(223,255,31,.25) 0 1px, transparent 1px calc(100%/40));}
+  #labels{position:absolute;left:0;right:0;top:0;height:16px;pointer-events:none;font-size:9px;letter-spacing:.08em}
+  #labels span{position:absolute;transform:translateX(-1px);opacity:.6;white-space:nowrap}
+  #scrub{position:absolute;left:0;right:0;top:16px;width:100%;height:26px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer}
+  #scrub::-webkit-slider-runnable-track{height:2px;background:rgba(223,255,31,.35)}
+  #scrub::-moz-range-track{height:2px;background:rgba(223,255,31,.35)}
+  #scrub::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:22px;margin-top:-10px;background:var(--Y);border:0;border-radius:2px}
+  #scrub::-moz-range-thumb{width:14px;height:22px;background:var(--Y);border:0;border-radius:2px}
+  #time{font-size:13px;min-width:120px;text-align:right;font-variant-numeric:tabular-nums;flex:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="bg"></canvas>
+    <div id="cam">
+      <div class="scene" id="s-intro">
+        <div class="label">120 BPM — 20 SECONDS</div>
+        <div class="count"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+        <div class="introbar"></div>
+      </div>
+      <div class="scene" id="s-make1"><div class="word split">Make</div></div>
+      <div class="scene" id="s-the1"><div class="echo"><div class="word">The</div></div><div class="echo"><div class="word">The</div></div><div class="word main">The</div></div>
+      <div class="scene" id="s-thing1"><div class="wipe"><span class="w">Thing.</span><span class="sweep"></span></div></div>
+      <div class="scene" id="s-break"><div class="slices"><span class="ghost">Break</span></div></div>
+      <div class="scene" id="s-the2"><div class="word">The</div></div>
+      <div class="scene" id="s-thing2"><div class="word split">Thing.</div></div>
+      <div class="scene" id="s-rebuild">
+        <div class="lbl">REBUILDING</div>
+        <div class="track"><div class="fill"></div></div>
+        <div class="pct">000%</div>
+      </div>
+      <div class="scene" id="s-make2"><div class="wrap"><div class="word split">Make</div><div class="ul"></div></div></div>
+      <div class="scene" id="s-it"><div class="echo"><div class="word">It</div></div><div class="echo"><div class="word">It</div></div><div class="word main">It</div></div>
+      <div class="scene" id="s-better"><div class="bwrap"><div class="block"></div><div class="bt splitmask">Better.</div></div></div>
+      <div class="scene" id="s-lock">
+        <div class="ln l1"><span>Make the thing.</span></div>
+        <div class="ln l2"><span>Break the thing.</span></div>
+        <div class="ln l3"><span><i class="block"></i><b class="tx" style="font-weight:inherit">Make it better.</b></span></div>
+        <div class="sig">KINETIC TYPE / 120 BPM / 16:9</div>
+      </div>
+    </div>
+    <div id="light"></div>
+    <canvas id="grain"></canvas>
+    <div id="hud"><span id="hud-l">BAR 1 · BEAT 1</span><span id="hud-r">00.00</span></div>
+    <div id="prog"></div>
+    <div id="overlay">
+      <div class="big">Make the thing.</div>
+      <div class="btn"></div>
+      <div class="small">CLICK TO START · SOUND ON</div>
+    </div>
+  </div>
+  <div id="controls">
+    <button id="play" aria-label="Play / pause">▶</button>
+    <div id="track">
+      <div id="labels"></div>
+      <div id="ticks"></div>
+      <input id="scrub" type="range" min="0" max="20" step="0.01" value="0" aria-label="Timeline scrubber">
+    </div>
+    <div id="beats"><i></i><i></i><i></i><i></i></div>
+    <div id="time">00.00 / 20.00</div>
+    <button id="fs" aria-label="Fullscreen" title="Fullscreen (F)">⛶</button>
+  </div>
+</div>
+
+<script src="../../../vendor/gsap/gsap.min.js"></script>
+<script>
+(() => {
+  const BPM = 120, B = 60 / BPM, S = B / 4, DUR = 20, STEPS = Math.round(DUR / S);
+  const K = '#0a0a0a', Y = '#dfff1f';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const stage = $('#stage'), cam = $('#cam'), canvas = $('#bg'), g = canvas.getContext('2d');
+  const scrub = $('#scrub'), playBtn = $('#play'), timeEl = $('#time'), overlay = $('#overlay');
+  const hudL = $('#hud-l'), hudR = $('#hud-r'), prog = $('#prog');
+
+  // seeded random so scrubbing is deterministic
+  let seed = 1337;
+  const rnd = (a = 0, b = 1) => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return a + (b - a) * (((t ^ (t >>> 14)) >>> 0) / 4294967296); };
+
+  // ---------- split helpers ----------
+  $$('.split').forEach(el => { const t = el.textContent; el.innerHTML = [...t].map(c => `<span class="ch">${c}</span>`).join(''); });
+  $$('.splitmask').forEach(el => { const t = el.textContent; el.innerHTML = [...t].map(c => `<span class="m"><span class="ch">${c}</span></span>`).join(''); });
+  // BREAK strips
+  const slices = $('#s-break .slices'), NSTRIP = 5;
+  for (let i = 0; i < NSTRIP; i++) {
+    const s = document.createElement('div'); s.className = 'strip';
+    const top = (i * 100 / NSTRIP).toFixed(2), bot = (100 - (i + 1) * 100 / NSTRIP).toFixed(2);
+    s.style.clipPath = `inset(${top}% -20% ${bot}% -20%)`;
+    s.innerHTML = '<div class="hl"></div><span class="t">Break</span>';
+    slices.appendChild(s);
+  }
+
+  // ---------- layout: 16:9 stage, devicePixelRatio canvas ----------
+  let W = 0, H = 0, U = 10, dpr = 1;
+  const grain = $('#grain'), gg = grain.getContext('2d');
+  function makeGrain() { // static noise tile, moved on the compositor each frame (cheap "film" grain)
+    const tile = document.createElement('canvas'); tile.width = tile.height = 160;
+    const tc = tile.getContext('2d'), id = tc.createImageData(160, 160);
+    for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; }
+    tc.putImageData(id, 0, 0); return tile;
+  }
+  const grainTile = makeGrain();
+  function layout() {
+    const fs = !!document.fullscreenElement, narrow = innerWidth < 640;
+    const ctrlH = fs ? 0 : 66, pad = fs ? 0 : (narrow ? 8 : 12);
+    $('#controls').style.display = fs ? 'none' : '';
+    const vw = innerWidth - pad * 2, vh = innerHeight - ctrlH - pad * 2;
+    W = Math.floor(Math.min(vw, vh * 16 / 9)); H = Math.floor(W * 9 / 16);
+    U = W / 100;
+    stage.style.width = W + 'px'; stage.style.height = H + 'px';
+    stage.style.setProperty('--u', U + 'px');
+    $('#controls').style.width = W + 'px';
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    grain.width = W + 128; grain.height = H + 128;
+    gg.fillStyle = gg.createPattern(grainTile, 'repeat'); gg.fillRect(0, 0, grain.width, grain.height);
+    drawBg(lastP, true);
+  }
+  let lastP = 0;
+  addEventListener('resize', layout);
+  document.addEventListener('fullscreenchange', layout);
+
+  // ---------- timeline ----------
+  const tl = gsap.timeline({ paused: true });
+  const show = (el, a, b) => { tl.set(el, { autoAlpha: 1 }, a); if (b != null) tl.set(el, { autoAlpha: 0 }, b); };
+  const colors = (t, bg, fg) => tl.set(stage, { '--bg': bg, '--fg': fg }, t);
+  const shake = (t, amt = 1.5) => tl.to(cam, { keyframes: [
+      { xPercent: -amt, yPercent: amt * .6, duration: .04 }, { xPercent: amt, yPercent: -amt * .4, duration: .04 },
+      { xPercent: -amt * .5, yPercent: amt * .3, duration: .04 }, { xPercent: 0, yPercent: 0, duration: .06 }], ease: 'none' }, t);
+
+  colors(0, K, Y);
+
+  // INTRO 0–2 : count-in
+  const sIntro = $('#s-intro'); show(sIntro, 0, 2);
+  $$('.count span', sIntro).forEach((el, k) =>
+    tl.fromTo(el, { scale: 1.7, opacity: 1 }, { scale: 1, opacity: .3, duration: B, ease: 'power2.out', immediateRender: false }, k * B));
+  tl.fromTo($('.introbar', sIntro), { scaleX: 0 }, { scaleX: 1, duration: 2, ease: 'none' }, 0);
+
+  // MAKE 2–4 : split letters drop one per beat
+  const sMake1 = $('#s-make1'), make1 = $$('.ch', sMake1); show(sMake1, 1.8, 4);
+  make1.forEach((ch, i) => {
+    const land = 2 + i * B;
+    tl.fromTo(ch, { yPercent: -170, opacity: 0, rotation: i % 2 ? 10 : -10 },
+      { yPercent: 0, opacity: 1, rotation: 0, duration: .2, ease: 'power3.in' }, land - .2);
+    tl.fromTo(ch, { scaleY: .62, scaleX: 1.2 }, { scaleY: 1, scaleX: 1, duration: .45, ease: 'elastic.out(1,.35)', immediateRender: false }, land);
+  });
+  tl.to($('.word', sMake1), { yPercent: -60, opacity: 0, duration: .22, ease: 'power3.in' }, 3.78);
+
+  // THE 4–5 : scale slam
+  const echo = (scene, t, big = 1.7) => $$('.echo .word', scene).forEach((e, i) =>
+    tl.fromTo(e, { scale: 1, opacity: .85 }, { scale: big + i * .45, opacity: 0, duration: .55 + i * .12, ease: 'power2.out', immediateRender: false }, t + i * .06));
+  const sThe1 = $('#s-the1'), the1 = $('.word.main', sThe1); show(sThe1, 3.86, 5);
+  tl.fromTo(the1, { scale: 7, opacity: 0 }, { scale: 1, opacity: 1, duration: .14, ease: 'power4.in' }, 4 - .14);
+  shake(4, 2); echo(sThe1, 4); echo(sThe1, 4.5, 1.35);
+  tl.fromTo(the1, { scale: 1.3 }, { scale: 1, duration: .4, ease: 'power2.out', immediateRender: false }, 4.5);
+
+  // THING. 5–7 : mask wipe + colour inversion
+  const sThing1 = $('#s-thing1'), w1 = $('.w', sThing1), sweep = $('.sweep', sThing1); show(sThing1, 5, 7);
+  tl.fromTo(w1, { clipPath: 'inset(0% 100% 0% 0%)' }, { clipPath: 'inset(0% 0% 0% 0%)', duration: .5, ease: 'power4.inOut' }, 5);
+  tl.fromTo(sweep, { left: '-6%', autoAlpha: 1 }, { left: '102%', duration: .5, ease: 'power4.inOut' }, 5);
+  tl.set(sweep, { autoAlpha: 0 }, 5.5);
+  colors(6, Y, K); colors(6.125, K, Y); colors(6.25, Y, K);
+  tl.fromTo($('.wipe', sThing1), { scale: 1.08 }, { scale: 1, duration: .35, ease: 'power3.out' }, 6);
+  tl.to(w1, { clipPath: 'inset(0% 0% 0% 100%)', duration: .4, ease: 'power4.in' }, 6.6);
+  colors(7, K, Y);
+
+  // BREAK 7–9 : sliced glitch, strips fly apart
+  const sBreak = $('#s-break'), strips = $$('.strip', sBreak); show(sBreak, 6.84, 9);
+  tl.fromTo(slices, { scaleX: 2.4, scaleY: .15, opacity: 0 }, { scaleX: 1, scaleY: 1, opacity: 1, duration: .16, ease: 'power4.in' }, 7 - .16);
+  shake(7, 1.2);
+  for (let j = 0; j < 8; j++) {
+    const t = 7.5 + j * S;
+    strips.forEach((s, i) => {
+      tl.set(s, { xPercent: rnd() < .55 ? rnd(-9, 9) : 0 }, t);
+      tl.set($('.hl', s), { opacity: rnd() < .22 ? 1 : 0 }, t);
+    });
+  }
+  strips.forEach(s => { tl.set(s, { xPercent: 0 }, 8.5); tl.set($('.hl', s), { opacity: 0 }, 8.5); });
+  shake(8, 2.4);
+  strips.forEach((s, i) => tl.to(s, { xPercent: i % 2 ? 160 : -160, duration: .45, ease: 'power4.in' }, 8.5 + i * .015));
+
+  // THE 9–10 : strobe colour inversions on 8ths
+  const sThe2 = $('#s-the2'), the2 = $('.word', sThe2); show(sThe2, 9, 10);
+  for (let k = 0; k < 4; k++) {
+    const t = 9 + k * .25;
+    colors(t, k % 2 ? K : Y, k % 2 ? Y : K);
+    tl.fromTo(the2, { scale: 1.12 + .08 * k, rotation: k % 2 ? 3 : -3 }, { scale: 1, rotation: 0, duration: .22, ease: 'power2.out', immediateRender: false }, t);
+  }
+  colors(10, K, Y);
+
+  // THING. 10–12 : slam then letters break off and fall
+  const sThing2 = $('#s-thing2'), thing2W = $('.word', sThing2), thing2 = $$('.ch', sThing2); show(sThing2, 10, 12.2);
+  tl.fromTo(thing2W, { scale: .3, opacity: 0 }, { scale: 1, opacity: 1, duration: .12, ease: 'power4.out' }, 10);
+  shake(10, 1.6);
+  thing2.forEach(ch => tl.set(ch, { rotation: rnd(-7, 7), yPercent: rnd(-4, 4) }, 10.5));
+  thing2.forEach((ch, i) => tl.to(ch, { yPercent: 320, xPercent: rnd(-50, 50), rotation: rnd(-80, 80), duration: .55, ease: 'power2.in' }, 11 + i * .125));
+
+  // REBUILD 12–13
+  const sRe = $('#s-rebuild'), pct = $('.pct', sRe); show(sRe, 12, 13);
+  const pobj = { v: 0 };
+  tl.fromTo($('.fill', sRe), { scaleX: 0 }, { scaleX: 1, duration: 1, ease: 'none' }, 12);
+  tl.fromTo(pobj, { v: 0 }, { v: 100, duration: 1, ease: 'none', onUpdate: () => { pct.textContent = String(Math.round(pobj.v)).padStart(3, '0') + '%'; } }, 12);
+
+  // MAKE 13–15 : pieces reassemble
+  const sMake2 = $('#s-make2'), make2 = $$('.ch', sMake2); show(sMake2, 13, 15);
+  make2.forEach(ch => tl.fromTo(ch,
+    { xPercent: rnd(-400, 400), yPercent: rnd(-250, 250), rotation: rnd(-180, 180), scale: rnd(.3, 2.2), opacity: 0 },
+    { xPercent: 0, yPercent: 0, rotation: 0, scale: 1, opacity: 1, duration: .55, ease: 'expo.out' }, 13));
+  tl.fromTo($('.ul', sMake2), { scaleX: 0 }, { scaleX: 1, duration: .4, ease: 'power4.out' }, 14);
+  tl.fromTo(make2, { yPercent: -12 }, { yPercent: 0, duration: .3, ease: 'power2.out', stagger: .06, immediateRender: false }, 14.5);
+  tl.to($('.wrap', sMake2), { scale: .85, opacity: 0, duration: .15, ease: 'power2.in' }, 14.85);
+
+  // IT 15–16 : giant slam + inversion
+  const sIt = $('#s-it'), it = $('.word.main', sIt); show(sIt, 15, 16);
+  tl.fromTo(it, { scale: .08, opacity: 0 }, { scale: 1, opacity: 1, duration: .3, ease: 'expo.out' }, 15);
+  shake(15, 2.5); echo(sIt, 15.12, 1.3); echo(sIt, 15.5, 1.25);
+  colors(15.5, Y, K);
+  tl.fromTo(it, { scale: 1.14 }, { scale: 1, duration: .35, ease: 'power3.out', immediateRender: false }, 15.5);
+  colors(16, K, Y);
+
+  // BETTER. 16–18.6 : per-letter mask rise + block inversion wipe
+  const sBetter = $('#s-better'), better = $$('.ch', sBetter), block = $('.block', sBetter); show(sBetter, 16, 18.6);
+  better.forEach((ch, i) => tl.fromTo(ch, { yPercent: 115 }, { yPercent: 0, duration: .38, ease: 'power4.out' }, 16 + i * S));
+  tl.fromTo(block, { scaleX: 0, transformOrigin: 'left center' }, { scaleX: 1, duration: .3, ease: 'power4.inOut' }, 17);
+  tl.fromTo($('.bwrap', sBetter), { scale: 1.06 }, { scale: 1, duration: .4, ease: 'power3.out', immediateRender: false }, 17.5);
+  tl.set(block, { transformOrigin: 'right center' }, 18);
+  tl.to(block, { scaleX: 0, duration: .25, ease: 'power4.inOut' }, 18);
+  better.forEach((ch, i) => tl.to(ch, { yPercent: -115, duration: .25, ease: 'power3.in' }, 18.25 + i * .02));
+
+  // LOCKUP 18.5–20
+  const sLock = $('#s-lock'); show(sLock, 18.5, null);
+  $$('.ln > span', sLock).forEach((el, i) => tl.fromTo(el, { yPercent: 110 }, { yPercent: 0, duration: .35, ease: 'power4.out' }, 18.5 + i * S * 2));
+  tl.fromTo($('.l3 .block', sLock), { scaleX: 0 }, { scaleX: 1, duration: .3, ease: 'power4.inOut' }, 19);
+  tl.to($('.sig', sLock), { opacity: .7, duration: .3 }, 19.25);
+  shake(19, 1);
+  tl.set({}, {}, DUR);
+
+  // word markers on scrubber
+  const marks = [[0,'1-2-3-4'],[2,'MAKE'],[4,'THE'],[5,'THING.'],[7,'BREAK'],[9,'THE'],[10,'THING.'],[12,'···'],[13,'MAKE'],[15,'IT'],[16,'BETTER.'],[18.5,'∎']];
+  $('#labels').innerHTML = marks.map(([t, l]) => `<span style="left:${t / DUR * 100}%">${l}</span>`).join('');
+
+  // ---------- audio: 120 BPM beat, Web Audio ----------
+  let ac = null, master = null, session = null, noise = null;
+  function ensureAudio() {
+    if (ac) return;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    ac = new AC();
+    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
+    master = ac.createGain(); master.gain.value = .8; master.connect(comp); comp.connect(ac.destination);
+    noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const env = (gn, t, peak, dec) => { gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(peak, t + .004); gn.gain.exponentialRampToValueAtTime(0.0001, t + dec); };
+  function nz(t, dur) { const s = ac.createBufferSource(); s.buffer = noise; s.start(t, Math.random() * .5); s.stop(t + dur + .05); return s; }
+  function kick(out, t, v = 1) {
+    const o = ac.createOscillator(), gn = ac.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + .13);
+    env(gn, t, v, .38); o.connect(gn).connect(out); o.start(t); o.stop(t + .45);
+  }
+  function snare(out, t, v = .55) {
+    const s = nz(t, .2), hp = ac.createBiquadFilter(), gn = ac.createGain(); hp.type = 'highpass'; hp.frequency.value = 1300;
+    env(gn, t, v, .18); s.connect(hp).connect(gn).connect(out);
+    const o = ac.createOscillator(), g2 = ac.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(210, t); o.frequency.exponentialRampToValueAtTime(150, t + .08);
+    env(g2, t, v * .6, .1); o.connect(g2).connect(out); o.start(t); o.stop(t + .15);
+  }
+  function hat(out, t, v = .15, dec = .04) {
+    const s = nz(t, dec), hp = ac.createBiquadFilter(), gn = ac.createGain(); hp.type = 'highpass'; hp.frequency.value = 7500;
+    env(gn, t, v, dec); s.connect(hp).connect(gn).connect(out);
+  }
+  function bass(out, t, f) {
+    const o = ac.createOscillator(), lp = ac.createBiquadFilter(), gn = ac.createGain(); o.type = 'sawtooth'; o.frequency.value = f;
+    lp.type = 'lowpass'; lp.Q.value = 6; lp.frequency.setValueAtTime(1400, t); lp.frequency.exponentialRampToValueAtTime(180, t + .2);
+    env(gn, t, .22, .22); o.connect(lp).connect(gn).connect(out); o.start(t); o.stop(t + .26);
+  }
+  function blip(out, t, f) {
+    const o = ac.createOscillator(), gn = ac.createGain(); o.type = 'square'; o.frequency.value = f;
+    env(gn, t, .12, .07); o.connect(gn).connect(out); o.start(t); o.stop(t + .1);
+  }
+  function boom(out, t) {
+    const o = ac.createOscillator(), gn = ac.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(32, t + .6);
+    env(gn, t, .7, .9); o.connect(gn).connect(out); o.start(t); o.stop(t + 1);
+    const s = nz(t, .4), lp = ac.createBiquadFilter(), g2 = ac.createGain(); lp.type = 'lowpass'; lp.frequency.value = 900;
+    env(g2, t, .4, .35); s.connect(lp).connect(g2).connect(out);
+  }
+  function crash(out, t) {
+    const s = nz(t, 1.0), hp = ac.createBiquadFilter(), gn = ac.createGain(); hp.type = 'highpass'; hp.frequency.value = 4200;
+    env(gn, t, .3, 1.0); s.connect(hp).connect(gn).connect(out);
+  }
+  function riser(out, t, dur) {
+    const s = nz(t, dur), bp = ac.createBiquadFilter(), gn = ac.createGain(); bp.type = 'bandpass'; bp.Q.value = 3;
+    bp.frequency.setValueAtTime(300, t); bp.frequency.exponentialRampToValueAtTime(7000, t + dur);
+    gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(.45, t + dur); gn.gain.linearRampToValueAtTime(0, t + dur + .02);
+    s.connect(bp).connect(gn).connect(out);
+  }
+  const ROOTS = [55, 55, 43.65, 49, 55, 65.41, 43.65, 49, 55, 49];
+  const ACCENTS = new Set([4, 6, 8, 10, 15, 17, 19].map(s => Math.round(s / S)));
+  function scheduleStep(n, t) {
+    if (!ac || n >= STEPS) return;
+    const out = session, sec = n * S, b = Math.floor(n / 4), s16 = n % 4, bib = b % 4, bar = Math.floor(b / 4);
+    t = Math.max(t, ac.currentTime);
+    if (sec >= 19.5) return;
+    if (n === Math.round(19 / S)) { kick(out, t, 1); boom(out, t); crash(out, t); return; }
+    if (sec < 2) { // count-in
+      if (s16 === 0) { blip(out, t, bib === 0 ? 1760 : 880); if (b === 0) kick(out, t, .8); }
+      if (s16 === 2) hat(out, t, .1);
+      return;
+    }
+    if (sec >= 12 && sec < 13) { // breakdown: riser + snare roll
+      if (n === Math.round(12 / S)) riser(out, t, 1);
+      if (sec >= 12.5 || s16 % 2 === 0) snare(out, t, .1 + .45 * (sec - 12));
+      return;
+    }
+    if (ACCENTS.has(n)) { boom(out, t); crash(out, t); }
+    if (s16 === 0) kick(out, t, 1);
+    if (s16 === 0 && (bib === 1 || bib === 3)) snare(out, t);
+    const dense = sec >= 13;
+    if (s16 === 2) hat(out, t, .16, .16); else if (dense || s16 % 2 === 0) hat(out, t, s16 === 0 ? .14 : .08);
+    if (s16 === 2 || (dense && s16 === 3 && bib === 3)) bass(out, t, ROOTS[bar % ROOTS.length] * (s16 === 3 ? 2 : 1));
+  }
+
+  // ---------- transport ----------
+  // startAt: clock time of song position 0 for the loop currently on screen.
+  // schedBase: clock time of position 0 for the loop the scheduler is filling (may already be the next loop -> seamless looping).
+  let playing = false, startAt = 0, schedBase = 0, pausedPos = 0, nextStep = 0, started = false, wasPlaying = false;
+  const clock = () => ac ? ac.currentTime : performance.now() / 1000;
+  const pos = () => playing ? clock() - startAt : pausedPos;
+  function newSession() { if (!ac) return; session = ac.createGain(); session.gain.value = 1; session.connect(master); }
+  function killSession() {
+    if (!session) return; const s = session; session = null;
+    try { s.gain.setTargetAtTime(0, ac.currentTime, .015); } catch (e) {}
+    setTimeout(() => { try { s.disconnect(); } catch (e) {} }, 250);
+  }
+  function play() {
+    ensureAudio(); if (ac && ac.state === 'suspended') ac.resume();
+    if (pausedPos >= DUR - .01) pausedPos = 0;
+    newSession();
+    startAt = schedBase = clock() + .03 - pausedPos;
+    nextStep = Math.ceil(pausedPos / S - 1e-6);
+    playing = true; playBtn.textContent = '❚❚';
+  }
+  function pause() { pausedPos = pos(); playing = false; killSession(); playBtn.textContent = '▶'; }
+  function toggle() { if (!started) return start(); playing ? pause() : play(); }
+  function start() { started = true; gsap.to(overlay, { autoAlpha: 0, duration: .3 }); play(); }
+  function pump() {
+    if (!playing || !ac) return;
+    const horizon = clock() + .15;
+    while (schedBase + nextStep * S < horizon) {
+      if (nextStep >= STEPS) { schedBase += DUR; nextStep = 0; continue; }
+      scheduleStep(nextStep, schedBase + nextStep * S); nextStep++;
+    }
+  }
+  setInterval(pump, 25);
+  document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
+
+  overlay.addEventListener('click', e => { e.stopPropagation(); start(); });
+  stage.addEventListener('click', () => toggle());
+  playBtn.addEventListener('click', () => toggle());
+  scrub.addEventListener('input', () => {
+    if (playing) { wasPlaying = true; pause(); }
+    pausedPos = parseFloat(scrub.value);
+  });
+  scrub.addEventListener('change', () => { if (wasPlaying) { wasPlaying = false; play(); } });
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    else if (e.code === 'KeyF') toggleFs();
+    else if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
+      const was = playing; if (was) pause();
+      pausedPos = Math.max(0, Math.min(DUR, pausedPos + (e.code === 'ArrowRight' ? B : -B)));
+      if (was) play();
+    }
+  });
+
+  function toggleFs() {
+    const el = $('#app');
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  }
+  $('#fs').addEventListener('click', toggleFs);
+
+  // ---------- background: DPR canvas dot grid pulsing on the beat + shockwave rings on accents ----------
+  // the canvas uses mix-blend-mode:difference, so the same strokes read on black AND on acid-yellow frames
+  const RINGS = [4, 6, 7, 8, 10, 15, 15.5, 17, 19];
+  let lastBgKey = '';
+  function drawBg(p, force) {
+    const ph = (p % B) / B, pulse = Math.exp(-ph * 5), downbeat = Math.floor(p / B) % 4 === 0;
+    const key = (p * 120 | 0);                      // skip redraws when the clock has not moved (paused)
+    if (!force && key === lastBgKey) return; lastBgKey = key;
+    const cw = canvas.width, ch = canvas.height; g.clearRect(0, 0, cw, ch);
+    const step = 5 * U * dpr, r = (.13 + .34 * pulse * (downbeat ? 1.45 : 1)) * U * dpr;
+    const cx = cw / 2, cy = ch / 2, maxD = Math.hypot(cx, cy);
+    // dots brighten in a wave that travels out from the centre on every beat
+    const wave = ph * maxD * 1.3;
+    g.fillStyle = `rgba(70,70,70,${.55 + .45 * pulse})`;
+    g.beginPath();
+    const hot = [];
+    for (let y = step / 2; y < ch; y += step) for (let x = step / 2; x < cw; x += step) {
+      const d = Math.abs(Math.hypot(x - cx, y - cy) - wave);
+      if (d < step * .8 && p > 2) { hot.push(x, y); continue; }
+      g.moveTo(x + r, y); g.arc(x, y, r, 0, Math.PI * 2);
+    }
+    g.fill();
+    if (hot.length) {
+      const a = .55 * (1 - ph);
+      g.fillStyle = `rgba(223,255,31,${a.toFixed(3)})`; g.beginPath();
+      const rr = r * 1.35;
+      for (let i = 0; i < hot.length; i += 2) { g.moveTo(hot[i] + rr, hot[i + 1]); g.arc(hot[i], hot[i + 1], rr, 0, Math.PI * 2); }
+      g.fill();
+    }
+    // shockwave rings
+    for (const t0 of RINGS) {
+      const dt = p - t0; if (dt < 0 || dt > .7) continue;
+      const k = dt / .7, e = 1 - Math.pow(1 - k, 3);
+      g.strokeStyle = `rgba(223,255,31,${(.7 * (1 - k)).toFixed(3)})`;
+      g.lineWidth = (1 - k) * 2.2 * U * dpr + dpr;
+      g.beginPath(); g.arc(cx, cy, e * maxD * 1.05, 0, Math.PI * 2); g.stroke();
+    }
+  }
+
+  const fmt = v => v.toFixed(2).padStart(5, '0');
+  const beatEls = $$('#beats i');
+  let lastBeat = -1, lastTimeTxt = '';
+  function frame() {
+    let p = pos();
+    if (playing && p >= DUR) { startAt += DUR; p -= DUR; }   // seamless loop: audio was already scheduled ahead
+    p = Math.max(0, Math.min(DUR, p)); lastP = p;
+    tl.time(p);
+    const txt = fmt(p);
+    if (txt !== lastTimeTxt) {
+      lastTimeTxt = txt;
+      if (document.activeElement !== scrub || playing) scrub.value = p;
+      timeEl.textContent = `${txt} / ${fmt(DUR)}`;
+      hudR.textContent = `${BPM} BPM · ${txt}s`;
+      prog.style.transform = `scaleX(${p / DUR})`;
+    }
+    const beat = Math.min(39, Math.floor(p / B));
+    if (beat !== lastBeat) {
+      lastBeat = beat;
+      hudL.textContent = `BAR ${Math.floor(beat / 4) + 1} · BEAT ${(beat % 4) + 1}`;
+      beatEls.forEach((el, i) => el.classList.toggle('on', i === beat % 4));
+    }
+    drawBg(p);
+    grain.style.transform = `translate(${(Math.random() * 128 - 64) | 0}px,${(Math.random() * 128 - 64) | 0}px)`;
+    pump();
+    requestAnimationFrame(frame);
+  }
+  layout();
+  tl.time(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

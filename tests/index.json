@@ -17,12 +17,12 @@
   },
   "summary": {
    "total": 76,
-   "done": 49,
-   "ok": 49,
-   "v1_ok": 41,
-   "tokens": 5823513,
-   "usd": 79.61,
-   "minutes": 794.6
+   "done": 56,
+   "ok": 56,
+   "v1_ok": 48,
+   "tokens": 6833092,
+   "usd": 94.75,
+   "minutes": 957.5
   },
   "waves": {
    "1": "Флагманы 3D",
@@ -624,24 +624,34 @@
    "kind": "html",
    "wave": 5,
    "wave_name": "Видео-код и прочее",
-   "status": "pending",
-   "entries": {},
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
    "shots": {
     "v1": "v1/screenshot.png",
     "v2": "v2/screenshot.png"
    },
-   "shot": "v2/screenshot.png",
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "20-секундная бесшовная петля на Canvas 2D: корабли на пенке латте (curl-noise, волны), выстрелы, дым, брызги, пар, наезд камеры, запись в WebM через MediaRecorder. Ошибок в консоли нет. Саму запись в headless не проверяли.",
+   "v1_issues": "Явных поломок нет. Пенка 192×192 с покадровым расчётом поля: на увеличении видна пикселизация, кадр стоил ~16 мс JS. Корабли мелкие, пар похож на туманные пятна, ручка чашки выглядит как тонкая проволока, на телефоне чашка мелкая.",
+   "v2_changes": "Поле закрутки, curl-noise и нормали волн считаются на грубой сетке 65×65 и интерполируются по пикселям. Пенка до 360px, узор 384px, кадр ~8.5 мс вместо ~16.5. Корабли увеличены в 1.25 раза. Пар из вытянутых спрайтов с завихрением. Ручка чашки сделана объёмной с затенением, добавлены блик на корпусе, градиентная кромка, тень у дна и обод блюдца. Вспышка выстрела подсвечивает пену, дым стал гуще. Ripple с отсечкой по bbox. Для портретного экрана своя раскладка, разрешение пенки зависит от размера.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 159918,
+   "minutes": 25.0,
+   "usd": 2.51,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 159918,
+     "tool_uses": 40,
+     "duration_ms": 1500000
+    }
+   ]
   },
   {
    "n": 17,
@@ -1978,23 +1988,34 @@
    "kind": "html",
    "wave": 8,
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
-   "status": "pending",
-   "entries": {},
-   "shots": {
-    "v1": "v1/screenshot.png"
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
    },
-   "shot": "v1/screenshot.png",
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Three.js, инстансированные шейдерные пузыри (thin-film, fresnel, wobble), сборка в MY WAY, хлопки с брызгами, разлёт, бесшовный 12-с цикл, ГРИП/боке, клик для повтора. Ошибок консоли нет.",
+   "v1_issues": "Фон не чёрный: блум и крупные боке-шары засвечивали кадр; пересвеченные белые блики, слово выглядело белым; алиасинг интерференционных полос (зерно и радиальные полосы на мелких/размытых пузырях); на узких экранах слово мелкое, радиусы пузырей не масштабировались вместе со словом.",
+   "v2_changes": "Тоньше плёнка (яркие цвета 1-го порядка) + анти-алиасинг через fwidth; прямоугольный софтбокс-блик, отражение задней стенки, слабый блум с высоким порогом, экспозиция; меньше и тусклее фоновые боке, ореол размытия в цвете боке; двухстрочная раскладка MY/WAY на портрете с пересборкой, масштаб радиусов по слову; адаптивный pixel ratio, safe-area; параметр ?t= для стоп-кадра.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 142714,
+   "minutes": 25.0,
+   "usd": 2.18,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 142714,
+     "tool_uses": 40,
+     "duration_ms": 1500000
+    }
+   ]
   },
   {
    "n": 72,
@@ -2006,23 +2027,34 @@
    "kind": "html",
    "wave": 8,
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
-   "status": "pending",
-   "entries": {},
-   "shots": {
-    "v1": "v1/screenshot.png"
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
    },
-   "shot": "v1/screenshot.png",
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Чистый WebGL2-рэймарчинг: колба, SDF-метаболы с плавучестью, цикл сборки слова LOVE (hold + melt), орбита камеры, bloom. Без ошибок консоли; в SwiftShader 3–6 FPS.",
+   "v1_issues": "Серое размытое пятно окна прямо на фоне; пересвеченный воск и бассейн (почти белые, без глубины); ступенчатые/рваные края капель из-за минимального шага марша 0.012; камера слишком близко — основание обрезано; жёсткий край пола на горизонте.",
+   "v2_changes": "Окно-софтбокс только в отражениях (вертикальный блик на стекле); тёмно-красная жидкость с поглощением, воск с SSS-градиентом deep red → orange → hot; уточнённый марш (шаг 0.004, откат на поверхность, 100 шагов); экспозиция/порог bloom снижены, мягче ореол; кадрирование всей лампы с фокусом по аспекту (портрет на мобиле), туман пола; DPR 1.5 и стартовое качество 0.55 на тач-устройствах; параметр ?t= для таймлайна.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 131049,
+   "minutes": 25.0,
+   "usd": 1.96,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 131049,
+     "tool_uses": 40,
+     "duration_ms": 1500000
+    }
+   ]
   },
   {
    "n": 73,
@@ -2034,21 +2066,34 @@
    "kind": "html",
    "wave": 8,
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Чистый WebGL1/2 stable fluids (advection, vorticity, Jacobi pressure, bloom), притяжение дыма к полю слова, рост/мерцание/рассеивание по 16-секундному циклу, 2 сцены (FUTURE на кибер-стене с трубами, PEACE из цветного дыма свечей), кнопка/пробел, мышь и тач. Ошибок консоли нет.",
+   "v1_issues": "Слова FUTURE/PEACE складывались слабо и почти не читались: завихрённость и плавучесть размывали буквы. На узком экране дым заливал весь экран, а слово при росте упиралось в края.",
+   "v2_changes": "Подавление vorticity внутри букв, уплотнение дыма к контуру слова и разрежение вокруг него; дым подсвечивает стену, у плотного дыма горячее ядро; свечение PEACE берёт цвет дыма; адаптивное качество (разрешение дыма и число итераций давления); для портретного экрана меньше выброс и шрифт; дым свечей выходит из кончика пламени; URL-параметры scene/t/auto.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 151276,
+   "minutes": 17.0,
+   "usd": 2.42,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 151276,
+     "tool_uses": 44,
+     "duration_ms": 1020899
+    }
+   ]
   },
   {
    "n": 74,
@@ -2060,21 +2105,34 @@
    "kind": "html",
    "wave": 8,
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "WebGL2 fluid sim: RGB/YB pigment streams pour and flow into calligraphic 'ART' (SDF guide field), spectral subtractive mixing, glossy normals from paint thickness, drips, marbling, fade, click to re-pour. No console errors.",
+   "v1_issues": "Streams puffed into flame/mushroom shapes; letters filled with blurry pastel gradients (per-channel max fill mixed all pigments); ragged pools under letters and stuck droplets; after marbling away a dim blue haze covered the whole screen; on mobile (portrait) too much paint for the small word — no letters formed.",
+   "v2_changes": "Viscosity pass + elongated emitters (rope-like streams), weaker vorticity; fill only into emptier pixels (distinct marbled veins) + in-letter combing curl advection; thickened hairlines and T terminals so they fill; downward bias & medial-axis cleanup for stranded drops; strong final dissipation + coverage threshold (clean fade to black); speeds in screen-height units and sim grid by area (portrait layout works, word fits with italic overhang); two-light gloss, fresnel, studio-window reflection, meniscus darkening; adaptive pressure iterations; ?t= seek for previews; mobile toolbar resize ignored.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 162619,
+   "minutes": 36.2,
+   "usd": 2.52,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 162619,
+     "tool_uses": 38,
+     "duration_ms": 2173740
+    }
+   ]
   },
   {
    "n": 75,
@@ -2086,21 +2144,34 @@
    "kind": "html",
    "wave": 8,
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Бриллиант трассируется в шейдере (выпуклый многогранник граней, внутренние отскоки, Френель/ПВО, дисперсия по каналам). Макро → LOVE из ~55 камней → нырок обратно, бесшовная петля 15 с; туман, искры, bloom. Ошибок в консоли нет. FPS на реальном GPU не измерен (SwiftShader ~1–5 FPS).",
+   "v1_issues": "Пересвет: купольный свет и bloom забивают «игру»; кольцевые полосы в тумане (закрутка зависит от радиуса); шейдер с развёрнутыми циклами (6×89 граней) долго компилировался, кадр макро очень тяжёлый (в SwiftShader скриншот уходил в таймаут); в портретном окне LOVE крошечное; два камня внизу V перекрываются; на макро-дистанции искра превращалась в большое белое пятно.",
+   "v2_changes": "Динамические циклы (uNP/uBounces), 16 граней рундиста вместо 32, 5 отскоков; адаптивное разрешение по времени кадра; сильнее дисперсия, темнее окружение, мягкое сжатие бликов, порог bloom 0.92; туман без колец и тише; искры ограничены и гаснут у камеры; раскладка LO/VE в две строки на портретных экранах; фильтр перекрывающихся камней; параметр ?t= для заморозки кадра.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 132854,
+   "minutes": 22.1,
+   "usd": 1.77,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 132854,
+     "tool_uses": 28,
+     "duration_ms": 1324720
+    }
+   ]
   },
   {
    "n": 76,
@@ -2112,21 +2183,34 @@
    "kind": "html",
    "wave": 8,
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Three.js ночной лес: процедурные деревья, луна, туман, светлячки на curl-noise складываются в золотое HOPE и рассеиваются; bloom, панорама, Web Audio сверчки+ветер по клику. Без ошибок консоли.",
+   "v1_issues": "Слово HOPE пересвечено в белое пятно (аддитивное наложение + сильный bloom); светлячки у камеры — огромные круги (нет ограничения размера); лес и луна почти не видны (луна вне кадра); тяжёлый туман (5 слоёв вложенного fbm); при низком FPS анимация замедлялась (dt clamp 0.05); надпись оверлея перекрывала слово; предупреждения toNonIndexed и Clock.",
+   "v2_changes": "Тёплое золотое HOPE с мерцанием без пересвета, ограничение и затухание размера точек у камеры; градиентное небо, луна в кадре, контровый свет, силуэты деревьев; трава (InstancedMesh) с ветром в шейдере; облегчённый туман с золотым подсвечиванием от слова; светлячки при растворении разлетаются к лесу; адаптивный DPR, реальное время вместо замедления; мобильная раскладка (fov и ширина слова под портрет); оверлей внизу, Google Font, кнопка/клавиша mute, пауза звука при скрытой вкладке; ?t= для перемотки.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 129149,
+   "minutes": 12.6,
+   "usd": 1.78,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 129149,
+     "tool_uses": 32,
+     "duration_ms": 757141
+    }
+   ]
   },
   {
    "n": 77,
@@ -2166,8 +2250,11 @@
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
    "status": "pending",
    "entries": {},
-   "shots": {},
-   "shot": null,
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "v2/screenshot.png",
    "date": null,
    "v1_worked": null,
    "notes": "",

@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fireflies — HOPE</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #050a14; overflow: hidden; }
+  canvas { display: block; }
+  #overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    padding-bottom: max(7vh, 40px); box-sizing: border-box;
+    color: #f3e2b0; font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif; cursor: pointer; user-select: none;
+    background: linear-gradient(to top, rgba(4,8,16,0.6), rgba(4,8,16,0) 40%);
+    transition: opacity 2.5s ease; -webkit-tap-highlight-color: transparent;
+  }
+  #overlay h1 { font-weight: 300; letter-spacing: 0.55em; font-size: clamp(18px, 3vw, 32px); margin: 0 0 0.5em; padding-left: 0.55em; opacity: 0.85; }
+  #overlay p { letter-spacing: 0.3em; font-size: clamp(10px, 1.2vw, 13px); opacity: 0.6; margin: 0; text-transform: uppercase;
+    animation: pulse 3s ease-in-out infinite; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-weight: 300; }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+  #mute { position: fixed; right: 14px; bottom: 14px; width: 38px; height: 38px; border-radius: 50%;
+    border: 1px solid rgba(243,226,176,0.25); background: rgba(5,10,20,0.35); color: #f3e2b0; font: 16px system-ui, sans-serif;
+    cursor: pointer; display: none; opacity: 0.6; transition: opacity .3s; }
+  #mute:hover { opacity: 1; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="overlay"><h1>FIREFLIES</h1><p>click to start sound</p></div>
+<button id="mute" aria-label="mute">♪</button>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../../vendor/three/build/three.module.js",
+  "three/addons/": "../../../vendor/three/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+// ---------- Renderer / scene ----------
+const params = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+const MAX_DPR = Math.min(window.devicePixelRatio || 1, 1.75);
+let dpr = MAX_DPR;
+renderer.setPixelRatio(dpr);
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const FOG_COLOR = new THREE.Color(0x0b1528);
+scene.background = FOG_COLOR;
+scene.fog = new THREE.FogExp2(FOG_COLOR, 0.016);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 800);
+
+// Seeded random
+let seed = 1337;
+const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+const rr = (a, b) => a + (b - a) * rand();
+
+// ---------- Lights ----------
+const moonDir = new THREE.Vector3(-0.42, 0.3, -0.86).normalize();
+const moonLight = new THREE.DirectionalLight(0x9fb4ff, 1.35);
+moonLight.position.copy(moonDir).multiplyScalar(100);
+scene.add(moonLight);
+// back-ish rim light so silhouettes facing the camera read
+const rimLight = new THREE.DirectionalLight(0x5a74b8, 0.35);
+rimLight.position.set(0.5, 0.6, 1);
+scene.add(rimLight);
+scene.add(new THREE.HemisphereLight(0x2c3f6a, 0x080c08, 0.4));
+
+const hopeLight = new THREE.PointLight(0xffb040, 0, 34, 1.4);
+hopeLight.position.set(0, 3.5, 0.5);
+scene.add(hopeLight);
+
+// ---------- Sky: gradient dome + moon + stars ----------
+{
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { uMoon: { value: moonDir } },
+    vertexShader: `varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: `
+      uniform vec3 uMoon; varying vec3 vD;
+      void main(){
+        float h = clamp(vD.y, 0.0, 1.0);
+        vec3 horizon = vec3(0.045, 0.075, 0.14);
+        vec3 zenith = vec3(0.004, 0.008, 0.022);
+        vec3 col = mix(horizon, zenith, pow(h, 0.45));
+        float m = max(dot(normalize(vD), uMoon), 0.0);
+        col += vec3(0.25, 0.32, 0.5) * pow(m, 18.0) * 0.6 + vec3(0.12, 0.16, 0.26) * pow(m, 4.0) * 0.35;
+        if (vD.y < 0.0) col = horizon;
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  }));
+  sky.renderOrder = -1;
+  scene.add(sky);
+}
+const moon = new THREE.Mesh(new THREE.SphereGeometry(7, 32, 16),
+  new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.48, 1.32), fog: false }));
+moon.position.copy(moonDir).multiplyScalar(260);
+scene.add(moon);
+
+function radialTexture(stops) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  stops.forEach(([o, col]) => grd.addColorStop(o, col));
+  g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: radialTexture([[0, 'rgba(200,215,255,0.55)'], [0.25, 'rgba(140,165,230,0.18)'], [1, 'rgba(0,0,0,0)']]),
+  blending: THREE.AdditiveBlending, depthWrite: false, fog: false, transparent: true
+}));
+halo.scale.setScalar(110);
+halo.position.copy(moon.position);
+scene.add(halo);
+
+{
+  const n = 1800, p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const th = rr(0, Math.PI * 2), ph = Math.acos(rr(0.05, 1));
+    const r = 400;
+    p[i * 3] = r * Math.sin(ph) * Math.cos(th);
+    p[i * 3 + 1] = r * Math.cos(ph);
+    p[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xbfd0ff, size: 1.4, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.8 }));
+  scene.add(stars);
+}
+
+// ---------- Ground ----------
+const CLEARING = 20;
+function groundH(x, z) {
+  const r = Math.hypot(x, z);
+  const rim = THREE.MathUtils.smoothstep(r, CLEARING * 0.6, CLEARING * 1.6);
+  return (Math.sin(x * 0.11) * Math.cos(z * 0.13) * 0.8 + Math.sin(x * 0.37 + z * 0.29) * 0.25) * (0.25 + rim) + rim * 1.2;
+}
+{
+  const g = new THREE.PlaneGeometry(400, 400, 200, 200);
+  g.rotateX(-Math.PI / 2);
+  const pa = g.attributes.position;
+  const col = new Float32Array(pa.count * 3);
+  for (let i = 0; i < pa.count; i++) {
+    const x = pa.getX(i), z = pa.getZ(i);
+    pa.setY(i, groundH(x, z));
+    const v = 0.75 + 0.25 * Math.sin(x * 0.7 + Math.cos(z * 0.5) * 2);
+    col[i * 3] = 0.05 * v; col[i * 3 + 1] = 0.09 * v; col[i * 3 + 2] = 0.055 * v;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }));
+  scene.add(ground);
+}
+
+// ---------- Procedural trees ----------
+function jitterGeo(geo, amt) {
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const n = Math.sin(x * 3.1 + y * 1.7) * Math.cos(z * 2.9 - y * 2.3);
+    p.setXYZ(i, x + n * amt, y + Math.sin(x * 5 + z * 4) * amt * 0.5, z + Math.cos(x * 2.2 + z * 3.7) * amt);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+function conifer() {
+  const parts = [];
+  const layers = 5;
+  for (let i = 0; i < layers; i++) {
+    const t = i / layers;
+    const rad = 2.4 * (1 - t * 0.75);
+    const h = 3.2 * (1 - t * 0.35);
+    const c = new THREE.ConeGeometry(rad, h, 9, 1, true);
+    c.translate(0, 2 + i * 1.7 + h / 2, 0);
+    parts.push(jitterGeo(c.toNonIndexed(), 0.18));
+  }
+  return mergeGeometries(parts);
+}
+function blobTree() {
+  const parts = [];
+  for (let i = 0; i < 4; i++) {
+    const s = new THREE.IcosahedronGeometry(rr(1.6, 2.4), 1);
+    s.translate(rr(-1.2, 1.2), rr(5, 7.5), rr(-1.2, 1.2));
+    parts.push(jitterGeo(s.index ? s.toNonIndexed() : s, 0.35));
+  }
+  return mergeGeometries(parts);
+}
+{
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.38, 1, 7);
+  trunkGeo.translate(0, 0.5, 0);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x1c140e, roughness: 1 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, flatShading: true });
+
+  const nCon = 340, nBlob = 140;
+  const conMesh = new THREE.InstancedMesh(conifer(), leafMat, nCon);
+  const blobMesh = new THREE.InstancedMesh(blobTree(), leafMat, nBlob);
+  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, nCon + nBlob);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
+  const col = new THREE.Color();
+  let ti = 0;
+  const place = (mesh, idx, trunkH, kind) => {
+    let x, z, r;
+    do {
+      const a = rr(0, Math.PI * 2);
+      r = CLEARING + Math.pow(rand(), 0.8) * 90;
+      x = Math.cos(a) * r; z = Math.sin(a) * r;
+    } while (r < CLEARING);
+    const sc = rr(0.7, 1.5) * (kind ? 1 : 1.1);
+    const y = groundH(x, z) - 0.2;
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rr(0, 6.28));
+    s.set(sc * rr(0.85, 1.15), sc * rr(0.9, 1.25), sc * rr(0.85, 1.15));
+    p.set(x, y, z);
+    m.compose(p, q, s);
+    mesh.setMatrixAt(idx, m);
+    col.setHSL(kind ? rr(0.3, 0.4) : rr(0.2, 0.3), rr(0.25, 0.4), rr(0.1, 0.17));
+    mesh.setColorAt(idx, col);
+    s.set(sc, sc * trunkH, sc);
+    m.compose(p, q, s);
+    trunks.setMatrixAt(ti++, m);
+  };
+  for (let i = 0; i < nCon; i++) place(conMesh, i, 3.0, 1);
+  for (let i = 0; i < nBlob; i++) place(blobMesh, i, 5.5, 0);
+  scene.add(conMesh, blobMesh, trunks);
+}
+
+// ---------- Grass tufts in the clearing (instanced, wind sway in vertex shader) ----------
+const grassUniforms = { uTime: { value: 0 } };
+{
+  const blade = new THREE.PlaneGeometry(0.09, 0.7, 1, 3);
+  blade.translate(0, 0.35, 0);
+  const bp = blade.attributes.position;
+  for (let i = 0; i < bp.count; i++) bp.setX(i, bp.getX(i) * (1 - bp.getY(i) / 0.75));
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = grassUniforms.uTime;
+    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
+      #include <begin_vertex>
+      vec4 ip = instanceMatrix[3];
+      float bend = transformed.y * transformed.y;
+      transformed.x += (sin(uTime * 1.1 + ip.x * 0.35 + ip.z * 0.21) * 0.18 + 0.08) * bend;
+      transformed.z += cos(uTime * 0.9 + ip.z * 0.4) * 0.06 * bend;`);
+  };
+  const n = 7000;
+  const grass = new THREE.InstancedMesh(blade, mat, n);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  const c = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    const a = rr(0, Math.PI * 2), r = Math.sqrt(rand()) * 34;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    p.set(x, groundH(x, z) - 0.05, z);
+    q.setFromAxisAngle(up, rr(0, 6.28));
+    const h = rr(0.4, 1.0);
+    s.set(rr(0.8, 1.4), h, 1);
+    m.compose(p, q, s);
+    grass.setMatrixAt(i, m);
+    c.setHSL(rr(0.22, 0.33), rr(0.3, 0.5), rr(0.08, 0.16));
+    grass.setColorAt(i, c);
+  }
+  scene.add(grass);
+}
+
+// ---------- Ground fog (layered noise planes) ----------
+const fogMats = [];
+{
+  const vs = `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`;
+  const fs = `
+    uniform float uTime; uniform float uOpacity; uniform vec3 uColor; uniform float uSeed;
+    varying vec3 vW;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+      return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
+    float fbm(vec2 p){ float v=0., a=.5; for(int i=0;i<4;i++){ v+=a*noise(p); p=p*2.03+vec2(1.7,9.2); a*=.5; } return v; }
+    uniform vec3 uGlowPos; uniform float uGlow;
+    void main(){
+      vec2 p = vW.xz*0.05 + vec2(uTime*0.02 + uSeed, uTime*0.011);
+      float n = fbm(p + vec2(noise(p*0.6 - uTime*0.015)) * 1.3);
+      float d = length(vW.xz);
+      float edge = 1.0 - smoothstep(45.0, 110.0, d);
+      float a = smoothstep(0.3, 0.8, n) * uOpacity * edge;
+      // warm glow from the HOPE swarm scattered in the mist
+      float g = uGlow * exp(-dot(vW - uGlowPos, vW - uGlowPos) * 0.012);
+      gl_FragColor = vec4(uColor + vec3(1.0, 0.62, 0.22) * g, a * (1.0 + g * 0.6));
+    }`;
+  const heights = [0.3, 0.75, 1.3, 2.0];
+  heights.forEach((h, i) => {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uOpacity: { value: 0.2 - i * 0.035 }, uColor: { value: new THREE.Color(0x52668c) }, uSeed: { value: i * 7.3 },
+        uGlowPos: { value: new THREE.Vector3(0, 2, 0) }, uGlow: { value: 0 } },
+      vertexShader: vs, fragmentShader: fs, transparent: true, depthWrite: false
+    });
+    fogMats.push(mat);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = h;
+    plane.renderOrder = 1;
+    scene.add(plane);
+  });
+}
+
+// ---------- HOPE target points ----------
+function sampleText(word) {
+  const W = 640, H = 200;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.font = 'bold 170px Georgia, "Times New Roman", serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(word, W / 2, H / 2 + 8);
+  const d = g.getImageData(0, 0, W, H).data;
+  const pts = [];
+  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
+    if (d[(y * W + x) * 4 + 3] > 128) pts.push([x / W, y / H]);
+  }
+  return { pts, aspect: H / W };
+}
+
+// ---------- Fireflies ----------
+const N = 3600;
+const WORD_FRACTION = 0.78;
+let TEXT_W = 14;
+const TEXT_BASE = 2.3;
+const text = sampleText('HOPE');
+let TEXT_H = TEXT_W * text.aspect;
+
+const wpos = new Float32Array(N * 3);
+const pos = new Float32Array(N * 3);
+const tgt = new Float32Array(N * 3);
+const tgtUV = new Float32Array(N * 3);   // normalized text coords + depth jitter (to re-fit on resize)
+const delay = new Float32Array(N);
+const isWord = new Uint8Array(N);
+const gold = new Float32Array(N);
+const phase = new Float32Array(N), freq = new Float32Array(N), size = new Float32Array(N);
+const pspeed = new Float32Array(N);
+
+for (let i = 0; i < N; i++) {
+  const a = rr(0, Math.PI * 2), r = Math.sqrt(rand()) * 27;
+  wpos[i * 3] = Math.cos(a) * r;
+  wpos[i * 3 + 1] = rr(0.4, 7);
+  wpos[i * 3 + 2] = Math.sin(a) * r;
+  isWord[i] = rand() < WORD_FRACTION ? 1 : 0;
+  const s = text.pts[(rand() * text.pts.length) | 0];
+  tgtUV[i * 3] = s[0] + rr(-0.003, 0.003);
+  tgtUV[i * 3 + 1] = s[1] + rr(-0.008, 0.008);
+  tgtUV[i * 3 + 2] = rr(-0.25, 0.25);
+  delay[i] = rand();
+  phase[i] = rr(0, Math.PI * 2);
+  freq[i] = rr(0.6, 2.2);
+  size[i] = rr(0.6, 1.4);
+  pspeed[i] = rr(0.6, 1.3);
+}
+function layoutText(width) {
+  TEXT_W = width; TEXT_H = TEXT_W * text.aspect;
+  for (let i = 0; i < N; i++) {
+    tgt[i * 3] = (tgtUV[i * 3] - 0.5) * TEXT_W;
+    tgt[i * 3 + 1] = TEXT_BASE + (1 - tgtUV[i * 3 + 1]) * TEXT_H;
+    tgt[i * 3 + 2] = tgtUV[i * 3 + 2];
+  }
+}
+layoutText(TEXT_W);
+pos.set(wpos);
+
+const fGeo = new THREE.BufferGeometry();
+fGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+fGeo.setAttribute('aGold', new THREE.BufferAttribute(gold, 1).setUsage(THREE.DynamicDrawUsage));
+fGeo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+fGeo.setAttribute('aFreq', new THREE.BufferAttribute(freq, 1));
+fGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+
+const fMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 }, uScale: { value: 1 }, uMaxSize: { value: 40 } },
+  vertexShader: `
+    attribute float aGold; attribute float aPhase; attribute float aFreq; attribute float aSize;
+    uniform float uTime; uniform float uScale; uniform float uMaxSize;
+    varying float vI; varying float vGold;
+    void main(){
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      // free fireflies: slow bioluminescent pulse (long dark, short flash)
+      float s = 0.5 + 0.5 * sin(uTime * aFreq + aPhase);
+      float blink = pow(s, 7.0) * 1.1 + 0.05;
+      // word fireflies: steady warm glow with fast twinkle
+      float tw = 0.36 + 0.3 * pow(0.5 + 0.5 * sin(uTime * (2.5 + aFreq * 2.0) + aPhase * 5.0), 4.0);
+      vI = mix(blink, tw, aGold);
+      // fade fireflies that pass right in front of the lens
+      vI *= smoothstep(1.2, 4.0, -mv.z);
+      vGold = aGold;
+      float sz = aSize * uScale * (0.55 + 0.55 * vI) * (1.0 - 0.3 * aGold) / -mv.z;
+      gl_PointSize = min(sz, uMaxSize);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: `
+    varying float vI; varying float vGold;
+    void main(){
+      vec2 c = gl_PointCoord - 0.5;
+      float d = length(c);
+      float core = smoothstep(0.13, 0.0, d);
+      float halo = exp(-d * d * 24.0) * 0.5;
+      float a = (core + halo) * vI;
+      if (a < 0.004) discard;
+      vec3 green = vec3(0.7, 1.0, 0.3);
+      vec3 goldC = vec3(1.0, 0.6, 0.17);
+      vec3 col = mix(green, goldC, vGold) * (1.0 + core * mix(1.4, 0.6, vGold));
+      gl_FragColor = vec4(col * 2.0, a);
+    }`,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+});
+const fireflies = new THREE.Points(fGeo, fMat);
+fireflies.frustumCulled = false;
+fireflies.renderOrder = 2;
+scene.add(fireflies);
+
+// Analytic curl of a sinusoidal vector potential (divergence-free flow)
+const cv = { x: 0, y: 0, z: 0 };
+function curl(x, y, z, t) {
+  // octave 1
+  let cx = -Math.sin(y + 0.4) - 1.1 * Math.cos(1.1 * z + 0.5 * t);
+  let cy = -0.9 * Math.sin(0.9 * z + 1.1) - 1.2 * Math.cos(1.2 * x + 0.6 * t);
+  let cz = -1.4 * Math.sin(1.4 * x + 2.3) - 1.3 * Math.cos(1.3 * y + 0.7 * t);
+  // octave 2 (rotated / scaled)
+  const X = 2.3 * x + 0.7 * z, Y = 2.1 * y, Z = 2.3 * z - 0.7 * x;
+  cx += 0.5 * (-Math.sin(Y + 1.7 + t * 0.3) - Math.cos(Z + 0.8 * t));
+  cy += 0.5 * (-Math.sin(Z + 2.9) - Math.cos(X - 0.9 * t));
+  cz += 0.5 * (-Math.sin(X + 0.3 * t) - Math.cos(Y + 1.9 * t));
+  cv.x = cx; cv.y = cy; cv.z = cz;
+  return cv;
+}
+
+// ---------- Choreography ----------
+const T_WANDER = 13, T_GATHER = 6, T_HOLD = 7, T_DISSOLVE = 6;
+const CYCLE = T_WANDER + T_GATHER + T_HOLD + T_DISSOLVE;
+const ease = (x) => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+
+function updateFireflies(dt, t) {
+  const tc = (t + 7) % CYCLE;
+  let phaseKind = 0, pt = 0;
+  if (tc < T_WANDER) { phaseKind = 0; }
+  else if (tc < T_WANDER + T_GATHER) { phaseKind = 1; pt = tc - T_WANDER; }
+  else if (tc < T_WANDER + T_GATHER + T_HOLD) { phaseKind = 2; pt = tc - T_WANDER - T_GATHER; }
+  else { phaseKind = 3; pt = tc - T_WANDER - T_GATHER - T_HOLD; }
+
+  let hope = 0;
+  if (phaseKind === 1) hope = ease(pt / T_GATHER);
+  else if (phaseKind === 2) hope = 1;
+  else if (phaseKind === 3) hope = 1 - ease(pt / T_DISSOLVE);
+
+  // during dissolve the swarm is blown outward, back toward the tree line
+  const scatter = phaseKind === 3 ? Math.sin(Math.PI * Math.min(pt / T_DISSOLVE, 1)) * 1.6 : 0;
+  const ft = t * 0.12;
+  for (let i = 0; i < N; i++) {
+    const i3 = i * 3;
+    let x = wpos[i3], y = wpos[i3 + 1], z = wpos[i3 + 2];
+    const c = curl(x * 0.09, y * 0.22, z * 0.09, ft + i * 0.0003);
+    const sp = 0.55 * pspeed[i];
+    let vx = c.x * sp, vy = c.y * sp * 0.35, vz = c.z * sp;
+    const r = Math.hypot(x, z) + 1e-4;
+    if (scatter > 0 && isWord[i]) { vx += x / r * scatter; vz += z / r * scatter; vy += 0.15 * scatter; }
+    // soft containment: stay in/around the clearing volume
+    if (r > 30) { const k = (r - 30) * 0.12; vx -= x / r * k; vz -= z / r * k; }
+    if (y < 0.4) vy += (0.4 - y) * 1.5;
+    if (y > 8.5) vy -= (y - 8.5) * 0.8;
+    x += vx * dt; y += vy * dt; z += vz * dt;
+    wpos[i3] = x; wpos[i3 + 1] = y; wpos[i3 + 2] = z;
+
+    let w = 0;
+    if (isWord[i]) {
+      if (phaseKind === 1) w = ease((pt - delay[i] * 2.6) / 3.2);
+      else if (phaseKind === 2) w = 1;
+      else if (phaseKind === 3) w = 1 - ease((pt - delay[i] * 2.2) / 3.4);
+    }
+    gold[i] = w;
+    if (w > 0) {
+      const sw = Math.sin(Math.PI * w) * 2.2;
+      const hx = Math.sin(t * 1.3 + phase[i]) * 0.03;
+      const hy = Math.cos(t * 1.1 + phase[i] * 1.7) * 0.03;
+      pos[i3] = x + (tgt[i3] + hx - x) * w + c.x * sw * 0.4;
+      pos[i3 + 1] = y + (tgt[i3 + 1] + hy - y) * w + c.y * sw * 0.25;
+      pos[i3 + 2] = z + (tgt[i3 + 2] - z) * w + c.z * sw * 0.4;
+    } else {
+      pos[i3] = x; pos[i3 + 1] = y; pos[i3 + 2] = z;
+    }
+  }
+  fGeo.attributes.position.needsUpdate = true;
+  fGeo.attributes.aGold.needsUpdate = true;
+  return hope;
+}
+
+// ---------- Post-processing ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.6, 0.6);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// ---------- Resize (camera framing keeps the word on screen in portrait too) ----------
+let camR = 17;
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h);
+  composer.setPixelRatio(dpr);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.fov = camera.aspect < 0.8 ? 72 : camera.aspect < 1.2 ? 60 : 50;
+  camera.updateProjectionMatrix();
+  camR = camera.aspect < 0.8 ? 19 : 17;
+  const visW = 2 * (camR - 1.5) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+  layoutText(Math.min(14, visW * 0.84));
+  fMat.uniforms.uScale.value = h * dpr * 0.22;
+  fMat.uniforms.uMaxSize.value = Math.max(18, h * dpr * 0.045);
+}
+addEventListener('resize', resize);
+resize();
+
+// ---------- Audio (crickets + wind) ----------
+let audio = null;
+function startAudio() {
+  if (audio) { audio.ctx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  const ctx = new AC();
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(0, ctx.currentTime);
+  master.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 4);
+  master.connect(ctx.destination);
+  audio = { ctx, master, muted: false };
+
+  // Wind: filtered noise with slow LFOs
+  const len = ctx.sampleRate * 4;
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch); let last = 0;
+    for (let i = 0; i < len; i++) { const wn = Math.random() * 2 - 1; last = (last + 0.02 * wn) / 1.02; d[i] = last * 3.5; }
+  }
+  const noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 380; bp.Q.value = 0.7;
+  const windGain = ctx.createGain(); windGain.gain.value = 0.35;
+  const lfo1 = ctx.createOscillator(); lfo1.frequency.value = 0.06;
+  const lfo1g = ctx.createGain(); lfo1g.gain.value = 220;
+  lfo1.connect(lfo1g).connect(bp.frequency);
+  const lfo2 = ctx.createOscillator(); lfo2.frequency.value = 0.09;
+  const lfo2g = ctx.createGain(); lfo2g.gain.value = 0.2;
+  lfo2.connect(lfo2g).connect(windGain.gain);
+  noise.connect(bp).connect(windGain).connect(master);
+  noise.start(); lfo1.start(); lfo2.start();
+
+  // Crickets: sine carriers gated by scheduled chirp envelopes
+  const crickets = [];
+  for (let k = 0; k < 7; k++) {
+    const osc = ctx.createOscillator(); osc.type = 'sine';
+    osc.frequency.value = rr(4100, 5300);
+    const g = ctx.createGain(); g.gain.value = 0;
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    const vol = ctx.createGain(); vol.gain.value = rr(0.012, 0.035);
+    if (pan) { pan.pan.value = rr(-0.9, 0.9); osc.connect(g).connect(vol).connect(pan).connect(master); }
+    else osc.connect(g).connect(vol).connect(master);
+    osc.start();
+    crickets.push({ g, next: ctx.currentTime + rr(0.2, 2), pulses: (3 + rand() * 2) | 0, gap: rr(0.6, 1.4) });
+  }
+  setInterval(() => {
+    const now = ctx.currentTime;
+    for (const c of crickets) {
+      while (c.next < now + 0.3) {
+        let t0 = c.next;
+        for (let p = 0; p < c.pulses; p++) {
+          const s = t0 + p * 0.045;
+          c.g.gain.setValueAtTime(0, s);
+          c.g.gain.linearRampToValueAtTime(1, s + 0.006);
+          c.g.gain.linearRampToValueAtTime(0, s + 0.028);
+        }
+        c.next = t0 + c.pulses * 0.045 + c.gap * rr(0.8, 1.3);
+      }
+    }
+  }, 100);
+}
+const overlay = document.getElementById('overlay');
+const muteBtn = document.getElementById('mute');
+const begin = () => {
+  startAudio();
+  overlay.classList.add('hidden');
+  muteBtn.style.display = 'block';
+};
+overlay.addEventListener('pointerdown', begin);
+addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') begin(); if (e.key === 'm') toggleMute(); });
+function toggleMute() {
+  if (!audio) return;
+  audio.muted = !audio.muted;
+  audio.master.gain.cancelScheduledValues(audio.ctx.currentTime);
+  audio.master.gain.setTargetAtTime(audio.muted ? 0 : 0.8, audio.ctx.currentTime, 0.3);
+  muteBtn.textContent = audio.muted ? '×' : '♪';
+}
+muteBtn.addEventListener('click', toggleMute);
+document.addEventListener('visibilitychange', () => {
+  if (!audio) return;
+  if (document.hidden) audio.ctx.suspend(); else audio.ctx.resume();
+});
+
+// ---------- Loop ----------
+let t = Math.max(0, parseFloat(params.get('t')) || 0);
+let last = performance.now();
+let fpsAcc = 0, fpsFrames = 0;
+const textCenter = new THREE.Vector3();
+function frame(now) {
+  requestAnimationFrame(frame);
+  now = now || performance.now();
+  const rawDt = (now - last) / 1000; last = now;
+  const dt = Math.min(rawDt, 0.1);
+  t += dt;
+
+  // adaptive resolution: keep the frame rate up on weak GPUs
+  fpsAcc += rawDt; fpsFrames++;
+  if (fpsAcc > 2) {
+    const fps = fpsFrames / fpsAcc;
+    if (fps < 42 && dpr > 1) { dpr = Math.max(1, dpr - 0.25); resize(); }
+    else if (fps > 58 && dpr < MAX_DPR) { dpr = Math.min(MAX_DPR, dpr + 0.25); resize(); }
+    fpsAcc = 0; fpsFrames = 0;
+  }
+
+  const hope = updateFireflies(dt, t);
+  fMat.uniforms.uTime.value = t;
+  grassUniforms.uTime.value = t;
+  textCenter.set(0, TEXT_BASE + TEXT_H * 0.5, 0);
+  for (const m of fogMats) { m.uniforms.uTime.value = t; m.uniforms.uGlow.value = hope * 0.35; m.uniforms.uGlowPos.value.copy(textCenter); }
+  hopeLight.position.set(0, textCenter.y, 1.2);
+  hopeLight.intensity = hope * 32 * (0.92 + 0.08 * Math.sin(t * 5.3));
+  bloom.strength = 0.85 + hope * 0.2;
+
+  // slow cinematic pan, gentle dolly toward the word while it shines
+  const a = -0.38 + 0.76 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 80));
+  const R = camR - hope * 1.5;
+  camera.position.set(Math.sin(a) * R, 2.3 + Math.sin(t * 0.13) * 0.3 + hope * 0.5, Math.cos(a) * R);
+  camera.lookAt(-Math.sin(a) * 1.5, textCenter.y - 0.2 + hope * 0.2, 0);
+
+  composer.render();
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

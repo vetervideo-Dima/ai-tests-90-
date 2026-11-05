@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Lava Lamp Love</title>
+<style>
+  html,body{margin:0;height:100%;background:#020102;overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh;touch-action:none}
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;color:#f5a070;
+       font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:24px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="err">WebGL2 is required to light this lava lamp.</div>
+<script>
+(() => {
+'use strict';
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+if (!gl) { document.getElementById('err').style.display = 'flex'; return; }
+
+const hasFloat = !!gl.getExtension('EXT_color_buffer_float');
+gl.getExtension('OES_texture_float_linear');
+
+// ---------------------------------------------------------------- shaders
+const VS = `#version 300 es
+in vec2 aPos; out vec2 vUv;
+void main(){ vUv = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0); }`;
+
+const SCENE_FS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 fragColor;
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uRo;
+uniform vec3  uTa;
+uniform float uYaw;
+uniform float uForm;
+uniform float uMelt;
+uniform float uHdr;
+uniform vec4  uBlob[8];
+uniform vec3  uTail[8];
+
+#define NB 8
+const vec3 WORD_C = vec3(0.0,-0.12,0.0);
+const vec3 BULB   = vec3(0.0,-1.02,0.0);
+const vec3 WARM   = vec3(1.0,0.42,0.12);
+const vec3 DEEP   = vec3(0.75,0.05,0.02);
+const vec3 MID    = vec3(1.0,0.28,0.04);
+const vec3 HOT    = vec3(1.0,0.72,0.28);
+const vec3 LIQ    = vec3(0.55,0.10,0.05);
+const vec3 ABSORB = vec3(0.18,0.55,0.85);
+const vec3 WIN    = normalize(vec3(-0.8,0.35,-0.5));
+
+float hash(vec3 p){ p = fract(p*0.3183099+0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+float noise(vec3 x){
+  vec3 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f);
+  return mix(mix(mix(hash(i+vec3(0,0,0)),hash(i+vec3(1,0,0)),f.x),
+                 mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),
+                 mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);
+}
+float smin(float a,float b,float k){ float h = max(k-abs(a-b),0.0)/k; return min(a,b)-h*h*k*0.25; }
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){
+  vec3 pa = p-a, ba = b-a; float h = clamp(dot(pa,ba)/max(dot(ba,ba),1e-6),0.0,1.0);
+  return length(pa-ba*h)-r;
+}
+float sdBox(vec3 p, vec3 b){ vec3 q = abs(p)-b; return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0); }
+float sdEllipsoid(vec3 p, vec3 r){ float k0 = length(p/r); float k1 = length(p/(r*r)); return k0*(k0-1.0)/k1; }
+float sdCylinder(vec3 p, float r, float h){
+  vec2 d = abs(vec2(length(p.xz),p.y)) - vec2(r,h);
+  return min(max(d.x,d.y),0.0) + length(max(d,0.0));
+}
+float sdCappedCone(vec3 p, float h, float r1, float r2){
+  vec2 q = vec2(length(p.xz), p.y);
+  vec2 k1 = vec2(r2,h);
+  vec2 k2 = vec2(r2-r1,2.0*h);
+  vec2 ca = vec2(q.x-min(q.x,(q.y<0.0)?r1:r2), abs(q.y)-h);
+  vec2 cb = q - k1 + k2*clamp(dot(k1-q,k2)/dot(k2,k2),0.0,1.0);
+  float s = (cb.x<0.0 && ca.y<0.0) ? -1.0 : 1.0;
+  return s*sqrt(min(dot(ca,ca),dot(cb,cb)));
+}
+
+// ---------------- lamp geometry
+float sdGlass(vec3 p){ return sdCappedCone(p-vec3(0.0,0.2,0.0), 1.17, 0.77, 0.42) - 0.03; }
+float sdInterior(vec3 p){ return sdGlass(p) + 0.035; }
+float sdBase(vec3 p){
+  float b = sdCappedCone(p-vec3(0.0,-1.47,0.0), 0.40, 0.95, 0.63) - 0.03;
+  float c = sdCylinder(p-vec3(0.0,-1.03,0.0), 0.81, 0.035) - 0.012;
+  return min(b,c);
+}
+float sdCap(vec3 p){ return sdCappedCone(p-vec3(0.0,1.64,0.0), 0.20, 0.44, 0.19) - 0.03; }
+
+vec2 mapScene(vec3 p){
+  vec2 res = vec2(p.y+1.9, 1.0);
+  float dm = min(sdBase(p), sdCap(p));
+  if(dm < res.x) res = vec2(dm, 2.0);
+  float dg = sdGlass(p);
+  if(dg < res.x) res = vec2(dg, 3.0);
+  return res;
+}
+
+// ---------------- wax
+float seg(vec3 q, vec2 a, vec2 b, float r){ return sdCapsule(q, vec3(a,0.0), vec3(b,0.0), r); }
+
+float wordSDF(vec3 p){
+  vec3 q = p - WORD_C;
+  float c = cos(uYaw), s = sin(uYaw);
+  q = vec3(c*q.x - s*q.z, q.y, s*q.x + c*q.z);
+  float m = uMelt;
+  q.y += m*m*(0.16 + 0.10*sin(q.x*7.0 + uTime*0.7));
+  q.x += m*0.05*sin(q.y*9.0 + uTime);
+  float bnd = sdBox(q, vec3(0.62,0.24,0.1));
+  if(bnd > 0.15) return bnd;
+  float r = 0.044, k = 0.035, d;
+  // L
+  float cx = -0.405;
+  d = smin(seg(q,vec2(cx-0.1,0.15),vec2(cx-0.1,-0.15),r), seg(q,vec2(cx-0.1,-0.15),vec2(cx+0.1,-0.15),r), k);
+  // O (stadium ring)
+  cx = -0.135;
+  vec2 o = q.xy - vec2(cx,0.0); o.y -= clamp(o.y,-0.05,0.05);
+  float ring = abs(length(o)-0.1);
+  d = min(d, length(vec2(ring,q.z)) - r);
+  // V
+  cx = 0.135;
+  d = min(d, smin(seg(q,vec2(cx-0.105,0.15),vec2(cx,-0.15),r), seg(q,vec2(cx,-0.15),vec2(cx+0.105,0.15),r), k));
+  // E
+  cx = 0.405;
+  float de = seg(q,vec2(cx-0.1,0.15),vec2(cx-0.1,-0.15),r);
+  de = smin(de, seg(q,vec2(cx-0.1,0.15),vec2(cx+0.1,0.15),r), k);
+  de = smin(de, seg(q,vec2(cx-0.1,0.0),vec2(cx+0.06,0.0),r), k);
+  de = smin(de, seg(q,vec2(cx-0.1,-0.15),vec2(cx+0.1,-0.15),r), k);
+  return min(d, de);
+}
+
+float mapWax(vec3 p){
+  float n = noise(p*3.5 + vec3(0.0,-uTime*0.25,uTime*0.1));
+  float d = 1e3;
+  if(uForm < 0.999){
+    for(int i=0;i<NB;i++) d = smin(d, sdCapsule(p, uBlob[i].xyz, uTail[i], uBlob[i].w), 0.28);
+  }
+  if(uForm > 0.001){
+    float dw = wordSDF(p);
+    d = (uForm < 0.999) ? mix(d, dw, uForm) : dw;
+  }
+  d += (n-0.5)*(0.05 + 0.05*uMelt);
+  float pool = sdEllipsoid(p-vec3(0.0,-0.97,0.0), vec3(0.95,0.15,0.95)) + (n-0.5)*0.05;
+  d = smin(d, pool, 0.22);
+  return max(d, sdInterior(p)+0.01);
+}
+
+vec3 waxNormal(vec3 p){
+  const vec2 e = vec2(1.0,-1.0)*0.0025;
+  return normalize(e.xyy*mapWax(p+e.xyy) + e.yyx*mapWax(p+e.yyx) + e.yxy*mapWax(p+e.yxy) + e.xxx*mapWax(p+e.xxx));
+}
+vec3 sceneNormal(vec3 p){
+  const vec2 e = vec2(1.0,-1.0)*0.0015;
+  return normalize(e.xyy*mapScene(p+e.xyy).x + e.yyx*mapScene(p+e.yyx).x + e.yxy*mapScene(p+e.yxy).x + e.xxx*mapScene(p+e.xxx).x);
+}
+
+// ---------------- lighting helpers
+vec3 env(vec3 rd){
+  vec3 c = vec3(0.006,0.005,0.007);
+  float k = dot(rd, WIN);
+  c += vec3(0.25,0.32,0.45)*smoothstep(0.93,0.985,k)*0.8;
+  c += vec3(0.05,0.02,0.01)*smoothstep(0.0,-0.6,rd.y);
+  return c;
+}
+// glow halo around the lamp body (closest approach of a ray to the glass, squashed vertically)
+float lampHaze(vec3 ro, vec3 rd, float tmax){
+  vec3 S = vec3(1.0,0.5,1.0);
+  vec3 o = (ro - vec3(0.0,0.05,0.0))*S;
+  vec3 d = rd*S; float dl = length(d); d /= dl;
+  float t = clamp(-dot(o,d), 0.0, tmax*dl);
+  vec3 c = o + d*t;
+  float h2 = dot(c,c);
+  return exp(-h2*1.6)*0.35 + 0.08/(1.0+h2*5.0);
+}
+
+vec3 shadeWax(vec3 p, vec3 rd){
+  vec3 n = waxNormal(p);
+  vec3 Lv = BULB - p; float dist = length(Lv); vec3 L = Lv/dist;
+  float att = 1.0/(0.35 + dist*dist*0.9);
+  float wrap = clamp((dot(n,L)+0.6)/1.6, 0.0, 1.0);
+  float thick = clamp(-mapWax(p - n*0.12)/0.12, 0.0, 1.0);
+  float back = pow(clamp(dot(rd,L)*0.5+0.5,0.0,1.0), 2.0);
+  float fres = pow(1.0 - clamp(dot(n,-rd),0.0,1.0), 3.0);
+  float heat = clamp(1.0 - (p.y+0.9)/2.2, 0.15, 1.0);
+  vec3 col = DEEP*0.22
+           + MID*wrap*att*1.1
+           + HOT*(1.0-thick)*(0.25+back)*att*1.1
+           + MID*fres*0.4*att
+           + HOT*pow(max(dot(reflect(rd,n),L),0.0),24.0)*0.5*att;
+  return col*(0.6 + 0.9*heat);
+}
+
+vec3 interior(vec3 ro, vec3 rd){
+  vec3 acc = vec3(0.0);
+  float t = 0.0;
+  bool hit = false;
+  vec3 p = ro;
+  for(int i=0;i<84;i++){
+    p = ro + rd*t;
+    float d = mapWax(p);
+    if(d < 0.0025){ hit = true; break; }
+    float di = sdInterior(p);
+    if(di > 0.004 && t > 0.06) break;
+    float st = clamp(d*0.85, 0.012, 0.12);
+    vec3 bv = p - BULB;
+    float bl = 1.0/(1.0 + 5.0*dot(bv,bv));
+    float g = exp(-max(d,0.0)*14.0);
+    vec3 tr = exp(-ABSORB*t);
+    acc += (LIQ*bl*1.1 + WARM*g*0.45 + HOT*exp(-dot(bv,bv)*25.0)*2.0) * st * tr;
+    t += st;
+  }
+  vec3 tr = exp(-ABSORB*t);
+  if(hit) return acc + shadeWax(p, rd)*tr;
+  vec3 back = LIQ*0.08*(1.0/(1.0+2.0*dot(p-BULB,p-BULB))) + env(rd)*0.6;
+  return acc + back*tr;
+}
+
+vec3 shadeFloor(vec3 p, vec3 rd){
+  vec3 n = vec3(0.0,1.0,0.0);
+  vec3 lp = vec3(0.0,-0.3,0.0);
+  vec3 Lv = lp - p; float dist = length(Lv);
+  float diff = max(dot(n, Lv/dist), 0.0)/(1.0 + 0.7*dist*dist);
+  float ao = 0.25 + 0.75*smoothstep(0.0, 0.6, sdBase(p));
+  float ca = 0.8 + 0.2*noise(vec3(p.xz*3.0, uTime*0.4));
+  float grain = 0.85 + 0.15*noise(vec3(p.x*1.5, 0.0, p.z*40.0));
+  vec3 albedo = vec3(0.10,0.065,0.045)*grain;
+  vec3 col = albedo*WARM*diff*ao*ca*3.0;
+  vec3 rr = reflect(rd, n);
+  float fr = 0.04 + 0.96*pow(1.0-max(dot(-rd,n),0.0),5.0);
+  col += WARM*lampHaze(p, rr, 10.0)*(0.15+fr)*0.6*ao;
+  return col;
+}
+
+vec3 shadeMetal(vec3 p, vec3 rd){
+  vec3 n = sceneNormal(p);
+  vec3 lp = (p.y < 0.0) ? vec3(0.0,-0.6,0.0) : vec3(0.0,1.0,0.0);
+  vec3 Lv = lp - p; float dist = length(Lv); vec3 L = Lv/dist;
+  float diff = max(dot(n,L),0.0)/(1.0+dist*dist*1.5);
+  vec3 r = reflect(rd, n);
+  float fr = 0.5 + 0.5*pow(1.0-max(dot(-rd,n),0.0),5.0);
+  vec3 METAL = vec3(0.55,0.36,0.22);
+  vec3 col = METAL*(diff*WARM*1.6 + 0.01);
+  col += METAL*(env(r)*1.5 + WARM*lampHaze(p, r, 3.0)*2.0)*fr;
+  // brushed anisotropic shimmer
+  col *= 0.9 + 0.1*noise(vec3(atan(p.z,p.x)*60.0, p.y*2.0, 0.0));
+  return col;
+}
+
+void main(){
+  vec2 fc = vUv*uRes;
+  vec2 uv = (fc - 0.5*uRes)/min(uRes.x,uRes.y);
+  vec3 ro = uRo, ta = uTa;
+  vec3 ww = normalize(ta-ro);
+  vec3 uu = normalize(cross(ww, vec3(0.0,1.0,0.0)));
+  vec3 vv = cross(uu, ww);
+  vec3 rd = normalize(uv.x*uu + uv.y*vv + 1.15*ww);
+
+  float t = 0.0; vec2 h = vec2(0.0,-1.0);
+  for(int i=0;i<110;i++){
+    vec3 p = ro + rd*t;
+    h = mapScene(p);
+    if(h.x < 0.0008*t){ break; }
+    t += h.x*0.95;
+    if(t > 18.0){ h.y = -1.0; break; }
+  }
+  vec3 col;
+  if(h.y < 0.0){
+    col = env(rd)*0.5;
+  } else {
+    vec3 p = ro + rd*t;
+    if(h.y < 1.5){
+      col = shadeFloor(p, rd);
+      col *= exp(-0.08*t*t*0.1);
+    } else if(h.y < 2.5){
+      col = shadeMetal(p, rd);
+    } else {
+      vec3 n = sceneNormal(p);
+      float cosi = clamp(dot(-rd,n),0.0,1.0);
+      float F = 0.04 + 0.96*pow(1.0-cosi,5.0);
+      vec3 rr = reflect(rd,n);
+      vec3 refl = env(rr)*1.4 + WARM*0.02;
+      vec3 rd2 = refract(rd, n, 1.0/1.25);
+      if(dot(rd2,rd2) < 0.5) rd2 = rd;
+      vec3 tr = interior(p - n*0.05, rd2);
+      col = mix(tr, refl, F);
+      col += vec3(0.7,0.8,1.0)*pow(max(dot(rr,WIN),0.0),90.0)*1.2;
+      col += WARM*pow(1.0-cosi,3.0)*0.08;
+    }
+  }
+  col += WARM*lampHaze(ro, rd, t)*0.22;
+  fragColor = vec4(max(col,0.0)*uHdr, 1.0);
+}`;
+
+const BRIGHT_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uTex; uniform vec2 uTexel; uniform float uInvHdr;
+void main(){
+  vec3 c = vec3(0.0);
+  c += texture(uTex, vUv + uTexel*vec2(-1.0,-1.0)).rgb;
+  c += texture(uTex, vUv + uTexel*vec2( 1.0,-1.0)).rgb;
+  c += texture(uTex, vUv + uTexel*vec2(-1.0, 1.0)).rgb;
+  c += texture(uTex, vUv + uTexel*vec2( 1.0, 1.0)).rgb;
+  c *= 0.25*uInvHdr;
+  float l = max(c.r, max(c.g, c.b));
+  float k = smoothstep(0.35, 1.2, l);
+  o = vec4(c*k, 1.0);
+}`;
+
+const BLUR_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uTex; uniform vec2 uDir;
+void main(){
+  vec3 c = texture(uTex, vUv).rgb*0.227027;
+  c += texture(uTex, vUv + uDir*1.384615).rgb*0.316216;
+  c += texture(uTex, vUv - uDir*1.384615).rgb*0.316216;
+  c += texture(uTex, vUv + uDir*3.230769).rgb*0.070270;
+  c += texture(uTex, vUv - uDir*3.230769).rgb*0.070270;
+  o = vec4(c, 1.0);
+}`;
+
+const COMP_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uScene, uB1, uB2; uniform float uInvHdr; uniform float uTime; uniform vec2 uRes;
+vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0); }
+float h12(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+void main(){
+  vec3 s = texture(uScene, vUv).rgb*uInvHdr;
+  vec3 b1 = texture(uB1, vUv).rgb;
+  vec3 b2 = texture(uB2, vUv).rgb;
+  vec3 c = s + b1*0.55 + b2*0.85;
+  c *= 1.25;
+  c = aces(c);
+  vec2 q = vUv - 0.5;
+  c *= 1.0 - dot(q,q)*1.1;
+  c = pow(c, vec3(0.95,1.0,1.05));
+  c = pow(c, vec3(1.0/2.2));
+  c += (h12(vUv*uRes + fract(uTime)*91.7) - 0.5)*0.025;
+  o = vec4(c, 1.0);
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); throw new Error('shader compile failed'); }
+  return s;
+}
+function program(fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.bindAttribLocation(p, 0, 'aPos');
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(p)); throw new Error('link failed'); }
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); const name = info.name.replace(/\[0\]$/, ''); u[name] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+const progScene = program(SCENE_FS), progBright = program(BRIGHT_FS), progBlur = program(BLUR_FS), progComp = program(COMP_FS);
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+function makeTarget(w, h){
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  if (hasFloat) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  return { tex, fb, w, h };
+}
+function freeTarget(t){ if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); } }
+
+const HDR = hasFloat ? 1.0 : 0.25;
+let W = 1, H = 1, quality = 0.7, targets = null;
+function buildTargets(){
+  if (targets) Object.values(targets).forEach(freeTarget);
+  const sw = Math.max(2, Math.round(W*quality)), sh = Math.max(2, Math.round(H*quality));
+  const b1w = Math.max(2, Math.round(sw/4)), b1h = Math.max(2, Math.round(sh/4));
+  const b2w = Math.max(2, Math.round(sw/8)), b2h = Math.max(2, Math.round(sh/8));
+  targets = {
+    scene: makeTarget(sw, sh),
+    a1: makeTarget(b1w, b1h), b1: makeTarget(b1w, b1h),
+    a2: makeTarget(b2w, b2h), b2: makeTarget(b2w, b2h),
+  };
+}
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.floor(window.innerWidth*dpr)), h = Math.max(1, Math.floor(window.innerHeight*dpr));
+  if (w === W && h === H && targets) return;
+  W = w; H = h; canvas.width = W; canvas.height = H;
+  buildTargets();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------------------------------------------------------------- wax simulation (buoyancy)
+const NB = 8;
+const LETTER_X = [-0.405, -0.135, 0.135, 0.405];
+const WORD_Y = -0.12;
+const rnd = (() => { let s = 1234567; return () => (s = (s*16807) % 2147483647) / 2147483647; })();
+const glassR = (y) => 0.80 - 0.14583*(y + 1.0) - 0.035;
+const blobs = [];
+for (let i = 0; i < NB; i++) {
+  const a = rnd()*Math.PI*2, rr = rnd()*0.35;
+  blobs.push({
+    p: [Math.cos(a)*rr, -0.85 + rnd()*1.9, Math.sin(a)*rr], v: [0, 0, 0],
+    T: rnd(), r: 0.10 + rnd()*0.06, heat: 0.7 + rnd()*0.6, cool: 0.7 + rnd()*0.6,
+    seed: rnd()*100, letter: i >> 1, off: (i & 1) ? -0.075 : 0.075,
+  });
+}
+const blobU = new Float32Array(NB*4), tailU = new Float32Array(NB*3);
+
+// cycle timeline (seconds)
+const CYCLE = 28, OFFSET = 6;
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a)/(b - a))); return t*t*(3 - 2*t); };
+let released = false;
+
+function stepSim(dt, time, yaw){
+  const tc = (time + OFFSET) % CYCLE;
+  const gather = sstep(13.0, 18.0, tc) * (1 - sstep(23.6, 24.6, tc));
+  if (tc > 24.0 && !released) {
+    released = true;
+    blobs.forEach((b) => { b.T = rnd() < 0.5 ? 0.15 + rnd()*0.2 : 0.7 + rnd()*0.25; b.v = [ (rnd()-0.5)*0.1, 0, (rnd()-0.5)*0.1 ]; });
+  }
+  if (tc < 20.0) released = false;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  for (const b of blobs) {
+    const [x, y, z] = b.p;
+    // temperature: heated by the bulb at the bottom, cooled at the top
+    if (y < -0.55) b.T += dt*0.38*b.heat;
+    else if (y > 0.92) b.T -= dt*0.35*b.cool;
+    b.T = Math.min(1, Math.max(0, b.T));
+    const buoy = (b.T - 0.5)*1.5*(1 - gather);
+    const f = [0, buoy, 0];
+    // gentle convection wander
+    const s = b.seed;
+    f[0] += Math.sin(time*0.31 + s)*0.06 + Math.sin(time*0.13 + s*2.1)*0.05;
+    f[2] += Math.cos(time*0.27 + s*1.3)*0.06 + Math.cos(time*0.11 + s*0.7)*0.05;
+    // attraction to the letters of LOVE
+    if (gather > 0.001) {
+      const lx = LETTER_X[b.letter];
+      const ax = cy*lx, az = -sy*lx, ay = WORD_Y + b.off;
+      const k = 7.0*gather;
+      f[0] += (ax - x)*k; f[1] += (ay - y)*k; f[2] += (az - z)*k;
+      f[0] -= b.v[0]*4.0*gather; f[1] -= b.v[1]*4.0*gather; f[2] -= b.v[2]*4.0*gather;
+    }
+    const drag = 1.6;
+    for (let k = 0; k < 3; k++) { b.v[k] += (f[k] - b.v[k]*drag)*dt; b.p[k] += b.v[k]*dt; }
+    // walls
+    const ymin = -0.86, ymax = 1.12;
+    if (b.p[1] < ymin) { b.p[1] = ymin; b.v[1] = Math.max(0, b.v[1]); }
+    if (b.p[1] > ymax) { b.p[1] = ymax; b.v[1] = Math.min(0, b.v[1]); }
+    const rmax = Math.max(0.05, glassR(b.p[1]) - b.r - 0.03);
+    const rad = Math.hypot(b.p[0], b.p[2]);
+    if (rad > rmax) { const s2 = rmax/rad; b.p[0] *= s2; b.p[2] *= s2; b.v[0] *= 0.5; b.v[2] *= 0.5; }
+  }
+}
+
+function packBlobs(){
+  for (let i = 0; i < NB; i++) {
+    const b = blobs[i];
+    let vx = b.v[0], vy = b.v[1], vz = b.v[2];
+    let L = Math.hypot(vx, vy, vz)*0.7;
+    const maxL = 0.22;
+    const sc = L > maxL ? maxL/L : 1;
+    const stretch = Math.min(L, maxL);
+    blobU[i*4] = b.p[0]; blobU[i*4+1] = b.p[1]; blobU[i*4+2] = b.p[2];
+    blobU[i*4+3] = b.r*(1 - stretch*0.6);
+    tailU[i*3] = b.p[0] - vx*0.7*sc; tailU[i*3+1] = b.p[1] - vy*0.7*sc; tailU[i*3+2] = b.p[2] - vz*0.7*sc;
+  }
+}
+
+// ---------------------------------------------------------------- render loop
+let last = performance.now(), start = last, acc = 0, frameAvg = 16, qTimer = 0;
+const fixed = 1/60;
+
+function drawPass(prog, target){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fb : null);
+  gl.viewport(0, 0, target ? target.w : W, target ? target.h : H);
+  gl.useProgram(prog.p);
+}
+function bindTex(unit, tex, loc){ gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(loc, unit); }
+
+function frame(now){
+  requestAnimationFrame(frame);
+  const dtReal = Math.min(0.1, (now - last)/1000); last = now;
+  const time = (now - start)/1000;
+
+  // camera: slow cinematic orbit
+  const yaw = time*0.085;
+  const dist = 4.0 + 0.25*Math.sin(time*0.07);
+  const camY = 0.35 + 0.22*Math.sin(time*0.11);
+  const ro = [Math.sin(yaw)*dist, camY, Math.cos(yaw)*dist];
+  const ta = [0, -0.08 + 0.05*Math.sin(time*0.09), 0];
+
+  acc += dtReal;
+  let n = 0;
+  while (acc >= fixed && n < 8) { stepSim(fixed, time, yaw); acc -= fixed; n++; }
+  if (n >= 8) acc = 0;
+  packBlobs();
+
+  const tc = (time + OFFSET) % CYCLE;
+  const form = sstep(16.5, 20.0, tc) * (1 - sstep(24.0, 27.5, tc));
+  const melt = sstep(23.8, 27.0, tc);
+
+  // adaptive resolution
+  frameAvg = frameAvg*0.95 + dtReal*1000*0.05;
+  qTimer += dtReal;
+  if (qTimer > 1.5) {
+    qTimer = 0;
+    let nq = quality;
+    if (frameAvg > 22 && quality > 0.35) nq = Math.max(0.35, quality - 0.1);
+    else if (frameAvg < 14 && quality < 1.0) nq = Math.min(1.0, quality + 0.1);
+    if (nq !== quality) { quality = nq; buildTargets(); }
+  }
+
+  gl.bindVertexArray(vao);
+  const T = targets;
+  // 1) scene
+  drawPass(progScene, T.scene);
+  const u = progScene.u;
+  gl.uniform2f(u.uRes, T.scene.w, T.scene.h);
+  gl.uniform1f(u.uTime, time);
+  gl.uniform3f(u.uRo, ro[0], ro[1], ro[2]);
+  gl.uniform3f(u.uTa, ta[0], ta[1], ta[2]);
+  gl.uniform1f(u.uYaw, yaw);
+  gl.uniform1f(u.uForm, form);
+  gl.uniform1f(u.uMelt, melt);
+  gl.uniform1f(u.uHdr, HDR);
+  gl.uniform4fv(u.uBlob, blobU);
+  gl.uniform3fv(u.uTail, tailU);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // 2) bloom: bright pass + blur chain
+  drawPass(progBright, T.a1);
+  bindTex(0, T.scene.tex, progBright.u.uTex);
+  gl.uniform2f(progBright.u.uTexel, 1/T.scene.w, 1/T.scene.h);
+  gl.uniform1f(progBright.u.uInvHdr, 1/HDR);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  const blur = (src, dst, dx, dy) => {
+    drawPass(progBlur, dst);
+    bindTex(0, src.tex, progBlur.u.uTex);
+    gl.uniform2f(progBlur.u.uDir, dx/src.w, dy/src.h);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+  blur(T.a1, T.b1, 1, 0); blur(T.b1, T.a1, 0, 1);
+  blur(T.a1, T.a2, 1, 0); blur(T.a2, T.b2, 0, 1);
+  blur(T.b2, T.a2, 2, 0); blur(T.a2, T.b2, 0, 2);
+
+  // 3) composite
+  drawPass(progComp, null);
+  bindTex(0, T.scene.tex, progComp.u.uScene);
+  bindTex(1, T.a1.tex, progComp.u.uB1);
+  bindTex(2, T.b2.tex, progComp.u.uB2);
+  gl.uniform1f(progComp.u.uInvHdr, 1/HDR);
+  gl.uniform1f(progComp.u.uTime, time);
+  gl.uniform2f(progComp.u.uRes, W, H);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

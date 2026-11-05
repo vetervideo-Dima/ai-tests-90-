@@ -64,6 +64,9 @@ tests/NN-slug/
 стоимости) дописывает координатор — не трогай.
 `entry` — путь относительно папки теста к тому, что открывать в просмотрщике (html, svg, mp4 или md).
 
+**Python GUI (tkinter):** запускай через `xvfb-run -a /usr/bin/python3.12 файл.py` (у этого python есть tkinter и numpy;
+`python3` по умолчанию — без tkinter). Скриншот окна: `xvfb-run -a -s "-screen 0 1280x800x24" bash -c 'python3.12 файл.py & sleep 5; import -window root shot.png; kill %1'`.
+
 **Тяжёлые файлы:** видео (mp4/webm) ≤ 15 МБ, без node_modules и промежуточных файлов рендера в git.
 
 **Сайт:** `python3 tools/build.py` пересобирает `tests/index.json`, `index.html` и страницы `tests/NN-slug/index.html`.

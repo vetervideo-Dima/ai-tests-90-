@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hexagon Ball</title>
+<style>
+  :root { --bg:#070912; --fg:#c7cfe8; --dim:#7d86a6; --accent:#4fd1ff; --ball:#ff6b3d; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow:hidden; }
+  canvas { display:block; width:100vw; height:100vh; height:100dvh; touch-action:none; cursor:pointer; }
+  #hud { position:fixed; left:14px; top:12px; pointer-events:none; color:var(--dim);
+    font-variant-numeric: tabular-nums; text-shadow:0 1px 2px #000; }
+  #hud b { color:var(--fg); font-weight:600; }
+  #panel { position:fixed; left:0; right:0; margin:0 auto; width:max-content; bottom:calc(14px + env(safe-area-inset-bottom));
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center; padding:8px 10px;
+    background:rgba(16,20,36,.72); border:1px solid rgba(79,209,255,.18); border-radius:14px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); max-width:calc(100vw - 24px); }
+  #panel button { background:rgba(79,209,255,.1); color:var(--fg); border:1px solid rgba(79,209,255,.28);
+    border-radius:9px; padding:7px 11px; font:inherit; cursor:pointer; min-width:40px; }
+  #panel button:hover { background:rgba(79,209,255,.2); }
+  #panel label { display:flex; align-items:center; gap:6px; color:var(--dim); }
+  #spin { width:120px; accent-color: var(--accent); }
+  #help { position:fixed; right:14px; top:12px; color:var(--dim); text-align:right; pointer-events:none; }
+  @media (max-width: 600px) { #help { display:none; } #spin { width:90px; } #panel { gap:6px; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="help">Tap / Space — kick · R — reset<br>↑/↓ — spin speed · S — reverse · P — pause</div>
+<div id="panel">
+  <button id="kick" title="Kick (Space)">Kick</button>
+  <button id="rev" title="Reverse spin (S)">⇄</button>
+  <label>spin <input id="spin" type="range" min="-360" max="360" step="5" value="60"></label>
+  <button id="pause" title="Pause (P)">❚❚</button>
+  <button id="reset" title="Reset (R)">↺</button>
+</div>
+<script>
+(() => {
+  // ---------------------------------------------------------------- settings (world units)
+  const HEX_RADIUS = 300, WALL = 14, BALL_R = 18;
+  const GRAVITY = 1500, AIR_DRAG = 0.15, ANG_DRAG = 0.4;
+  const RESTITUTION = 0.85, REST_SPEED = 40, FRICTION = 0.35, INERTIA = 0.4;
+  const PHYSICS_HZ = 480, DT = 1 / PHYSICS_HZ, MAX_FRAME = 0.05;
+  const TRAIL_LEN = 28, VIEW = HEX_RADIUS + WALL + 40; // world half-extent to fit
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const hud = document.getElementById('hud');
+  const spinInput = document.getElementById('spin');
+
+  // ---------------------------------------------------------------- simulation (center at 0,0)
+  const sim = { angle: 0, omega: 60 * Math.PI / 180, x: 0, y: 0, vx: 0, vy: 0, spin: 0, ballAngle: 0 };
+  const impacts = [];
+  function reset() {
+    sim.x = (Math.random() * 2 - 1) * 60; sim.y = -120;
+    sim.vx = (Math.random() * 2 - 1) * 250; sim.vy = (Math.random() * 2 - 1) * 100;
+    sim.spin = 0; trail.length = 0;
+  }
+  function kick() { sim.vx += (Math.random() * 2 - 1) * 500; sim.vy -= 900; }
+
+  function hexVerts(radius, angle) {
+    const v = [];
+    for (let i = 0; i < 6; i++) {
+      const a = angle + i * Math.PI / 3;
+      v.push(radius * Math.cos(a), radius * Math.sin(a));
+    }
+    return v;
+  }
+
+  function step(dt) {
+    sim.angle = (sim.angle + sim.omega * dt) % (Math.PI * 2);
+    sim.vy += GRAVITY * dt;
+    const d = Math.exp(-AIR_DRAG * dt);
+    sim.vx *= d; sim.vy *= d;
+    sim.x += sim.vx * dt; sim.y += sim.vy * dt;
+    sim.spin *= Math.exp(-ANG_DRAG * dt);
+    sim.ballAngle += sim.spin * dt;
+
+    const v = hexVerts(HEX_RADIUS, sim.angle);
+    for (let i = 0; i < 6; i++) {
+      const j = (i + 1) % 6;
+      collide(v[i * 2], v[i * 2 + 1], v[j * 2], v[j * 2 + 1]);
+    }
+  }
+
+  function collide(ax, ay, bx, by) {
+    // inward normal of the edge (hexagon is convex, ball inside -> infinite line is enough)
+    let ex = bx - ax, ey = by - ay;
+    const el = Math.hypot(ex, ey);
+    let nx = -ey / el, ny = ex / el;
+    if (nx * -ax + ny * -ay < 0) { nx = -nx; ny = -ny; }
+    const signed = (sim.x - ax) * nx + (sim.y - ay) * ny;
+    if (signed >= BALL_R) return;
+
+    sim.x += nx * (BALL_R - signed); sim.y += ny * (BALL_R - signed);
+
+    const rx = -nx * BALL_R, ry = -ny * BALL_R;          // center -> contact
+    const cx = sim.x + rx, cy = sim.y + ry;
+    const wvx = -sim.omega * cy, wvy = sim.omega * cx;  // wall surface velocity (omega x r)
+    let relx = sim.vx - sim.spin * ry - wvx, rely = sim.vy + sim.spin * rx - wvy;
+    const vn = relx * nx + rely * ny;
+    if (vn >= 0) return;
+
+    const e = -vn > REST_SPEED ? RESTITUTION : 0;
+    const jn = -(1 + e) * vn;
+    sim.vx += nx * jn; sim.vy += ny * jn;
+
+    const tx = -ny, ty = nx;
+    relx = sim.vx - sim.spin * ry - wvx; rely = sim.vy + sim.spin * rx - wvy;
+    const vt = relx * tx + rely * ty;
+    const invI = 1 / (INERTIA * BALL_R * BALL_R);
+    const rt = rx * ty - ry * tx;
+    let jt = -vt / (1 + rt * rt * invI);
+    const maxJt = FRICTION * jn;
+    jt = Math.max(-maxJt, Math.min(maxJt, jt));
+    sim.vx += tx * jt; sim.vy += ty * jt;
+    sim.spin += rt * jt * invI;
+
+    if (jn > 250) impacts.push({ x: cx, y: cy, s: Math.min(1, jn / 2500), life: 1, nx, ny });
+  }
+
+  // ---------------------------------------------------------------- particles & trail
+  const trail = [];
+  const sparks = [];
+  function spawnSparks(im) {
+    const n = 4 + Math.round(im.s * 10);
+    for (let i = 0; i < n; i++) {
+      const a = Math.atan2(im.ny, im.nx) + (Math.random() - 0.5) * 2.2;
+      const sp = 120 + Math.random() * 380 * im.s;
+      sparks.push({ x: im.x, y: im.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, decay: 1.6 + Math.random() * 1.4 });
+    }
+    if (sparks.length > 300) sparks.splice(0, sparks.length - 300);
+  }
+
+  // ---------------------------------------------------------------- view / resize
+  let W = 0, H = 0, dpr = 1, scale = 1, ox = 0, oy = 0;
+  let bgGrad = null;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    const panelSpace = W < 600 ? 120 : 70;               // keep hexagon clear of the bottom panel
+    const usableH = Math.max(200, H - panelSpace - 40);
+    scale = Math.min(W - 24, usableH) / (2 * VIEW);
+    ox = W / 2; oy = 40 + usableH / 2;
+    bgGrad = ctx.createRadialGradient(ox, oy, 0, ox, oy, Math.max(W, H) * 0.75);
+    bgGrad.addColorStop(0, '#141a33'); bgGrad.addColorStop(0.55, '#0a0d1c'); bgGrad.addColorStop(1, '#05060c');
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------------------------------------------------------------- drawing
+  function hexPath(radius, angle) {
+    const v = hexVerts(radius, angle);
+    ctx.moveTo(v[0], v[1]);
+    for (let i = 1; i < 6; i++) ctx.lineTo(v[i * 2], v[i * 2 + 1]);
+    ctx.closePath();
+  }
+
+  function draw(frame) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+
+    const outerR = HEX_RADIUS + WALL / Math.cos(Math.PI / 6);
+
+    // floor of the arena + subtle radial light from above
+    ctx.beginPath(); hexPath(HEX_RADIUS, sim.angle);
+    const floor = ctx.createRadialGradient(0, -120, 20, 0, 0, HEX_RADIUS * 1.1);
+    floor.addColorStop(0, '#182043'); floor.addColorStop(1, '#0b0e1f');
+    ctx.fillStyle = floor; ctx.fill();
+
+    // rotating faint spokes to make the spin readable
+    ctx.save(); ctx.rotate(sim.angle);
+    ctx.strokeStyle = 'rgba(79,209,255,0.05)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 6; i++) {
+      ctx.beginPath(); ctx.moveTo(0, 0);
+      const a = i * Math.PI / 3 + Math.PI / 6, ap = HEX_RADIUS * Math.cos(Math.PI / 6);
+      ctx.lineTo(ap * Math.cos(a), ap * Math.sin(a));
+      ctx.stroke();
+    }
+    for (const r of [80, 160, 240]) { ctx.beginPath(); hexPath(r, 0); ctx.stroke(); }
+    ctx.restore();
+
+    // wall ring with neon glow
+    ctx.save();
+    ctx.shadowColor = 'rgba(79,209,255,0.75)'; ctx.shadowBlur = 28 * scale * dpr;
+    ctx.beginPath(); hexPath(outerR, sim.angle); hexPath(HEX_RADIUS, sim.angle);
+    const wallGrad = ctx.createLinearGradient(-outerR, -outerR, outerR, outerR);
+    wallGrad.addColorStop(0, '#2bb6ff'); wallGrad.addColorStop(0.5, '#1676c4'); wallGrad.addColorStop(1, '#6a4dff');
+    ctx.fillStyle = wallGrad; ctx.fill('evenodd');
+    ctx.restore();
+    ctx.beginPath(); hexPath(HEX_RADIUS, sim.angle);
+    ctx.strokeStyle = '#b8f0ff'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+
+    // impact flashes on the wall
+    for (let i = impacts.length - 1; i >= 0; i--) {
+      const im = impacts[i];
+      if (im.life === 1) spawnSparks(im);
+      im.life -= frame * 3;
+      if (im.life <= 0) { impacts.splice(i, 1); continue; }
+      const rad = (10 + 30 * im.s) * (1.7 - 0.7 * im.life);
+      const g = ctx.createRadialGradient(im.x, im.y, 0, im.x, im.y, rad);
+      g.addColorStop(0, `rgba(200,245,255,${0.55 * im.life})`); g.addColorStop(1, 'rgba(79,209,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(im.x, im.y, rad, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // sparks
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i];
+      p.life -= p.decay * frame;
+      if (p.life <= 0) { sparks.splice(i, 1); continue; }
+      p.vy += GRAVITY * 0.5 * frame; p.x += p.vx * frame; p.y += p.vy * frame;
+      p.vx *= 0.98; p.vy *= 0.98;
+      ctx.strokeStyle = `rgba(150,225,255,${p.life})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.02, p.y - p.vy * 0.02); ctx.stroke();
+    }
+
+    // trail
+    for (let i = 0; i < trail.length - 1; i++) {
+      const k = (i + 1) / trail.length;
+      ctx.fillStyle = `rgba(255,110,60,${0.22 * k * k})`;
+      ctx.beginPath(); ctx.arc(trail[i][0], trail[i][1], BALL_R * (0.35 + 0.6 * k), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ball: shadow, body, spinning stripe, highlight
+    const bx = sim.x, by = sim.y;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(bx + 5, by + 7, BALL_R, BALL_R * 0.9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,107,61,0.6)'; ctx.shadowBlur = 18 * scale * dpr;
+    const body = ctx.createRadialGradient(bx - 6, by - 7, 2, bx, by, BALL_R);
+    body.addColorStop(0, '#ffc2a6'); body.addColorStop(0.45, '#ff6b3d'); body.addColorStop(1, '#9c2a10');
+    ctx.fillStyle = body; ctx.beginPath(); ctx.arc(bx, by, BALL_R, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath(); ctx.arc(bx, by, BALL_R - 0.5, 0, Math.PI * 2); ctx.clip();
+    ctx.translate(bx, by); ctx.rotate(sim.ballAngle);
+    ctx.fillStyle = 'rgba(255,240,220,0.55)'; ctx.fillRect(-BALL_R, -3, BALL_R * 2, 6);
+    ctx.fillStyle = 'rgba(80,20,5,0.35)'; ctx.fillRect(-3, -BALL_R, 6, BALL_R * 2);
+    ctx.restore();
+    const hl = ctx.createRadialGradient(bx - 7, by - 8, 0, bx - 7, by - 8, 9);
+    hl.addColorStop(0, 'rgba(255,255,255,0.75)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl; ctx.beginPath(); ctx.arc(bx, by, BALL_R, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ---------------------------------------------------------------- loop
+  let paused = false, last = performance.now(), acc = 0, fps = 60, hudTimer = 0;
+  function loop(now) {
+    const frame = Math.min((now - last) / 1000, MAX_FRAME);
+    last = now;
+    if (frame > 0) fps += (1 / frame - fps) * 0.05;
+    if (!paused) {
+      acc += frame;
+      while (acc >= DT) { step(DT); acc -= DT; }
+      trail.push([sim.x, sim.y]);
+      if (trail.length > TRAIL_LEN) trail.shift();
+    }
+    draw(paused ? 0 : frame);
+    hudTimer -= frame;
+    if (hudTimer <= 0) {
+      hudTimer = 0.15;
+      hud.innerHTML = `hexagon <b>${(sim.omega * 180 / Math.PI).toFixed(0)}°/s</b> · ball <b>${Math.hypot(sim.vx, sim.vy).toFixed(0)}</b> px/s · ` +
+        `spin <b>${(sim.spin / (2 * Math.PI)).toFixed(1)}</b> rev/s · ${fps.toFixed(0)} fps${paused ? ' · <b>paused</b>' : ''}`;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------------------------------------------------------------- input
+  function setOmega(deg) {
+    deg = Math.max(-360, Math.min(360, deg));
+    sim.omega = deg * Math.PI / 180; spinInput.value = deg;
+  }
+  function togglePause() { paused = !paused; document.getElementById('pause').textContent = paused ? '▶' : '❚❚'; }
+  canvas.addEventListener('pointerdown', kick);
+  document.getElementById('kick').onclick = kick;
+  document.getElementById('reset').onclick = reset;
+  document.getElementById('pause').onclick = togglePause;
+  document.getElementById('rev').onclick = () => setOmega(-sim.omega * 180 / Math.PI);
+  spinInput.addEventListener('input', () => setOmega(+spinInput.value));
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); kick(); }
+    else if (e.key === 'r' || e.key === 'R') reset();
+    else if (e.key === 'p' || e.key === 'P') togglePause();
+    else if (e.key === 's' || e.key === 'S') setOmega(-sim.omega * 180 / Math.PI);
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setOmega(Math.round(sim.omega * 180 / Math.PI) + 15); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setOmega(Math.round(sim.omega * 180 / Math.PI) - 15); }
+  });
+  document.addEventListener('visibilitychange', () => { last = performance.now(); });
+
+  reset();
+  requestAnimationFrame((t) => { last = t; loop(t); });
+})();
+</script>
+</body>
+</html>

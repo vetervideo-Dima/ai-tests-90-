@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Twelve Loaders — CSS Motion Gallery</title>
+<meta name="color-scheme" content="dark light">
+<script>
+  /* set theme before first paint (no flash) */
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('loader-theme'); } catch (e) {}
+    if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0e14;
+    --bg2: #151722;
+    --card: rgba(255,255,255,0.035);
+    --card-border: rgba(255,255,255,0.08);
+    --text: #eef0f8;
+    --muted: #8a8fa8;
+    --a1: #7c5cff;
+    --a2: #ff5c8a;
+    --a3: #2de2c4;
+    --a4: #ffc65c;
+    --ink: #eef0f8;
+    --shadow: 0 20px 50px -20px rgba(0,0,0,0.6);
+    --speed: 1;
+  }
+  [data-theme="light"] {
+    --bg: #f3f1ec;
+    --bg2: #e8e4dc;
+    --card: rgba(255,255,255,0.7);
+    --card-border: rgba(20,20,40,0.08);
+    --text: #1b1c26;
+    --muted: #6b6e80;
+    --a1: #5b3df5;
+    --a2: #e8396b;
+    --a3: #0fae94;
+    --a4: #e89a10;
+    --ink: #1b1c26;
+    --shadow: 0 20px 40px -24px rgba(40,30,10,0.35);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, color-mix(in srgb, var(--a1) 18%, transparent), transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, color-mix(in srgb, var(--a2) 14%, transparent), transparent 60%),
+      linear-gradient(var(--bg), var(--bg2));
+    color: var(--text);
+    transition: color .5s;
+    padding: clamp(16px, 4vw, 56px);
+    overflow-x: hidden;
+  }
+  html.theming *, html.theming *::before, html.theming *::after { transition: background-color .45s, border-color .45s, color .45s, box-shadow .45s !important; }
+
+  header {
+    max-width: 1240px; margin: 0 auto 36px;
+    display: flex; align-items: end; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+  }
+  h1 { font-size: clamp(28px, 4.4vw, 52px); font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  h1 span { background: linear-gradient(90deg, var(--a1), var(--a2), var(--a3)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  header p { color: var(--muted); margin-top: 10px; font-size: 15px; }
+
+  .toggle {
+    position: relative; width: 74px; height: 38px; border-radius: 999px; border: 1px solid var(--card-border);
+    background: var(--card); cursor: pointer; flex-shrink: 0;
+    box-shadow: var(--shadow);
+  }
+  .toggle::before {
+    content: ""; position: absolute; top: 4px; left: 4px; width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--a4), var(--a2));
+    box-shadow: inset -7px -3px 0 0 var(--bg);
+    transition: transform .5s cubic-bezier(.6,-0.3,.3,1.4), box-shadow .5s;
+  }
+  [data-theme="light"] .toggle::before { transform: translateX(36px); box-shadow: inset 0 0 0 0 var(--bg), 0 0 14px var(--a4); }
+  .toggle:focus-visible { outline: 2px solid var(--a1); outline-offset: 3px; }
+
+  .grid {
+    max-width: 1240px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: 22px;
+    box-shadow: var(--shadow);
+    aspect-ratio: 1 / 1.08; display: flex; flex-direction: column; overflow: hidden;
+    transition: transform .4s cubic-bezier(.2,.8,.2,1), border-color .4s;
+    content-visibility: auto; contain-intrinsic-size: auto 300px;
+    position: relative; isolation: isolate;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(70% 55% at 50% 42%, color-mix(in srgb, var(--glow, var(--a1)) 16%, transparent), transparent 70%);
+    opacity: .7; transition: opacity .4s;
+  }
+  .card:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--glow, var(--a1)) 45%, transparent); }
+  .card:hover::before { opacity: 1; }
+  .card:nth-child(1) { --glow: var(--a3); } .card:nth-child(2) { --glow: var(--a1); } .card:nth-child(3) { --glow: var(--a2); }
+  .card:nth-child(4) { --glow: var(--a1); } .card:nth-child(5) { --glow: var(--a4); } .card:nth-child(6) { --glow: var(--a2); }
+  .card:nth-child(7) { --glow: var(--a3); } .card:nth-child(8) { --glow: var(--a1); } .card:nth-child(9) { --glow: var(--a2); }
+  .card:nth-child(10) { --glow: var(--a3); } .card:nth-child(11) { --glow: var(--a4); } .card:nth-child(12) { --glow: var(--a2); }
+  .stage { flex: 1; display: grid; place-items: center; position: relative; min-height: 0; }
+  .stage > * { flex-shrink: 0; }
+  .label {
+    padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--card-border); font-size: 14px; font-weight: 500;
+  }
+  .label small { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--muted); font-size: 11px; }
+
+  /* 01 Liquid fill */
+  .liquid {
+    width: 110px; height: 110px; border-radius: 50%; position: relative; overflow: hidden;
+    border: 3px solid var(--a3);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--a3) 14%, transparent), inset 0 0 20px color-mix(in srgb, var(--a3) 20%, transparent);
+  }
+  .liquid::before, .liquid::after {
+    content: ""; position: absolute; width: 220%; height: 220%; left: -60%; top: 0;
+    border-radius: 42%;
+    animation: liquid-spin 5s linear infinite, liquid-rise 6s ease-in-out infinite;
+    will-change: transform;
+  }
+  .liquid::before { background: color-mix(in srgb, var(--a3) 85%, transparent); z-index: 1; }
+  .liquid::after { background: color-mix(in srgb, var(--a1) 45%, transparent); border-radius: 38%; animation-duration: 7s, 6s; animation-delay: 0s, -0.3s; }
+  /* glass highlight */
+  .liquid { background: radial-gradient(circle at 30% 25%, color-mix(in srgb, #fff 18%, transparent), transparent 40%); }
+  @keyframes liquid-spin { to { rotate: 360deg; } }
+  /* translate (compositor-only) instead of animating `top` */
+  @keyframes liquid-rise { 0%, 100% { translate: 0 95px; } 50% { translate: 0 -5px; } }
+
+  /* 02 Orbiting dots */
+  .orbit { width: 110px; height: 110px; position: relative; }
+  .orbit i {
+    position: absolute; inset: 0; animation: orbit 1.8s cubic-bezier(.5,.1,.5,.9) infinite;
+  }
+  .orbit i::before {
+    content: ""; position: absolute; top: 0; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
+    background: var(--a1); box-shadow: 0 0 12px var(--a1);
+  }
+  /* v2: dots trail behind the leader (positive offsets) and are spread wider */
+  .orbit i:nth-child(1) { animation-delay: -.6s; }
+  .orbit i:nth-child(2) { animation-delay: -.45s; } .orbit i:nth-child(2)::before { transform: scale(.85); background: var(--a2); box-shadow: 0 0 12px var(--a2);}
+  .orbit i:nth-child(3) { animation-delay: -.3s; } .orbit i:nth-child(3)::before { transform: scale(.7); }
+  .orbit i:nth-child(4) { animation-delay: -.15s; } .orbit i:nth-child(4)::before { transform: scale(.55); background: var(--a2); box-shadow: 0 0 12px var(--a2);}
+  .orbit i:nth-child(5) { animation-delay: 0s; } .orbit i:nth-child(5)::before { transform: scale(.4); }
+  .orbit::after {
+    content: ""; position: absolute; inset: 7px; border-radius: 50%; border: 1px dashed var(--card-border);
+  }
+  @keyframes orbit { to { transform: rotate(360deg); } }
+
+  /* 03 Morphing blob */
+  .blob {
+    width: 100px; height: 100px;
+    background: linear-gradient(135deg, var(--a2), var(--a1) 60%, var(--a3));
+    animation: blob 6s ease-in-out infinite, blob-spin 12s linear infinite;
+    box-shadow: 0 10px 40px -10px var(--a2);
+  }
+  @keyframes blob {
+    0%, 100% { border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%; }
+    25% { border-radius: 70% 30% 46% 54% / 30% 29% 71% 70%; }
+    50% { border-radius: 50% 50% 34% 66% / 56% 68% 32% 44%; }
+    75% { border-radius: 30% 70% 60% 40% / 65% 35% 65% 35%; }
+  }
+  @keyframes blob-spin { to { rotate: 360deg; } }
+
+  /* 04 DNA helix */
+  .dna { display: flex; gap: 8px; height: 90px; align-items: center; }
+  .dna span { position: relative; width: 10px; height: 90px; }
+  .dna span::before, .dna span::after {
+    content: ""; position: absolute; left: 0; top: 0; width: 10px; height: 10px; border-radius: 50%;
+    animation: dna-y 2s ease-in-out infinite, dna-z 2s linear infinite;
+    animation-delay: calc(var(--i) * -0.15s);
+  }
+  .dna span::before { background: var(--a1); box-shadow: 0 0 8px color-mix(in srgb, var(--a1) 70%, transparent); }
+  .dna span::after { background: var(--a2); box-shadow: 0 0 8px color-mix(in srgb, var(--a2) 70%, transparent); animation-delay: calc(var(--i) * -0.15s - 1s); }
+  /* v2: compositor-only translate + separate depth (scale/opacity) track */
+  @keyframes dna-y { 0%, 100% { translate: 0 0; } 50% { translate: 0 80px; } }
+  @keyframes dna-z {
+    0%, 100% { scale: 1;    opacity: .9; }
+    25%      { scale: 1.45; opacity: 1; }
+    50%      { scale: 1;    opacity: .9; }
+    75%      { scale: .5;   opacity: .45; }
+  }
+  .dna span i { position: absolute; left: 4px; top: 5px; width: 2px; height: 80px; background: var(--card-border); }
+
+  /* 05 Pendulum (Newton's cradle) */
+  .cradle { display: flex; position: relative; padding-top: 4px; }
+  .cradle::before { content: ""; position: absolute; top: 0; left: -10px; right: -10px; height: 3px; border-radius: 3px; background: var(--muted); }
+  .cradle i {
+    width: 20px; height: 80px; position: relative; transform-origin: 50% 0;
+  }
+  .cradle i::before { content: ""; position: absolute; left: 50%; top: 0; width: 1.5px; height: 60px; background: var(--muted); transform: translateX(-50%); }
+  .cradle i::after { content: ""; position: absolute; bottom: 0; left: 0; width: 20px; height: 20px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff, var(--a4) 40%, color-mix(in srgb, var(--a4) 60%, #000)); }
+  .cradle i:first-child { animation: swing-l 1.2s ease-in infinite alternate; }
+  .cradle i:last-child { animation: swing-r 1.2s ease-out infinite alternate; }
+  @keyframes swing-l { 0% { transform: rotate(40deg); } 50%,100% { transform: rotate(0); } }
+  @keyframes swing-r { 0%,50% { transform: rotate(0); } 100% { transform: rotate(-40deg); } }
+
+  /* 06 Ink bloom */
+  .ink { width: 120px; height: 120px; position: relative; isolation: isolate; }
+  .ink i {
+    position: absolute; inset: 0; margin: auto; width: 100%; height: 100%; border-radius: 50%;
+    background: radial-gradient(circle, var(--a1) 0%, color-mix(in srgb, var(--a1) 60%, transparent) 40%, transparent 70%);
+    animation: bloom 3s cubic-bezier(.2,.6,.3,1) infinite; opacity: 0;
+    mix-blend-mode: screen;
+  }
+  [data-theme="light"] .ink i { mix-blend-mode: multiply; }
+  .ink i:nth-child(2) { animation-delay: -1s; background: radial-gradient(circle, var(--a2) 0%, color-mix(in srgb, var(--a2) 60%, transparent) 40%, transparent 70%); }
+  .ink i:nth-child(3) { animation-delay: -2s; background: radial-gradient(circle, var(--a3) 0%, color-mix(in srgb, var(--a3) 60%, transparent) 40%, transparent 70%); }
+  @keyframes bloom {
+    0% { transform: scale(.05) rotate(0); opacity: 0; border-radius: 50%; }
+    15% { opacity: 1; }
+    100% { transform: scale(1) rotate(90deg); opacity: 0; border-radius: 40% 60% 55% 45%; }
+  }
+
+  /* 07 Pixel snake */
+  .snake { display: grid; grid-template-columns: repeat(4, 18px); grid-template-rows: repeat(4, 18px); gap: 5px; }
+  .snake i { border-radius: 4px; background: color-mix(in srgb, var(--muted) 18%, transparent); }
+  .snake i.p { animation: snake 1.6s linear infinite; animation-delay: calc(var(--n) * 1.6s / 12 - 1.6s); }
+  @keyframes snake {
+    0% { background: var(--a3); box-shadow: 0 0 10px var(--a3); }
+    30% { background: color-mix(in srgb, var(--a3) 40%, transparent); box-shadow: none; }
+    40%, 100% { background: color-mix(in srgb, var(--muted) 18%, transparent); }
+  }
+
+  /* 08 Breathing ring */
+  .breath { width: 110px; height: 110px; position: relative; display: grid; place-items: center; }
+  .breath i { position: absolute; border-radius: 50%; }
+  .breath i:nth-child(1) {
+    inset: 0; border: 4px solid var(--a1);
+    animation: breathe 4s ease-in-out infinite;
+  }
+  .breath i:nth-child(2) {
+    inset: 22px; border: 2px solid var(--a2);
+    animation: breathe 4s ease-in-out infinite reverse;
+  }
+  .breath i:nth-child(3) {
+    inset: 46px; background: var(--a3);
+    animation: breathe-core 4s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(.7); opacity: .5; box-shadow: 0 0 0 0 transparent; }
+    50% { transform: scale(1); opacity: 1; box-shadow: 0 0 30px -4px var(--a1), inset 0 0 20px -6px var(--a1); }
+  }
+  @keyframes breathe-core { 0%,100% { transform: scale(.6); } 50% { transform: scale(1.2); } }
+
+  /* 09 Gooey merge */
+  .goo { width: 140px; height: 60px; position: relative; filter: url(#goo); }
+  .goo i { position: absolute; top: 50%; left: 50%; width: 26px; height: 26px; margin: -13px; border-radius: 50%; background: var(--a2); }
+  .goo i:nth-child(1) { animation: goo-l 2.4s ease-in-out infinite; }
+  .goo i:nth-child(2) { animation: goo-r 2.4s ease-in-out infinite; background: var(--a1); }
+  .goo i:nth-child(3) { width: 34px; height: 34px; margin: -17px; animation: goo-c 2.4s ease-in-out infinite; background: color-mix(in srgb, var(--a1) 50%, var(--a2)); }
+  @keyframes goo-l { 0%,100% { transform: translateX(-48px); } 50% { transform: translateX(0); } }
+  @keyframes goo-r { 0%,100% { transform: translateX(48px); } 50% { transform: translateX(0); } }
+  @keyframes goo-c { 0%,100% { transform: scale(.6); } 50% { transform: scale(1.15); } }
+
+  /* 10 Equalizer */
+  .eq { display: flex; gap: 6px; align-items: flex-end; height: 80px; }
+  .eq i { width: 9px; height: 100%; border-radius: 5px; transform-origin: bottom;
+    background: linear-gradient(to top, var(--a3), var(--a1) 60%, var(--a2));
+    animation: eq var(--d) ease-in-out infinite alternate; animation-delay: var(--dl); }
+  @keyframes eq { 0% { transform: scaleY(.15); } 100% { transform: scaleY(1); } }
+
+  /* 11 Folding cube */
+  .fold { width: 64px; height: 64px; position: relative; transform: rotateZ(45deg); }
+  .fold i { float: left; width: 50%; height: 50%; position: relative; transform: scale(1.1); }
+  .fold i::before {
+    content: ""; position: absolute; inset: 0; background: var(--a4);
+    animation: fold 2.4s infinite linear both; transform-origin: 100% 100%;
+  }
+  .fold i:nth-child(2) { transform: scale(1.1) rotateZ(90deg); }
+  .fold i:nth-child(4) { transform: scale(1.1) rotateZ(180deg); }
+  .fold i:nth-child(3) { transform: scale(1.1) rotateZ(270deg); }
+  .fold i:nth-child(2)::before { animation-delay: .3s; background: var(--a2); }
+  .fold i:nth-child(4)::before { animation-delay: .6s; background: var(--a1); }
+  .fold i:nth-child(3)::before { animation-delay: .9s; background: var(--a3); }
+  @keyframes fold {
+    0%, 10% { transform: perspective(140px) rotateX(-180deg); opacity: 0; }
+    25%, 75% { transform: perspective(140px) rotateX(0); opacity: 1; }
+    90%, 100% { transform: perspective(140px) rotateY(180deg); opacity: 0; }
+  }
+
+  /* 12 Typewriter dots */
+  .type { font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 22px; font-weight: 600; display: flex; align-items: center; }
+  .type .word { color: var(--text); }
+  .type .dots {
+    display: inline-block; overflow: hidden; white-space: nowrap; width: 0; color: var(--a2);
+    animation: typing 2.4s steps(4, end) infinite;
+  }
+  .type .caret { display: inline-block; width: 3px; height: 1.1em; margin-left: 2px; background: var(--a1); animation: blink .6s steps(1) infinite; }
+  @keyframes typing { 0% { width: 0; } 100% { width: 4ch; } }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  footer { max-width: 1240px; margin: 36px auto 0; color: var(--muted); font-size: 13px; text-align: center; }
+
+  /* v2: mobile — two compact columns, loaders scaled to fit */
+  @media (max-width: 640px) {
+    header { margin-bottom: 22px; align-items: center; flex-wrap: nowrap; }
+    header p { font-size: 13px; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .card { border-radius: 16px; aspect-ratio: 1 / 1.15; contain-intrinsic-size: auto 190px; }
+    .stage > * { zoom: .72; }
+    .label { padding: 10px 12px; font-size: 12.5px; }
+    .label small { font-size: 10px; }
+  }
+  @media (max-width: 340px) { .grid { grid-template-columns: 1fr; } .stage > * { zoom: 1; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 8s !important; }
+  }
+</style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <filter id="goo">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+        <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9" result="goo"/>
+        <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+      </filter>
+    </defs>
+  </svg>
+
+  <header>
+    <div>
+      <h1>Twelve <span>Loaders</span></h1>
+      <p>Pure CSS motion studies — every loop seamless, zero JavaScript in the animations.</p>
+    </div>
+    <button class="toggle" id="toggle" aria-label="Toggle dark / light theme"></button>
+  </header>
+
+  <main class="grid">
+    <article class="card"><div class="stage"><div class="liquid"></div></div><div class="label">Liquid Fill <small>01</small></div></article>
+
+    <article class="card"><div class="stage"><div class="orbit"><i></i><i></i><i></i><i></i><i></i></div></div><div class="label">Orbiting Dots <small>02</small></div></article>
+
+    <article class="card"><div class="stage"><div class="blob"></div></div><div class="label">Morphing Blob <small>03</small></div></article>
+
+    <article class="card"><div class="stage"><div class="dna">
+      <span style="--i:0"><i></i></span><span style="--i:1"><i></i></span><span style="--i:2"><i></i></span><span style="--i:3"><i></i></span><span style="--i:4"><i></i></span><span style="--i:5"><i></i></span><span style="--i:6"><i></i></span><span style="--i:7"><i></i></span><span style="--i:8"><i></i></span><span style="--i:9"><i></i></span>
+    </div></div><div class="label">DNA Helix <small>04</small></div></article>
+
+    <article class="card"><div class="stage"><div class="cradle"><i></i><i></i><i></i><i></i><i></i></div></div><div class="label">Pendulum <small>05</small></div></article>
+
+    <article class="card"><div class="stage"><div class="ink"><i></i><i></i><i></i></div></div><div class="label">Ink Bloom <small>06</small></div></article>
+
+    <article class="card"><div class="stage"><div class="snake">
+      <i class="p" style="--n:0"></i><i class="p" style="--n:1"></i><i class="p" style="--n:2"></i><i class="p" style="--n:3"></i>
+      <i class="p" style="--n:11"></i><i></i><i></i><i class="p" style="--n:4"></i>
+      <i class="p" style="--n:10"></i><i></i><i></i><i class="p" style="--n:5"></i>
+      <i class="p" style="--n:9"></i><i class="p" style="--n:8"></i><i class="p" style="--n:7"></i><i class="p" style="--n:6"></i>
+    </div></div><div class="label">Pixel Snake <small>07</small></div></article>
+
+    <article class="card"><div class="stage"><div class="breath"><i></i><i></i><i></i></div></div><div class="label">Breathing Ring <small>08</small></div></article>
+
+    <article class="card"><div class="stage"><div class="goo"><i></i><i></i><i></i></div></div><div class="label">Gooey Merge <small>09</small></div></article>
+
+    <article class="card"><div class="stage"><div class="eq">
+      <i style="--d:.9s;--dl:-.2s"></i><i style="--d:.6s;--dl:-.5s"></i><i style="--d:1.1s;--dl:-.1s"></i><i style="--d:.7s;--dl:-.4s"></i><i style="--d:.5s;--dl:-.3s"></i><i style="--d:.8s;--dl:-.6s"></i><i style="--d:1s;--dl:-.25s"></i>
+    </div></div><div class="label">Equalizer <small>10</small></div></article>
+
+    <article class="card"><div class="stage"><div class="fold"><i></i><i></i><i></i><i></i></div></div><div class="label">Folding Cube <small>11</small></div></article>
+
+    <article class="card"><div class="stage"><div class="type"><span class="word">loading</span><span class="dots">...</span><span class="caret"></span></div></div><div class="label">Typewriter Dots <small>12</small></div></article>
+  </main>
+
+  <footer>Hover a card to lift it · Toggle the theme top-right</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('toggle'), timer;
+    function sync() { btn.setAttribute('aria-pressed', root.getAttribute('data-theme') === 'light'); }
+    sync();
+    btn.addEventListener('click', function () {
+      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.classList.add('theming');
+      root.setAttribute('data-theme', next);
+      sync();
+      clearTimeout(timer); timer = setTimeout(function () { root.classList.remove('theming'); }, 500);
+      try { localStorage.setItem('loader-theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>

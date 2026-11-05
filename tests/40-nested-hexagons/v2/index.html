@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nested Rotating Hexagons</title>
+<style>
+  :root { --bg:#0b0c14; --panel:rgba(18,20,34,.82); --ink:#c9cdef; --mute:#7c82a8; --acc:#7ef0ff; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font:13px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #panel { position:fixed; top:14px; left:14px; width:248px; padding:12px 14px 10px; border-radius:12px;
+    background:var(--panel); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    border:1px solid rgba(126,240,255,.12); box-shadow:0 8px 30px rgba(0,0,0,.35); transition:transform .3s, opacity .3s; }
+  #panel.hidden { transform:translateX(-120%); opacity:0; pointer-events:none; }
+  h1 { font-size:13px; margin:0 0 8px; letter-spacing:.06em; text-transform:uppercase; color:var(--acc); font-weight:600; }
+  label { display:grid; grid-template-columns:1fr auto; gap:2px 8px; margin:7px 0; color:var(--mute); }
+  label b { color:var(--ink); font-weight:500; font-variant-numeric:tabular-nums; }
+  input[type=range] { grid-column:1 / -1; width:100%; accent-color:#7ea6ff; margin:2px 0 0; }
+  .row { display:flex; gap:6px; margin-top:10px; }
+  button { flex:1; padding:7px 0; border-radius:8px; border:1px solid rgba(126,240,255,.2); background:rgba(126,166,255,.12);
+    color:var(--ink); font:inherit; cursor:pointer; }
+  button:hover { background:rgba(126,166,255,.24); }
+  #toggle { position:fixed; top:14px; right:14px; width:38px; height:38px; flex:none; border-radius:50%; font-size:16px;
+    background:var(--panel); }
+  .hint { color:var(--mute); font-size:11px; margin-top:8px; }
+  @media (max-width:640px) {
+    #panel { top:auto; bottom:calc(10px + env(safe-area-inset-bottom)); left:10px; right:10px; width:auto;
+      display:grid; grid-template-columns:1fr 1fr; column-gap:14px; padding:10px 12px 8px; }
+    #panel.hidden { transform:translateY(130%); }
+    h1, .row, .hint { grid-column:1 / -1; }
+    .hint { display:none; }
+    label { margin:4px 0; font-size:12px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="toggle" title="Settings">⚙</button>
+<div id="panel">
+  <h1>Nested Hexagons</h1>
+  <label>Gravity <b id="vg"></b><input id="g" type="range" min="0" max="2000" step="10" value="500"></label>
+  <label>Wall friction <b id="vf"></b><input id="f" type="range" min="0" max="1.5" step="0.01" value="0.7"></label>
+  <label>Air friction <b id="va"></b><input id="a" type="range" min="0" max="1" step="0.01" value="0.08"></label>
+  <label>Bounciness <b id="ve"></b><input id="e" type="range" min="0.3" max="1" step="0.01" value="0.92"></label>
+  <label>Rotation speed <b id="vs"></b><input id="s" type="range" min="-3" max="3" step="0.05" value="1"></label>
+  <label>Hexagon size <b id="vz"></b><input id="z" type="range" min="0.7" max="1.12" step="0.01" value="1"></label>
+  <div class="row"><button id="reset">New layout</button><button id="pause">Pause</button></div>
+  <div class="hint">Tap / click the scene to kick the balls. Keys: R reset, Space pause, H hide panel.</div>
+</div>
+<script>
+(() => {
+  // ---------------- adjustable parameters (also exposed via the panel) ----------------
+  const P = {
+    gravity: 500,            // px/s² in 800-unit world space
+    wallFriction: 0.7,       // Coulomb coefficient
+    airFriction: 0.08,       // linear damping per second
+    restitution: 0.92,
+    speedScale: 1,           // multiplier for all rotation speeds
+    sizeScale: 1,            // multiplier for all hexagon sizes
+  };
+  const HEX_SIZES  = [70, 125, 180, 235, 290, 345];   // circumradius, inner -> outer
+  const ROT_SPEEDS = [1.4, -1.1, 0.9, -0.8, 0.7, -1.3];
+  const COLORS = ['#ff5a5f', '#ffb547', '#5cff9d', '#4dc9ff', '#c77dff'];
+  const BALL_R = 9, SUBSTEPS = 10, DT = 1 / 120, MAX_SPEED = 2200, TRAIL = 22;
+  const WORLD = 800, C = WORLD / 2;
+
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, dpr = 1, scale = 1, ox = 0, oy = 0;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const mobile = W <= 640;
+    const availH = mobile ? H - 190 : H;            // leave room for the bottom panel on phones
+    scale = Math.min(W, availH) / (WORLD * 0.9);
+    ox = W / 2; oy = mobile ? availH / 2 + 6 : H / 2;
+  }
+  addEventListener('resize', resize); resize();
+
+  // ---------------- world ----------------
+  let hexes, balls;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function reset() {
+    const n = HEX_SIZES.length;
+    hexes = HEX_SIZES.map((r, i) => ({ base: r, w: ROT_SPEEDS[i % ROT_SPEEDS.length], ang: rnd(0, Math.PI * 2),
+      gap: i < n - 1 ? Math.floor(Math.random() * 6) : -1 }));
+    balls = [];
+    for (const col of COLORS) {
+      let x, y;
+      for (let t = 0; t < 100; t++) {
+        const a = rnd(0, 6.283), rr = rnd(0, HEX_SIZES[0] * P.sizeScale * 0.55);
+        x = C + rr * Math.cos(a); y = C + rr * Math.sin(a);
+        if (balls.every(o => Math.hypot(x - o.x, y - o.y) > 2.2 * BALL_R)) break;
+      }
+      balls.push({ x, y, vx: rnd(-220, 220), vy: rnd(-260, -60), w: 0, rot: rnd(0, 6.28), r: BALL_R,
+        m: 1, I: 0.5 * BALL_R * BALL_R, col, trail: [] });
+    }
+  }
+  const hexR = h => h.base * P.sizeScale;
+  const hexOmega = h => h.w * P.speedScale;
+  function verts(h) {
+    const r = hexR(h), v = [];
+    for (let k = 0; k < 6; k++) v.push([C + r * Math.cos(h.ang + k * Math.PI / 3), C + r * Math.sin(h.ang + k * Math.PI / 3)]);
+    return v;
+  }
+
+  function collideWall(b, a, c, om) {
+    const ex = c[0] - a[0], ey = c[1] - a[1], L2 = ex * ex + ey * ey;
+    let t = ((b.x - a[0]) * ex + (b.y - a[1]) * ey) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const px = a[0] + t * ex, py = a[1] + t * ey;
+    const dx = b.x - px, dy = b.y - py, d2 = dx * dx + dy * dy;
+    if (d2 >= b.r * b.r) return;
+    const d = Math.sqrt(d2);
+    let nx, ny;
+    if (d < 1e-9) { const L = Math.sqrt(L2); nx = -ey / L; ny = ex / L; } else { nx = dx / d; ny = dy / d; }
+    b.x += nx * (b.r - d); b.y += ny * (b.r - d);
+    const wvx = -om * (py - C), wvy = om * (px - C);        // wall velocity at contact
+    const rvx = b.vx - wvx, rvy = b.vy - wvy, vn = rvx * nx + rvy * ny;
+    if (vn >= 0) return;
+    const tx = -ny, ty = nx;
+    const e = vn < -30 ? P.restitution : 0;
+    const jn = -(1 + e) * vn * b.m;
+    const slip = rvx * tx + rvy * ty - b.r * b.w;            // contact-point slip incl. spin
+    const lim = P.wallFriction * jn;
+    let jt = -slip * b.m / 3; jt = jt < -lim ? -lim : jt > lim ? lim : jt;
+    b.vx += (jn * nx + jt * tx) / b.m; b.vy += (jn * ny + jt * ty) / b.m;
+    b.w += -b.r * jt / b.I;
+    const imp = Math.abs(vn);
+    if (imp > 140) b.flash = Math.min(1, imp / 700);
+  }
+  function collideBalls(b1, b2) {
+    const dx = b2.x - b1.x, dy = b2.y - b1.y, rr = b1.r + b2.r, d2 = dx * dx + dy * dy;
+    if (d2 >= rr * rr || d2 === 0) return;
+    const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, o = (rr - d) / 2;
+    b1.x -= nx * o; b1.y -= ny * o; b2.x += nx * o; b2.y += ny * o;
+    const vn = (b2.vx - b1.vx) * nx + (b2.vy - b1.vy) * ny;
+    if (vn >= 0) return;
+    const j = -(1 + P.restitution) * vn / 2;
+    b1.vx -= j * nx; b1.vy -= j * ny; b2.vx += j * nx; b2.vy += j * ny;
+  }
+  function step(dt) {
+    for (const h of hexes) h.ang += hexOmega(h) * dt;
+    const damp = Math.exp(-P.airFriction * dt);
+    for (const b of balls) {
+      b.vy += P.gravity * dt;
+      b.vx *= damp; b.vy *= damp; b.w *= damp;
+      const s = Math.hypot(b.vx, b.vy);
+      if (s > MAX_SPEED) { b.vx *= MAX_SPEED / s; b.vy *= MAX_SPEED / s; }
+      b.x += b.vx * dt; b.y += b.vy * dt; b.rot += b.w * dt;
+    }
+    for (const h of hexes) {
+      const v = verts(h), om = hexOmega(h), R = hexR(h);
+      for (const b of balls) {
+        const r = Math.hypot(b.x - C, b.y - C);
+        if (r < R * 0.866 - b.r - 2 || r > R + b.r + 2) continue;   // broad phase
+        for (let k = 0; k < 6; k++) if (k !== h.gap) collideWall(b, v[k], v[(k + 1) % 6], om);
+      }
+    }
+    for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) collideBalls(balls[i], balls[j]);
+    const outer = hexes[hexes.length - 1], OR = hexR(outer);
+    for (const b of balls) {                                   // safety net: closed outer hexagon
+      const r = Math.hypot(b.x - C, b.y - C);
+      if (r > OR) { const k = (OR * 0.866 - b.r) / r; b.x = C + (b.x - C) * k; b.y = C + (b.y - C) * k; b.vx *= -0.5; b.vy *= -0.5; }
+    }
+  }
+
+  // ---------------- rendering ----------------
+  const ringCol = i => { const t = i / (HEX_SIZES.length - 1); return `hsl(${188 + t * 60}, 95%, ${70 - t * 8}%)`; };
+  const sx = x => ox + (x - C) * scale, sy = y => oy + (y - C) * scale;
+  function draw(time) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // background: soft vignette
+    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, Math.max(W, H) * 0.7);
+    g.addColorStop(0, '#151833'); g.addColorStop(1, '#07080f');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    hexes.forEach((h, i) => {
+      const v = verts(h), col = ringCol(i);
+      // walls as a polyline that starts right after the gap
+      const start = h.gap >= 0 ? h.gap + 1 : 0, count = h.gap >= 0 ? 5 : 6;
+      ctx.beginPath();
+      for (let k = 0; k <= count; k++) { const p = v[(start + k) % 6]; k ? ctx.lineTo(sx(p[0]), sy(p[1])) : ctx.moveTo(sx(p[0]), sy(p[1])); }
+      if (h.gap < 0) ctx.closePath();
+      ctx.strokeStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 14 * scale;
+      ctx.lineWidth = Math.max(2, 3.2 * scale); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = Math.max(1, 1.1 * scale); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.stroke();
+      if (h.gap >= 0) {                         // mark the opening with two small posts
+        for (const p of [v[h.gap], v[(h.gap + 1) % 6]]) {
+          ctx.beginPath(); ctx.arc(sx(p[0]), sy(p[1]), Math.max(2, 3.4 * scale), 0, 7);
+          ctx.fillStyle = col; ctx.fill();
+        }
+      }
+    });
+
+    // trails (additive)
+    ctx.globalCompositeOperation = 'lighter';
+    for (const b of balls) {
+      const tr = b.trail;
+      for (let i = 1; i < tr.length; i++) {
+        const t = i / tr.length;
+        ctx.beginPath(); ctx.moveTo(sx(tr[i - 1][0]), sy(tr[i - 1][1])); ctx.lineTo(sx(tr[i][0]), sy(tr[i][1]));
+        ctx.strokeStyle = b.col; ctx.globalAlpha = t * 0.45; ctx.lineWidth = b.r * 1.5 * t * scale; ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    // glow
+    for (const b of balls) {
+      const x = sx(b.x), y = sy(b.y), R = b.r * scale * (3.2 + (b.flash || 0) * 2.5);
+      const gg = ctx.createRadialGradient(x, y, 0, x, y, R);
+      gg.addColorStop(0, b.col + '88'); gg.addColorStop(1, b.col + '00');
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // balls: shaded sphere + spin marker
+    for (const b of balls) {
+      const x = sx(b.x), y = sy(b.y), r = b.r * scale;
+      const sg = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+      sg.addColorStop(0, '#ffffff'); sg.addColorStop(0.25, b.col); sg.addColorStop(1, shade(b.col, 0.45));
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = Math.max(1, 1.6 * scale);
+      ctx.beginPath(); ctx.moveTo(x + Math.cos(b.rot) * r * 0.25, y + Math.sin(b.rot) * r * 0.25);
+      ctx.lineTo(x + Math.cos(b.rot) * r * 0.9, y + Math.sin(b.rot) * r * 0.9); ctx.stroke();
+      b.flash = (b.flash || 0) * 0.9;
+    }
+  }
+  const shadeCache = {};
+  function shade(hex, k) {
+    if (shadeCache[hex + k]) return shadeCache[hex + k];
+    const n = parseInt(hex.slice(1), 16), r = (n >> 16) * k | 0, g = (n >> 8 & 255) * k | 0, b = (n & 255) * k | 0;
+    return shadeCache[hex + k] = `rgb(${r},${g},${b})`;
+  }
+
+  // ---------------- loop (fixed timestep, frame-rate independent) ----------------
+  let paused = false, last = performance.now(), acc = 0;
+  function frame(now) {
+    let dt = Math.min((now - last) / 1000, 0.1); last = now;
+    if (!paused) {
+      acc += dt;
+      while (acc >= DT) { for (let i = 0; i < SUBSTEPS; i++) step(DT / SUBSTEPS); acc -= DT; }
+      for (const b of balls) { b.trail.push([b.x, b.y]); if (b.trail.length > TRAIL) b.trail.shift(); }
+    }
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------------- UI ----------------
+  const bind = (id, key, fmt) => {
+    const el = document.getElementById(id), out = document.getElementById('v' + id);
+    const upd = () => { P[key] = +el.value; out.textContent = fmt(P[key]); };
+    el.addEventListener('input', upd); upd();
+  };
+  bind('g', 'gravity', v => v.toFixed(0));
+  bind('f', 'wallFriction', v => v.toFixed(2));
+  bind('a', 'airFriction', v => v.toFixed(2));
+  bind('e', 'restitution', v => v.toFixed(2));
+  bind('s', 'speedScale', v => '×' + v.toFixed(2));
+  bind('z', 'sizeScale', v => '×' + v.toFixed(2));
+  const pauseBtn = document.getElementById('pause'), panel = document.getElementById('panel');
+  const togglePause = () => { paused = !paused; pauseBtn.textContent = paused ? 'Play' : 'Pause'; };
+  document.getElementById('reset').onclick = () => reset();
+  pauseBtn.onclick = togglePause;
+  document.getElementById('toggle').onclick = () => panel.classList.toggle('hidden');
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    else if (e.key === 'r' || e.key === 'R') reset();
+    else if (e.key === 'h' || e.key === 'H') panel.classList.toggle('hidden');
+  });
+  cv.addEventListener('pointerdown', e => {      // kick: push balls away from the pointer
+    const wx = C + (e.clientX - ox) / scale, wy = C + (e.clientY - oy) / scale;
+    for (const b of balls) {
+      const dx = b.x - wx, dy = b.y - wy, d = Math.hypot(dx, dy) + 30;
+      b.vx += dx / d * 500 + rnd(-60, 60); b.vy += dy / d * 500 - 200;
+    }
+  });
+
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

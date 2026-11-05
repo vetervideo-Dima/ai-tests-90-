@@ -1,0 +1,4 @@
+Remotion: обратный отсчёт 5→1 (`MyComposition`) + вариант «Hello World» с побуквенной печатью (`HelloWorld`). Отрендерено в MP4 (h264, 1920×1080, 30 fps) через `npx remotion render ... --browser-executable=/opt/pw-browsers/chromium`.
+v1: отсчёт рендерится и работает (`v1/countdown.mp4`), а HelloWorld падает на кадре 0 — `interpolate` с немонотонным `inputRange [0,0.5,0.5,1]` у мигающего курсора, поэтому видео для него нет.
+v2: курсор исправлен, раскладка строки больше не прыгает при печати; в отсчёте теперь настоящий кроссфейд цифр (blur/3D), два кольца, вспышка на нуле, финальное затухание и зерно против бандинга. Результат: `v2/countdown.mp4`, `v2/hello.mp4`.
+Локальный запуск: `cd v2 && npm i remotion @remotion/cli react react-dom && npx remotion render src/index.ts MyComposition out.mp4` (или `npx remotion studio src/index.ts`).

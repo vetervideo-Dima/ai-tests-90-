@@ -1,0 +1,10 @@
+{
+  "name": "remotion-countdown-v1",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts MyComposition out/countdown.mp4",
+    "render:hello": "remotion render src/index.ts HelloWorld out/hello.mp4"
+  }
+}

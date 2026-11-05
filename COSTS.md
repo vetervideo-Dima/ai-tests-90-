@@ -53,3 +53,4 @@
 | 14-mammoths-storyboard | — | high | v1+v2 | 74 711 | 11 | 2.9 | ≈$0.52 | 2026-11-05 |
 | 12-manim-fourier | — | high | v1+v2 | 101 570 | 23 | 10.3 | ≈$1.14 | 2026-11-05 |
 | 15-spaghetti-test | — | high | v1+v2 | 69 820 | 4 | 2.2 | ≈$0.36 | 2026-11-05 |
+| 08-remotion-countdown | — | high | v1+v2 | 87 056 | 27 | 47.7 | ≈$0.94 | 2026-11-05 |

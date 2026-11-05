@@ -17,12 +17,12 @@
   },
   "summary": {
    "total": 76,
-   "done": 45,
-   "ok": 45,
-   "v1_ok": 38,
-   "tokens": 5463992,
-   "usd": 75.94,
-   "minutes": 731.8
+   "done": 49,
+   "ok": 49,
+   "v1_ok": 41,
+   "tokens": 5823513,
+   "usd": 79.61,
+   "minutes": 794.6
   },
   "waves": {
    "1": "Флагманы 3D",
@@ -321,23 +321,34 @@
    "kind": "video",
    "wave": 5,
    "wave_name": "Видео-код и прочее",
-   "status": "pending",
-   "entries": {},
-   "shots": {
-    "v1": "v1/screenshot.png"
+   "status": "ok",
+   "entries": {
+    "v1": "v1/countdown.mp4",
+    "v2": "v2/countdown.mp4"
    },
-   "shot": "v1/screenshot.png",
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": false,
+   "notes": "Remotion 4, рендер в MP4 (h264, 1920x1080, 30 fps) через Chromium из /opt/pw-browsers. Основная композиция MyComposition (отсчёт 5→1) работает и в v1, и в v2; вариант HelloWorld работает только в v2 (v2/hello.mp4).",
+   "v1_issues": "Отсчёт рабочий, но между цифрами нет перекрытия (кадр с пустым кольцом), кольцо резко перезаряжается, видео кончается пустым кадром. Вторая композиция HelloWorld падает на кадре 0: interpolate с немонотонным inputRange [0,0.5,0.5,1] у курсора; к тому же строка заново центрируется после каждой буквы.",
+   "v2_changes": "Кроссфейд цифр (blur, rotateX, scale), внешнее кольцо на весь отсчёт с делениями, внутреннее кольцо с плавной перезарядкой, пульс на каждую секунду, смена оттенка, вспышка и затухание после 1, виньетка и зерно против бандинга. HelloWorld: исправлен курсор (строго возрастающий диапазон, сплошной во время печати), фиксированная раскладка, курсор нулевой ширины, подчёркивание и лёгкий наезд камеры.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 87056,
+   "minutes": 47.7,
+   "usd": 0.94,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 87056,
+     "tool_uses": 27,
+     "duration_ms": 2863265
+    }
+   ]
   },
   {
    "n": 9,
@@ -577,21 +588,31 @@
    "kind": "text",
    "wave": 5,
    "wave_name": "Видео-код и прочее",
-   "status": "pending",
-   "entries": {},
+   "status": "ok",
+   "entries": {
+    "v1": "v1/result.md",
+    "v2": "v2/result.md"
+   },
    "shots": {},
    "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "5 уровней с нарастающей сложностью, failure-пункты на каждом уровне, оригинальный персонаж (Оттавия Ферранте, певица-меццо на пенсии). Ответ на английском, как и промпт.",
+   "v1_issues": "Промпты ссылаются на плейсхолдеры [character block]/[setting block], их нельзя вставить как есть; [waiter block] в L5 нигде не определён; сторона родинки неоднозначна; нет раскадровки по секундам и негативных промптов; оперное прошлое героини почти не задействовано; 15 с длиннее лимита многих моделей.",
+   "v2_changes": "Все 5 промптов полностью самодостаточны; таблица якорей идентичности и матрица нарастания сложности; раскадровка по секундам для L3–L5; негативные промпты; короткая реплика в L4 как мост к lip-sync; в L5 спетая нота и проверка смыкания губ на «м»; запасной вариант на 10 с; шкала 0–2 с порогом прохождения.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 69820,
+   "minutes": 2.2,
+   "usd": 0.36,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 69820,
+     "tool_uses": 4,
+     "duration_ms": 129567
+    }
+   ]
   },
   {
    "n": 16,
@@ -605,8 +626,11 @@
    "wave_name": "Видео-код и прочее",
    "status": "pending",
    "entries": {},
-   "shots": {},
-   "shot": null,
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "v2/screenshot.png",
    "date": null,
    "v1_worked": null,
    "notes": "",
@@ -746,21 +770,34 @@
    "kind": "html",
    "wave": 5,
    "wave_name": "Видео-код и прочее",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Lottie JSON 512x512, 60f@30fps, только shape-слои; JSON валиден, lottie-web (vendor) рендерит без ошибок консоли; плеер грузит coffee.json через fetch и проигрывает в цикле.",
+   "v1_issues": "Неверные касательные Безье у дна чашки (угловатый «надлом»); белый пар малоконтрастен на кремовом фоне; пар запускается по очереди внутри одного цикла, поэтому в начале и конце цикла поток прерывается; плоская заливка без объёма.",
+   "v2_changes": "Переделан контур чашки; бесшовный цикл пара (фазы со сдвигом 0/20/40 кадров, покадровые ключи), трим-пути, морфинг и сужение линии; более выраженный squash & stretch с перехлёстом и тень, которая следует за squash; градиентный фон, корпус, кофе, блик, полоска, блюдце; плеер: пауза, ползунок кадров, ?frame=N, prefers-reduced-motion, адаптивная вёрстка.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 86934,
+   "minutes": 3.9,
+   "usd": 0.79,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 86934,
+     "tool_uses": 16,
+     "duration_ms": 236625
+    }
+   ]
   },
   {
    "n": 21,
@@ -1902,21 +1939,34 @@
    "kind": "python",
    "wave": 5,
    "wave_name": "Видео-код и прочее",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Терминальный donut на Python (stdlib) работает в pty на 30 FPS, ресайз и Ctrl+C корректны; v2 — исправленный Python + веб-порт на canvas.",
+   "v1_issues": "Орбита планеты (r=3.9) почти совпадает с размером тора (3) — планета мелкая и около половины периода закрыта тором; океан цветом 17 почти не виден на чёрном; фон монотонный.",
+   "v2_changes": "Python: орбита 4.9 с наклоном 24°, планета крупнее, подгон масштаба по орбите, Blinn-Phong блик на торе, атмосферный ободок, полярные шапки, вращающиеся материки, цветные звёзды с параллаксом, выход по q/Esc, отключение автопереноса. Веб-порт: canvas-сетка 1:2, xterm-256 палитра, 30 FPS, glow-слой и сканлайны, авто-фит по проекции орбиты, на портретных экранах орбита разворачивается вертикально, пауза тапом/пробелом.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 115711,
+   "minutes": 9.0,
+   "usd": 1.58,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 115711,
+     "tool_uses": 35,
+     "duration_ms": 541028
+    }
+   ]
   },
   {
    "n": 71,
@@ -1930,8 +1980,10 @@
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
    "status": "pending",
    "entries": {},
-   "shots": {},
-   "shot": null,
+   "shots": {
+    "v1": "v1/screenshot.png"
+   },
+   "shot": "v1/screenshot.png",
    "date": null,
    "v1_worked": null,
    "notes": "",
@@ -1956,8 +2008,10 @@
    "wave_name": "Материя складывается в слово + бесконечные шейдеры (адаптация подборки ChatGPT)",
    "status": "pending",
    "entries": {},
-   "shots": {},
-   "shot": null,
+   "shots": {
+    "v1": "v1/screenshot.png"
+   },
+   "shot": "v1/screenshot.png",
    "date": null,
    "v1_worked": null,
    "notes": "",

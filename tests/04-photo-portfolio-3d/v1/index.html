@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Elena Voss Photography</title>
+<meta name="description" content="Elena Voss — fine art landscape & editorial photography. Light, land and stillness.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="../../../vendor/tailwindcss/tailwind.browser.js"></script>
+<style type="text/tailwindcss">
+  @theme {
+    --font-serif: "Cormorant Garamond", "Cormorant", "Playfair Display", Georgia, "Times New Roman", serif;
+    --font-sans: "Manrope", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --color-paper: #f6f2ec;
+    --color-bone: #ece5db;
+    --color-ink: #1d1b19;
+    --color-mute: #807870;
+    --color-clay: #b4876a;
+    --color-night: #0f0e0d;
+  }
+  @layer base {
+    html { scroll-behavior: smooth; }
+    body { @apply bg-paper text-ink font-sans antialiased; }
+    ::selection { background: #1d1b19; color: #f6f2ec; }
+  }
+</style>
+<style>
+  :root { --ease: cubic-bezier(.22,.8,.2,1); --ease-in-out: cubic-bezier(.65,0,.35,1); }
+  html, body { overflow-x: hidden; }
+  body { font-feature-settings: "ss01", "kern"; }
+  .grain { position: fixed; inset: -50%; width: 200%; height: 200%; pointer-events: none; z-index: 90; opacity: .07; mix-blend-mode: multiply; animation: grain 1.2s steps(6) infinite; }
+  @keyframes grain { 0%{transform:translate(0,0)} 20%{transform:translate(-3%,2%)} 40%{transform:translate(2%,-3%)} 60%{transform:translate(-2%,-1%)} 80%{transform:translate(3%,3%)} 100%{transform:translate(0,0)} }
+
+  /* Intro curtain */
+  #intro { position: fixed; inset: 0; z-index: 100; background: #f6f2ec; display: grid; place-items: center; transition: transform 1.1s var(--ease-in-out) .15s, visibility 0s 1.3s; }
+  #intro.done { transform: translateY(-100%); visibility: hidden; }
+  #intro .name { overflow: hidden; }
+  #intro .name span { display: inline-block; transform: translateY(110%); animation: rise .9s var(--ease) forwards; }
+  @keyframes rise { to { transform: translateY(0); } }
+  #intro .bar { width: 160px; height: 1px; background: #d8cfc4; overflow: hidden; margin-top: 18px; }
+  #intro .bar i { display: block; height: 100%; width: 100%; background: #1d1b19; transform: scaleX(0); transform-origin: left; animation: load 1s var(--ease) .2s forwards; }
+  @keyframes load { to { transform: scaleX(1); } }
+
+  /* Nav */
+  #nav { transition: background-color .5s var(--ease), backdrop-filter .5s, padding .5s var(--ease), color .5s; }
+  #nav.scrolled { background: rgba(246,242,236,.78); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); color: #1d1b19; }
+  .link-u { position: relative; }
+  .link-u::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: right; transition: transform .6s var(--ease); }
+  .link-u:hover::after { transform: scaleX(1); transform-origin: left; }
+
+  /* Hero */
+  .hero-bg { position: absolute; inset: -6%; background-size: cover; background-position: center; will-change: transform; }
+  .hero-bg img { width: 100%; height: 100%; object-fit: cover; }
+  .stage3d { perspective: 1400px; perspective-origin: 50% 45%; }
+  .frame3d { position: relative; transform-style: preserve-3d; will-change: transform; }
+  .frame3d .layer { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .frame3d .mat { background: #faf7f2; box-shadow: 0 50px 90px -30px rgba(20,14,8,.55), 0 18px 40px -20px rgba(20,14,8,.4); }
+  .frame3d .photo { position: absolute; inset: 7%; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+  .frame3d .photo img { width: 112%; height: 112%; margin: -6%; object-fit: cover; will-change: transform; }
+  .frame3d .line { border: 1px solid rgba(255,255,255,.65); }
+  .frame3d .glare { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light; background: radial-gradient(circle at var(--gx,30%) var(--gy,20%), rgba(255,255,255,.75), rgba(255,255,255,0) 55%); }
+  .frame3d .tag { position: absolute; font-family: var(--font-sans); font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: rgba(255,255,255,.85); white-space: nowrap; }
+  .scroll-cue { width: 1px; height: 64px; background: rgba(255,255,255,.3); overflow: hidden; position: relative; }
+  .scroll-cue::after { content: ""; position: absolute; left: 0; top: -40%; width: 100%; height: 40%; background: #fff; animation: cue 2.2s var(--ease-in-out) infinite; }
+  @keyframes cue { to { top: 100%; } }
+  .reveal-line { overflow: hidden; display: block; }
+  .reveal-line > span { display: inline-block; transform: translateY(105%); transition: transform 1.3s var(--ease); }
+  .ready .reveal-line > span { transform: translateY(0); }
+  .fade-up { opacity: 0; transform: translateY(24px); transition: opacity 1.2s var(--ease), transform 1.2s var(--ease); }
+  .ready .fade-up, .fade-up.in { opacity: 1; transform: none; }
+
+  /* Masonry */
+  #grid { display: flex; gap: var(--gap, 28px); align-items: flex-start; }
+  #grid .col { flex: 1 1 0; display: flex; flex-direction: column; gap: var(--gap, 28px); min-width: 0; }
+  .tile { perspective: 1000px; cursor: zoom-in; opacity: 0; transform: translateY(40px); transition: opacity 1.1s var(--ease), transform 1.1s var(--ease); }
+  .tile.in { opacity: 1; transform: none; }
+  .tile .card { position: relative; overflow: hidden; background: #e7dfd4; transform-style: preserve-3d; transition: transform .7s var(--ease), box-shadow .7s var(--ease); will-change: transform; }
+  .tile:hover .card { box-shadow: 0 30px 60px -30px rgba(30,20,10,.45); }
+  .tile .card img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); transition: transform 1.4s var(--ease), filter 1.2s var(--ease); filter: saturate(.92); }
+  .tile:hover .card img { transform: scale(1.1); filter: saturate(1.05); }
+  .tile .meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 20px; color: #fff; background: linear-gradient(to top, rgba(10,8,6,.55), rgba(10,8,6,0)); opacity: 0; transform: translateY(10px); transition: opacity .6s var(--ease), transform .6s var(--ease); }
+  .tile:hover .meta { opacity: 1; transform: none; }
+  .loader i { width: 6px; height: 6px; border-radius: 50%; background: #1d1b19; display: inline-block; animation: dot 1.2s var(--ease-in-out) infinite; opacity: .2; }
+  .loader i:nth-child(2) { animation-delay: .15s; } .loader i:nth-child(3) { animation-delay: .3s; }
+  @keyframes dot { 50% { opacity: 1; transform: translateY(-4px); } }
+
+  /* Lightbox */
+  #lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(14,13,12,.97); color: #f6f2ec; opacity: 0; visibility: hidden; transition: opacity .6s var(--ease), visibility 0s .6s; }
+  #lightbox.open { opacity: 1; visibility: visible; transition: opacity .6s var(--ease); }
+  #lb-stage { position: absolute; inset: 0; perspective: 1800px; perspective-origin: 50% 50%; overflow: hidden; touch-action: pan-y; }
+  #lb-world { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 1s var(--ease); }
+  #lightbox:not(.open) #lb-world { transform: translateZ(-500px) rotateX(14deg); }
+  .slide { position: absolute; left: 50%; top: 50%; transform-style: preserve-3d; transition: transform .95s var(--ease), opacity .95s var(--ease), filter .95s var(--ease); cursor: pointer; }
+  .slide img { width: 100%; height: 100%; object-fit: cover; display: block; box-shadow: 0 60px 120px -40px rgba(0,0,0,.8); }
+  .slide::after { content: ""; position: absolute; left: 4%; right: 4%; top: 100%; height: 40%; background: inherit; }
+  .slide .reflect { position: absolute; left: 0; right: 0; top: 100%; height: 100%; transform: scaleY(-1); opacity: .12; -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 65%, #000); mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 65%, #000); pointer-events: none; }
+  .slide .reflect img { box-shadow: none; }
+  .slide.current { cursor: grab; }
+  .lb-btn { width: 52px; height: 52px; border-radius: 999px; border: 1px solid rgba(246,242,236,.25); display: grid; place-items: center; transition: background .4s, border-color .4s, transform .4s var(--ease); }
+  .lb-btn:hover { background: rgba(246,242,236,.08); border-color: rgba(246,242,236,.6); transform: scale(1.05); }
+  #lb-caption > * { transition: opacity .5s var(--ease), transform .5s var(--ease); }
+  #lb-caption.swap > * { opacity: 0; transform: translateY(8px); }
+
+  /* About */
+  .about-word { font-size: clamp(120px, 22vw, 340px); line-height: .8; color: transparent; -webkit-text-stroke: 1px rgba(29,27,25,.09); white-space: nowrap; will-change: transform; }
+  .px { will-change: transform; }
+
+  /* Journal */
+  #journal-pin { position: relative; }
+  #journal-sticky { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+  #journal-track { display: flex; gap: 36px; will-change: transform; padding-left: max(24px, calc((100vw - 1280px) / 2 + 24px)); padding-right: 12vw; }
+  .story { flex: 0 0 auto; width: min(380px, 78vw); perspective: 1000px; }
+  .story .inner { transform-style: preserve-3d; transition: transform .8s var(--ease); will-change: transform; }
+  .story .pic { overflow: hidden; aspect-ratio: 4 / 5; background: #e7dfd4; }
+  .story .pic img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.05); transition: transform 1.4s var(--ease); }
+  .story:hover .pic img { transform: scale(1.12); }
+  .story .num { transform: translateZ(40px); }
+  .journal-native #journal-pin { height: auto !important; }
+  .journal-native #journal-sticky { position: relative; height: auto; padding: 0 0 20px; }
+  .journal-native #journal-track { overflow-x: auto; scroll-snap-type: x mandatory; transform: none !important; scrollbar-width: none; padding-bottom: 8px; }
+  .journal-native #journal-track::-webkit-scrollbar { display: none; }
+  .journal-native .story { scroll-snap-align: start; }
+
+  /* Form */
+  .field { position: relative; }
+  .field input, .field textarea { width: 100%; background: transparent; border: 0; border-bottom: 1px solid #cfc5b8; padding: 26px 0 10px; font-size: 17px; color: #1d1b19; outline: none; border-radius: 0; transition: border-color .4s; resize: none; }
+  .field label { position: absolute; left: 0; top: 26px; color: #8b8379; font-size: 15px; pointer-events: none; transform-origin: left top; transition: transform .5s var(--ease), color .4s; }
+  .field input:focus ~ label, .field input:not(:placeholder-shown) ~ label,
+  .field textarea:focus ~ label, .field textarea:not(:placeholder-shown) ~ label { transform: translateY(-22px) scale(.78); color: #1d1b19; letter-spacing: .08em; }
+  .field .bar { position: absolute; left: 0; bottom: 0; height: 1px; width: 100%; background: #1d1b19; transform: scaleX(0); transform-origin: left; transition: transform .7s var(--ease); }
+  .field input:focus ~ .bar, .field textarea:focus ~ .bar { transform: scaleX(1); }
+  .field.err input, .field.err textarea { border-color: #b4594a; }
+  .field.err label { color: #b4594a; }
+  .chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .chip span { display: inline-block; padding: 10px 18px; border: 1px solid #cfc5b8; border-radius: 999px; font-size: 13px; letter-spacing: .04em; cursor: pointer; transition: all .4s var(--ease); }
+  .chip input:checked + span { background: #1d1b19; color: #f6f2ec; border-color: #1d1b19; }
+  .chip input:focus-visible + span { outline: 2px solid #b4876a; outline-offset: 2px; }
+  .btn-send { position: relative; overflow: hidden; }
+  .btn-send::before { content: ""; position: absolute; inset: 0; background: #b4876a; transform: translateY(101%); transition: transform .7s var(--ease); }
+  .btn-send:hover::before { transform: translateY(0); }
+  .btn-send > * { position: relative; }
+  #sent { transition: opacity .8s var(--ease), transform .8s var(--ease); }
+
+  /* Cursor */
+  #cursor { position: fixed; left: 0; top: 0; z-index: 95; pointer-events: none; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #1d1b19; mix-blend-mode: difference; transition: width .45s var(--ease), height .45s var(--ease), margin .45s var(--ease), background .45s; display: grid; place-items: center; }
+  #cursor span { font-size: 10px; letter-spacing: .25em; text-transform: uppercase; color: #1d1b19; opacity: 0; transition: opacity .3s; }
+  #cursor.view { width: 86px; height: 86px; margin: -43px 0 0 -43px; background: #f6f2ec; mix-blend-mode: normal; }
+  #cursor.view span { opacity: 1; }
+  @media (pointer: coarse) { #cursor { display: none; } }
+
+  #menu { clip-path: circle(0% at calc(100% - 40px) 40px); transition: clip-path 1s var(--ease-in-out); }
+  #menu.open { clip-path: circle(150% at calc(100% - 40px) 40px); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="intro" aria-hidden="true">
+  <div class="text-center">
+    <div class="name font-serif text-4xl md:text-5xl font-light tracking-wide"><span>Elena Voss</span></div>
+    <div class="bar mx-auto"><i></i></div>
+  </div>
+</div>
+<div class="grain" id="grain" aria-hidden="true"></div>
+<div id="cursor" aria-hidden="true"><span>View</span></div>
+
+<!-- NAV -->
+<header id="nav" class="fixed top-0 inset-x-0 z-50 text-white">
+  <div class="max-w-[1400px] mx-auto px-6 md:px-10 h-20 flex items-center justify-between">
+    <a href="#top" class="font-serif text-2xl tracking-wide">Elena Voss<span class="text-clay">.</span></a>
+    <nav class="hidden md:flex items-center gap-10 text-[12px] uppercase tracking-[.28em]">
+      <a class="link-u" href="#work">Work</a>
+      <a class="link-u" href="#about">About</a>
+      <a class="link-u" href="#journal">Journal</a>
+      <a class="link-u" href="#contact">Contact</a>
+    </nav>
+    <button id="menuBtn" class="md:hidden w-10 h-10 grid place-items-center relative z-[60]" aria-label="Open menu">
+      <span class="block w-6 h-px bg-current shadow-[0_6px_0_currentColor] -translate-y-[3px]"></span>
+    </button>
+  </div>
+</header>
+<div id="menu" class="fixed inset-0 z-[55] bg-ink text-paper flex flex-col justify-center px-10 gap-6 md:hidden">
+  <a href="#work" class="font-serif text-5xl font-light">Work</a>
+  <a href="#about" class="font-serif text-5xl font-light">About</a>
+  <a href="#journal" class="font-serif text-5xl font-light">Journal</a>
+  <a href="#contact" class="font-serif text-5xl font-light">Contact</a>
+  <p class="mt-10 text-xs uppercase tracking-[.3em] text-paper/50">studio@elenavoss.com</p>
+</div>
+
+<main id="top">
+<!-- HERO -->
+<section id="hero" class="relative h-[100svh] min-h-[620px] overflow-hidden bg-night text-white">
+  <div class="hero-bg" id="heroBg"><img id="heroBgImg" alt="" aria-hidden="true"></div>
+  <div class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/10 to-black/55"></div>
+  <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(0,0,0,.45))]"></div>
+
+  <div class="relative h-full max-w-[1400px] mx-auto px-6 md:px-10 grid md:grid-cols-12 items-center gap-8 pt-20">
+    <div class="md:col-span-6 lg:col-span-5 relative z-10 order-2 md:order-1">
+      <p class="fade-up text-[11px] uppercase tracking-[.4em] text-white/70 mb-6" style="transition-delay:.9s">Fine art · Landscape · Editorial</p>
+      <h1 class="font-serif font-light leading-[.92] text-[clamp(56px,8.5vw,128px)]">
+        <span class="reveal-line"><span style="transition-delay:.55s">Elena</span></span>
+        <span class="reveal-line"><span class="italic pl-[.6em]" style="transition-delay:.7s">Voss</span></span>
+      </h1>
+      <p class="fade-up mt-8 max-w-sm text-white/75 leading-relaxed font-light" style="transition-delay:1.05s">Quiet photographs of light, land and the hours in between. Based in Copenhagen, working everywhere the weather is honest.</p>
+      <div class="fade-up mt-10 flex items-center gap-8" style="transition-delay:1.2s">
+        <a href="#work" class="group inline-flex items-center gap-4 text-[12px] uppercase tracking-[.3em]">
+          <span class="w-12 h-12 rounded-full border border-white/40 grid place-items-center transition group-hover:bg-white group-hover:text-ink">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1.5 7.5 7 13l5.5-5.5" stroke="currentColor" stroke-width="1.2"/></svg>
+          </span>
+          View portfolio
+        </a>
+      </div>
+    </div>
+
+    <div class="md:col-span-6 lg:col-span-7 order-1 md:order-2 flex justify-center md:justify-end stage3d" id="heroStage">
+      <div class="frame3d fade-up" id="heroFrame" style="width:min(440px,72vw,52svh);aspect-ratio:4/5;transition-delay:.4s">
+        <div class="layer" style="transform:translateZ(-80px) scale(1.12)"><div class="w-full h-full line opacity-40"></div></div>
+        <div class="layer" style="transform:translateZ(-40px) scale(1.06)"><div class="w-full h-full line opacity-70"></div></div>
+        <div class="layer mat" style="transform:translateZ(0)">
+          <div class="photo"><img id="heroImg" alt="Morning fog over the fjords, Lofoten"></div>
+          <div class="glare" id="heroGlare"></div>
+        </div>
+        <div class="layer" style="transform:translateZ(60px) scale(.9)"><div class="w-full h-full line opacity-80"></div></div>
+        <span class="tag" style="left:0;top:-28px;transform:translateZ(90px)">N° 01 — Lofoten</span>
+        <span class="tag" style="right:0;bottom:-28px;transform:translateZ(90px)">68.2° N · 13.6° E</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 text-[10px] uppercase tracking-[.4em] text-white/60">
+    <span>Scroll</span><span class="scroll-cue"></span>
+  </div>
+</section>
+
+<!-- WORK -->
+<section id="work" class="relative py-28 md:py-40">
+  <div class="max-w-[1400px] mx-auto px-6 md:px-10">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 md:mb-24">
+      <div>
+        <p class="text-[11px] uppercase tracking-[.4em] text-mute mb-5">Selected work — 2016 / 2026</p>
+        <h2 class="font-serif font-light text-[clamp(44px,6vw,92px)] leading-[.95]">The quiet <span class="italic">archive</span></h2>
+      </div>
+      <p class="max-w-sm text-mute leading-relaxed font-light">An ongoing collection of places held still for a moment. Scroll to wander — the archive keeps unfolding.</p>
+    </div>
+    <div id="grid" aria-live="polite"></div>
+    <div id="sentinel" class="h-px"></div>
+    <div class="flex justify-center mt-16 h-14 items-center">
+      <div id="loader" class="loader flex gap-2 opacity-0 transition-opacity duration-500"><i></i><i></i><i></i></div>
+      <button id="more" class="hidden text-[12px] uppercase tracking-[.3em] border border-ink/25 rounded-full px-8 py-4 hover:bg-ink hover:text-paper transition duration-500">Continue exploring</button>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section id="about" class="relative py-28 md:py-44 bg-bone overflow-hidden">
+  <div class="about-word font-serif italic absolute top-10 left-0 px" id="aboutWord" aria-hidden="true">stillness · light · stillness</div>
+  <div class="relative max-w-[1400px] mx-auto px-6 md:px-10 grid md:grid-cols-12 gap-14 md:gap-10 items-center">
+    <div class="md:col-span-6 lg:col-span-5 relative">
+      <div class="px relative aspect-[4/5] overflow-hidden" id="aboutMain"><img id="aboutImg" class="w-full h-[115%] object-cover -mt-[7%]" alt="Portrait of Elena Voss"></div>
+      <div class="px absolute -right-4 md:-right-16 -bottom-12 w-[42%] aspect-square overflow-hidden border-[10px] border-bone shadow-2xl shadow-black/20" id="aboutSmall"><img id="aboutImg2" class="w-full h-full object-cover" alt="Camera on a tripod by the sea"></div>
+    </div>
+    <div class="md:col-span-6 lg:col-start-7 px" id="aboutText">
+      <p class="text-[11px] uppercase tracking-[.4em] text-mute mb-6">About</p>
+      <h2 class="font-serif font-light text-[clamp(38px,4.6vw,70px)] leading-[1.02] mb-10">I photograph the moment <span class="italic">just before</span> the light decides.</h2>
+      <div class="grid sm:grid-cols-2 gap-8 text-mute font-light leading-relaxed">
+        <p>For fourteen years I have followed weather across northern coasts, high deserts and empty cities at dawn. I work slowly, mostly on medium format, and often return to the same place for years.</p>
+        <p>My work has appeared in Kinfolk, Cereal and National Geographic Traveller, and is held in private collections in eleven countries. I accept a few commissions each season.</p>
+      </div>
+      <div class="mt-14 grid grid-cols-3 gap-6 border-t border-ink/15 pt-8">
+        <div><div class="font-serif text-5xl font-light" data-count="14">0</div><div class="text-[11px] uppercase tracking-[.25em] text-mute mt-2">Years</div></div>
+        <div><div class="font-serif text-5xl font-light" data-count="32">0</div><div class="text-[11px] uppercase tracking-[.25em] text-mute mt-2">Countries</div></div>
+        <div><div class="font-serif text-5xl font-light" data-count="6">0</div><div class="text-[11px] uppercase tracking-[.25em] text-mute mt-2">Books</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- JOURNAL -->
+<section id="journal" class="relative bg-paper">
+  <div id="journal-pin">
+    <div id="journal-sticky">
+      <div class="max-w-[1400px] w-full mx-auto px-6 md:px-10 flex items-end justify-between gap-6 mb-10 md:mb-14 pt-24 md:pt-0">
+        <div>
+          <p class="text-[11px] uppercase tracking-[.4em] text-mute mb-5">Journal</p>
+          <h2 class="font-serif font-light text-[clamp(40px,5.4vw,84px)] leading-[.95]">Stories from <span class="italic">the field</span></h2>
+        </div>
+        <div class="hidden md:flex items-center gap-4 text-[11px] uppercase tracking-[.3em] text-mute">
+          <span id="jCount">01</span>
+          <span class="w-32 h-px bg-ink/15 relative overflow-hidden"><i id="jBar" class="absolute inset-0 bg-ink origin-left scale-x-0"></i></span>
+          <span>06</span>
+        </div>
+      </div>
+      <div id="journal-track"></div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section id="contact" class="relative py-28 md:py-44">
+  <div class="max-w-[1400px] mx-auto px-6 md:px-10 grid md:grid-cols-12 gap-16">
+    <div class="md:col-span-5">
+      <p class="text-[11px] uppercase tracking-[.4em] text-mute mb-6">Contact</p>
+      <h2 class="font-serif font-light text-[clamp(44px,5.6vw,88px)] leading-[.95] mb-10">Let’s make something <span class="italic">quiet</span> &amp; lasting.</h2>
+      <p class="text-mute font-light leading-relaxed max-w-sm mb-12">Commissions, editorial assignments, print sales and workshops. I reply to every message within two days.</p>
+      <div class="space-y-6 text-sm">
+        <div><div class="text-[11px] uppercase tracking-[.3em] text-mute mb-1">Email</div><a class="link-u font-serif text-2xl" href="mailto:studio@elenavoss.com">studio@elenavoss.com</a></div>
+        <div><div class="text-[11px] uppercase tracking-[.3em] text-mute mb-1">Studio</div><div class="font-serif text-2xl">Nørrebrogade 14, Copenhagen</div></div>
+        <div class="flex gap-6 pt-4 text-[12px] uppercase tracking-[.25em]"><a class="link-u" href="#">Instagram</a><a class="link-u" href="#">Behance</a><a class="link-u" href="#">Prints</a></div>
+      </div>
+    </div>
+    <div class="md:col-span-6 md:col-start-7 relative">
+      <form id="form" class="space-y-10" novalidate>
+        <div class="grid sm:grid-cols-2 gap-10">
+          <div class="field"><input id="f-name" name="name" type="text" placeholder=" " autocomplete="name" required><label for="f-name">Your name</label><span class="bar"></span></div>
+          <div class="field"><input id="f-email" name="email" type="email" placeholder=" " autocomplete="email" required><label for="f-email">Email address</label><span class="bar"></span></div>
+        </div>
+        <div>
+          <div class="text-[11px] uppercase tracking-[.3em] text-mute mb-4">I’m interested in</div>
+          <div class="flex flex-wrap gap-3">
+            <label class="chip"><input type="radio" name="type" value="commission" checked><span>Commission</span></label>
+            <label class="chip"><input type="radio" name="type" value="editorial"><span>Editorial</span></label>
+            <label class="chip"><input type="radio" name="type" value="prints"><span>Fine art prints</span></label>
+            <label class="chip"><input type="radio" name="type" value="workshop"><span>Workshop</span></label>
+          </div>
+        </div>
+        <div class="field"><textarea id="f-msg" name="message" rows="4" placeholder=" " required></textarea><label for="f-msg">Tell me about your project</label><span class="bar"></span></div>
+        <div class="flex items-center justify-between gap-6 flex-wrap">
+          <p class="text-xs text-mute max-w-[240px]">Your details stay between us. No newsletters, ever.</p>
+          <button type="submit" class="btn-send bg-ink text-paper rounded-full px-10 py-5 text-[12px] uppercase tracking-[.3em] inline-flex items-center gap-4">
+            <span>Send message</span>
+            <svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M0 5h15M11 1l4 4-4 4" stroke="currentColor" stroke-width="1.2"/></svg>
+          </button>
+        </div>
+      </form>
+      <div id="sent" class="absolute inset-0 flex flex-col justify-center opacity-0 translate-y-6 pointer-events-none">
+        <div class="font-serif text-6xl font-light italic mb-6">Thank you.</div>
+        <p class="text-mute font-light max-w-sm leading-relaxed">Your message is on its way. I’ll write back soon — usually with a question about the light.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="border-t border-ink/10">
+  <div class="max-w-[1400px] mx-auto px-6 md:px-10 py-10 flex flex-col md:flex-row gap-4 justify-between text-[11px] uppercase tracking-[.3em] text-mute">
+    <span>© 2026 Elena Voss Photography</span>
+    <span>All images are generated placeholders</span>
+    <a href="#top" class="link-u">Back to top ↑</a>
+  </div>
+</footer>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Image gallery">
+  <div id="lb-stage"><div id="lb-world"></div></div>
+  <div class="absolute top-0 inset-x-0 px-6 md:px-10 h-20 flex items-center justify-between z-10">
+    <span class="font-serif text-xl">Elena Voss<span class="text-clay">.</span></span>
+    <span id="lb-count" class="text-[11px] uppercase tracking-[.35em] text-paper/60">01 / 12</span>
+    <button id="lb-close" class="lb-btn" aria-label="Close gallery"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 2l12 12M14 2 2 14" stroke="currentColor" stroke-width="1.2"/></svg></button>
+  </div>
+  <div class="absolute bottom-0 inset-x-0 px-6 md:px-10 pb-8 flex items-end justify-between gap-6 z-10">
+    <div id="lb-caption">
+      <div id="lb-title" class="font-serif text-3xl md:text-4xl font-light"></div>
+      <div id="lb-loc" class="text-[11px] uppercase tracking-[.3em] text-paper/55 mt-2"></div>
+    </div>
+    <div class="flex gap-3">
+      <button id="lb-prev" class="lb-btn" aria-label="Previous image"><svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M16 5H1M5 1 1 5l4 4" stroke="currentColor" stroke-width="1.2"/></svg></button>
+      <button id="lb-next" class="lb-btn" aria-label="Next image"><svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M0 5h15M11 1l4 4-4 4" stroke="currentColor" stroke-width="1.2"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const finePointer = matchMedia('(pointer: fine)').matches;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const $ = (s, r = document) => r.querySelector(s);
+
+  /* ------------------------------------------------------------------
+     Seeded RNG + generative "photographs" as SVG
+  ------------------------------------------------------------------ */
+  function rng(seed) {
+    let s = seed >>> 0 || 1;
+    return () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+  }
+  const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+  const hex = (c) => c;
+  function mix(a, b, t) {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const ch = (p, sh) => (p >> sh) & 255;
+    const m = (sh) => Math.round(lerp(ch(pa, sh), ch(pb, sh), t));
+    return '#' + ((1 << 24) | (m(16) << 16) | (m(8) << 8) | m(0)).toString(16).slice(1);
+  }
+
+  const PALETTES = [
+    { sky: ['#f3d9c4', '#e7b7a3', '#9c8aa5'], land: '#3d3a4b', sun: '#fff1df' },   // dusk rose
+    { sky: ['#dfe6e8', '#c3d0d6', '#93a6b2'], land: '#2f3b45', sun: '#ffffff' },   // nordic morning
+    { sky: ['#f6e7c8', '#efc994', '#c98a6b'], land: '#5a3b2e', sun: '#fff6e0' },   // desert gold
+    { sky: ['#e8e1d6', '#cfc6b8', '#a59c8f'], land: '#4a4640', sun: '#fbf8f2' },   // fog
+    { sky: ['#d5dde0', '#a9bcc3', '#6f8a96'], land: '#1f2c33', sun: '#f4f6f4' },   // cold sea
+    { sky: ['#f1d5c9', '#d9a9a0', '#7e6a7f'], land: '#2c2433', sun: '#ffe9d6' },   // mauve
+    { sky: ['#e9e4cf', '#c9cfb2', '#8d9a7f'], land: '#2f3a2c', sun: '#fbf7e6' },   // sage
+  ];
+
+  function ridge(r, w, h, base, amp, rough) {
+    const n = 48, p1 = r() * 6.28, p2 = r() * 6.28, f1 = 1 + r() * 2, f2 = 3 + r() * 5;
+    let d = `M0 ${h} L0 ${base}`;
+    for (let i = 0; i <= n; i++) {
+      const x = (i / n) * w;
+      const t = i / n;
+      const y = base - amp * (0.55 * Math.sin(t * Math.PI * f1 + p1) + 0.3 * Math.sin(t * Math.PI * f2 + p2) + rough * (r() - 0.5));
+      d += ` L${x.toFixed(1)} ${y.toFixed(1)}`;
+    }
+    return d + ` L${w} ${h} Z`;
+  }
+
+  function scene(seed, w, h, forceTheme) {
+    const r = rng(seed * 9301 + 49297);
+    const pal = PALETTES[Math.floor(r() * PALETTES.length)];
+    const theme = forceTheme || pick(r, ['mountains', 'mountains', 'sea', 'dunes', 'forest', 'arches', 'moon', 'portrait', 'still']);
+    const [s0, s1, s2] = pal.sky;
+    const sx = (0.2 + r() * 0.6) * w, sy = (0.2 + r() * 0.35) * h, sr = Math.min(w, h) * (0.05 + r() * 0.07);
+    let defs = `<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s2}"/><stop offset=".55" stop-color="${s1}"/><stop offset="1" stop-color="${s0}"/></linearGradient>
+      <radialGradient id="glow" cx="${(sx / w).toFixed(3)}" cy="${(sy / h).toFixed(3)}" r=".6"><stop offset="0" stop-color="${pal.sun}" stop-opacity=".85"/><stop offset=".35" stop-color="${pal.sun}" stop-opacity=".18"/><stop offset="1" stop-color="${pal.sun}" stop-opacity="0"/></radialGradient>
+      <radialGradient id="vig" cx=".5" cy=".5" r=".75"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient>
+      <linearGradient id="fog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s0}" stop-opacity="0"/><stop offset="1" stop-color="${s0}" stop-opacity=".75"/></linearGradient>`;
+    let body = `<rect width="${w}" height="${h}" fill="url(#sky)"/><rect width="${w}" height="${h}" fill="url(#glow)"/>`;
+
+    if (theme === 'mountains' || theme === 'forest') {
+      body += `<circle cx="${sx}" cy="${sy}" r="${sr}" fill="${pal.sun}" opacity=".9"/>`;
+      const layers = 4 + Math.floor(r() * 2);
+      for (let i = 0; i < layers; i++) {
+        const t = i / (layers - 1);
+        const col = mix(mix(s1, s2, 0.4), pal.land, 0.25 + t * 0.75);
+        const base = h * (0.48 + t * 0.32);
+        if (theme === 'forest' && i >= layers - 2) {
+          let trees = '';
+          const count = 18 + Math.floor(r() * 14);
+          for (let k = 0; k < count; k++) {
+            const tx = (k / count) * w + (r() - 0.5) * (w / count);
+            const th = h * (0.12 + r() * 0.16) * (0.7 + t * 0.6), tw = th * 0.32;
+            const ty = base + h * 0.06 * r();
+            trees += `<path d="M${tx.toFixed(1)} ${(ty - th).toFixed(1)} L${(tx + tw).toFixed(1)} ${ty.toFixed(1)} L${(tx - tw).toFixed(1)} ${ty.toFixed(1)} Z"/>`;
+          }
+          body += `<g fill="${col}">${trees}<rect x="0" y="${(base + h * 0.04).toFixed(1)}" width="${w}" height="${h}"/></g>`;
+        } else {
+          body += `<path d="${ridge(r, w, h, base, h * (0.18 - t * 0.08), 0.12 + t * 0.1)}" fill="${col}"/>`;
+        }
+        if (i < layers - 1) body += `<rect y="${(base - h * 0.15).toFixed(1)}" width="${w}" height="${(h * 0.25).toFixed(1)}" fill="url(#fog)" opacity="${(0.5 - t * 0.3).toFixed(2)}"/>`;
+      }
+    } else if (theme === 'sea') {
+      const hz = h * (0.52 + r() * 0.12);
+      defs += `<linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(s0, s2, .4)}"/><stop offset="1" stop-color="${mix(s2, pal.land, .6)}"/></linearGradient>`;
+      body += `<circle cx="${sx}" cy="${Math.min(sy, hz - sr * 1.2)}" r="${sr}" fill="${pal.sun}" opacity=".95"/>`;
+      body += `<rect y="${hz}" width="${w}" height="${h - hz}" fill="url(#sea)"/>`;
+      for (let i = 0; i < 26; i++) {
+        const yy = hz + Math.pow(i / 26, 1.6) * (h - hz);
+        const ww = (8 + r() * 40) * (1 + i / 6);
+        body += `<rect x="${(sx - ww / 2 + (r() - 0.5) * 20).toFixed(1)}" y="${yy.toFixed(1)}" width="${ww.toFixed(1)}" height="${(1 + i / 10).toFixed(1)}" fill="${pal.sun}" opacity="${(0.55 - i / 60).toFixed(2)}"/>`;
+      }
+      if (r() > 0.4) {
+        const bx = w * (0.15 + r() * 0.7), by = hz + 2, bs = h * 0.035;
+        body += `<g fill="${pal.land}" opacity=".85"><path d="M${bx} ${by - bs * 2.2} L${bx} ${by - 2} L${bx + bs * 1.1} ${by - 2} Z"/><path d="M${bx - bs * .6} ${by - 1} L${bx + bs * 1.4} ${by - 1} L${bx + bs} ${by + bs * .3} L${bx - bs * .3} ${by + bs * .3} Z"/></g>`;
+      }
+      if (r() > 0.5) body += `<path d="${ridge(r, w, h, hz + 1, h * 0.04, 0.05)}" fill="${mix(s2, pal.land, .5)}" opacity=".6" transform="translate(${w * 0.55} 0) scale(.5 1)"/>`;
+    } else if (theme === 'dunes') {
+      body += `<circle cx="${sx}" cy="${sy}" r="${sr}" fill="${pal.sun}"/>`;
+      const sand = ['#e6c49a', '#d8a978', '#c48e62', '#a87350'];
+      for (let i = 0; i < 4; i++) {
+        const base = h * (0.55 + i * 0.12), a = h * 0.12;
+        const c1 = w * r(), c2 = w * r();
+        const lit = mix(sand[i], '#fff4e2', 0.25), shade = mix(sand[i], pal.land, 0.45);
+        defs += `<linearGradient id="d${i}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${lit}"/><stop offset="${(0.35 + r() * 0.3).toFixed(2)}" stop-color="${sand[i]}"/><stop offset="1" stop-color="${shade}"/></linearGradient>`;
+        body += `<path d="M0 ${h} L0 ${base} C ${c1} ${base - a}, ${c2} ${base - a * 1.4}, ${w} ${base - a * 0.2} L${w} ${h} Z" fill="url(#d${i})"/>`;
+      }
+    } else if (theme === 'arches') {
+      const wall = mix(s0, '#ffffff', 0.35), shade = mix(s1, pal.land, 0.35);
+      body = `<rect width="${w}" height="${h}" fill="${wall}"/>`;
+      const n = 2 + Math.floor(r() * 2), aw = w / (n + 0.6), gap = (w - aw * n) / (n + 1);
+      for (let i = 0; i < n; i++) {
+        const x = gap + i * (aw + gap), top = h * 0.25, bottom = h * 0.85;
+        body += `<path d="M${x} ${bottom} L${x} ${top + aw / 2} A ${aw / 2} ${aw / 2} 0 0 1 ${x + aw} ${top + aw / 2} L${x + aw} ${bottom} Z" fill="url(#sky)"/>`;
+        body += `<path d="M${x + aw} ${bottom} L${x + aw * 1.6} ${h} L${x + aw * 0.6} ${h} L${x} ${bottom} Z" fill="${shade}" opacity=".18"/>`;
+      }
+      body += `<rect y="${h * 0.85}" width="${w}" height="${h * 0.15}" fill="${mix(wall, shade, .3)}"/>`;
+      body += `<rect width="${w}" height="${h}" fill="url(#glow)" opacity=".6"/>`;
+    } else if (theme === 'moon') {
+      defs += `<linearGradient id="night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#151924"/><stop offset="1" stop-color="${mix(s2, '#1b1f2b', .5)}"/></linearGradient>`;
+      body = `<rect width="${w}" height="${h}" fill="url(#night)"/>`;
+      let stars = '';
+      for (let i = 0; i < 90; i++) stars += `<circle cx="${(r() * w).toFixed(1)}" cy="${(r() * h * 0.6).toFixed(1)}" r="${(r() * 1.4 + 0.3).toFixed(2)}" opacity="${(0.3 + r() * 0.7).toFixed(2)}"/>`;
+      body += `<g fill="#fff">${stars}</g>`;
+      defs += `<radialGradient id="mg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>`;
+      body += `<circle cx="${sx}" cy="${sy}" r="${sr * 4}" fill="url(#mg)"/><circle cx="${sx}" cy="${sy}" r="${sr}" fill="#f4efe4"/>`;
+      body += `<path d="${ridge(r, w, h, h * 0.78, h * 0.1, 0.15)}" fill="#0b0d12"/>`;
+    } else if (theme === 'portrait') {
+      const bg2 = mix(s1, pal.land, 0.2);
+      defs += `<radialGradient id="pbg" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="${mix(s0, '#fff', .3)}"/><stop offset="1" stop-color="${bg2}"/></radialGradient>
+        <linearGradient id="skin" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${mix(pal.land, s0, .55)}"/><stop offset="1" stop-color="${pal.land}"/></linearGradient>`;
+      body = `<rect width="${w}" height="${h}" fill="url(#pbg)"/>`;
+      const cx = w * (0.45 + r() * 0.15), hy = h * 0.4, hr = Math.min(w, h) * 0.16;
+      body += `<path d="M${cx - w * 0.42} ${h} C ${cx - w * 0.38} ${h * 0.7}, ${cx - hr * 1.3} ${h * 0.66}, ${cx - hr * 0.45} ${hy + hr * 1.35} L${cx + hr * 0.45} ${hy + hr * 1.35} C ${cx + hr * 1.3} ${h * 0.66}, ${cx + w * 0.38} ${h * 0.7}, ${cx + w * 0.42} ${h} Z" fill="url(#skin)"/>`;
+      body += `<rect x="${cx - hr * 0.4}" y="${hy + hr * 0.6}" width="${hr * 0.8}" height="${hr * 0.9}" fill="url(#skin)"/>`;
+      body += `<ellipse cx="${cx}" cy="${hy}" rx="${hr * 0.82}" ry="${hr}" fill="url(#skin)"/>`;
+      body += `<path d="M${cx - hr * 0.95} ${hy + hr * 0.2} C ${cx - hr * 1.1} ${hy - hr * 1.4}, ${cx + hr * 1.2} ${hy - hr * 1.5}, ${cx + hr * 0.95} ${hy + hr * 0.6} C ${cx + hr * 1.3} ${hy + hr * 2.2}, ${cx + hr * 0.4} ${hy + hr * 2.2}, ${cx + hr * 0.6} ${hy + hr * 1.2} C ${cx + hr * 0.9} ${hy - hr * 0.2}, ${cx - hr * 0.4} ${hy - hr * 0.9}, ${cx - hr * 0.95} ${hy + hr * 0.2} Z" fill="${mix(pal.land, '#000', .35)}"/>`;
+      body += `<ellipse cx="${cx - hr * 0.55}" cy="${hy - hr * 0.1}" rx="${hr * 0.12}" ry="${hr * 0.5}" fill="${pal.sun}" opacity=".35"/>`;
+    } else { // still life
+      const table = mix(s0, pal.land, 0.25);
+      body = `<rect width="${w}" height="${h}" fill="${mix(s0, '#fff', .2)}"/><rect width="${w}" height="${h}" fill="url(#glow)"/>`;
+      body += `<rect y="${h * 0.68}" width="${w}" height="${h * 0.32}" fill="${table}"/>`;
+      const vx = w * (0.35 + r() * 0.2), vw = w * 0.16, vh = h * 0.28, vy = h * 0.68;
+      defs += `<linearGradient id="vase" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${mix(s1, '#fff', .3)}"/><stop offset=".6" stop-color="${s1}"/><stop offset="1" stop-color="${mix(s1, pal.land, .5)}"/></linearGradient>`;
+      body += `<path d="M${vx + vw * 0.35} ${vy - vh} L${vx + vw * 0.65} ${vy - vh} C ${vx + vw * 0.6} ${vy - vh * 0.7}, ${vx + vw * 1.15} ${vy - vh * 0.55}, ${vx + vw} ${vy} L${vx} ${vy} C ${vx - vw * 0.15} ${vy - vh * 0.55}, ${vx + vw * 0.4} ${vy - vh * 0.7}, ${vx + vw * 0.35} ${vy - vh} Z" fill="url(#vase)"/>`;
+      body += `<path d="M${vx + vw * 0.5} ${vy - vh} C ${vx + vw * 0.4} ${vy - vh * 1.6}, ${vx - vw * 0.6} ${vy - vh * 1.9}, ${vx - vw * 0.9} ${vy - vh * 2.1}" stroke="${pal.land}" stroke-width="2" fill="none"/>`;
+      body += `<ellipse cx="${vx - vw * 0.5}" cy="${vy - vh * 1.85}" rx="${vw * 0.45}" ry="${vw * 0.16}" fill="${mix(pal.land, '#6d7a5a', .5)}" transform="rotate(-30 ${vx - vw * 0.5} ${vy - vh * 1.85})"/>`;
+      body += `<ellipse cx="${vx + vw * 0.15}" cy="${vy - vh * 1.45}" rx="${vw * 0.4}" ry="${vw * 0.14}" fill="${mix(pal.land, '#7f8a65', .4)}" transform="rotate(25 ${vx + vw * 0.15} ${vy - vh * 1.45})"/>`;
+      body += `<circle cx="${vx + vw * 2}" cy="${vy - w * 0.05}" r="${w * 0.05}" fill="${pal.sun}" opacity=".9"/>`;
+      body += `<path d="M${vx + vw} ${vy} L${vx + vw * 3.2} ${vy + h * 0.12} L${vx + vw * 1.6} ${vy + h * 0.12} L${vx} ${vy} Z" fill="#000" opacity=".08"/>`;
+    }
+
+    body += `<rect width="${w}" height="${h}" fill="url(#vig)"/>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice"><defs>${defs}</defs>${body}</svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  /* ------------------------------------------------------------------
+     Grain texture (canvas, generated once)
+  ------------------------------------------------------------------ */
+  (function grain() {
+    const c = document.createElement('canvas'); c.width = c.height = 160;
+    const g = c.getContext('2d'); const id = g.createImageData(160, 160);
+    for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; }
+    g.putImageData(id, 0, 0);
+    $('#grain').style.backgroundImage = `url(${c.toDataURL()})`;
+  })();
+
+  /* ------------------------------------------------------------------
+     Data
+  ------------------------------------------------------------------ */
+  const TITLES = ['Quiet Hours', 'Salt & Light', 'The Long Blue', 'After Rain', 'Low Tide', 'Paper Sky', 'Northern Hush', 'A Field of Fog', 'Slow Water', 'The Last Warmth', 'Weightless', 'Held Breath', 'Pale Fire', 'Ember Dunes', 'Glass Morning', 'Soft Ridge', 'White Noise', 'Between Tides', 'Mineral', 'Distance', 'Hollow Light', 'Gentle Ruin', 'Still Life No. 4', 'The Listener'];
+  const PLACES = ['Lofoten, Norway', 'Hokkaido, Japan', 'Atacama, Chile', 'Faroe Islands', 'Isle of Skye, Scotland', 'Namib, Namibia', 'Dolomites, Italy', 'Vík, Iceland', 'Sintra, Portugal', 'Matera, Italy', 'Wadi Rum, Jordan', 'Copenhagen, Denmark', 'Patagonia, Argentina', 'Kyoto, Japan'];
+  const RATIOS = [[4, 5], [3, 4], [2, 3], [1, 1], [4, 3], [3, 2], [4, 5], [3, 4]];
+  const items = [];
+  function makeItem(i) {
+    const r = rng(i * 7919 + 13);
+    const [a, b] = pick(r, RATIOS);
+    const w = 600, h = Math.round(600 * b / a);
+    return { i, w, h, src: scene(i + 101, w, h), title: TITLES[(i * 7) % TITLES.length], loc: PLACES[(i * 5 + 3) % PLACES.length], year: 2016 + ((i * 3) % 11) };
+  }
+
+  /* ------------------------------------------------------------------
+     Hero
+  ------------------------------------------------------------------ */
+  const heroSrc = scene(7, 800, 1000, 'mountains');
+  $('#heroImg').src = heroSrc;
+  $('#heroBgImg').src = scene(7, 1600, 1000, 'mountains');
+  $('#aboutImg').src = scene(42, 800, 1150, 'portrait');
+  $('#aboutImg2').src = scene(19, 600, 600, 'sea');
+
+  const heroFrame = $('#heroFrame'), heroImg = $('#heroImg'), heroBg = $('#heroBg'), heroGlare = $('#heroGlare'), hero = $('#hero');
+  const hState = { tx: 0, ty: 0, x: 0, y: 0, hasMouse: false };
+  hero.addEventListener('pointermove', (e) => {
+    const r = hero.getBoundingClientRect();
+    hState.tx = ((e.clientX - r.left) / r.width) * 2 - 1;
+    hState.ty = ((e.clientY - r.top) / r.height) * 2 - 1;
+    hState.hasMouse = true;
+  });
+  hero.addEventListener('pointerleave', () => { hState.hasMouse = false; });
+
+  /* ------------------------------------------------------------------
+     Masonry with infinite loading
+  ------------------------------------------------------------------ */
+  const grid = $('#grid'), loaderEl = $('#loader'), moreBtn = $('#more');
+  let cols = [], colH = [], colCount = 0, loading = false, autoBudget = 4;
+  const BATCH = 12;
+
+  function wantedCols() { const w = innerWidth; return w < 560 ? 1 : w < 900 ? 2 : w < 1300 ? 3 : 4; }
+  function buildCols() {
+    const n = wantedCols(); if (n === colCount) return;
+    colCount = n; grid.innerHTML = ''; cols = []; colH = [];
+    grid.style.setProperty('--gap', n === 1 ? '22px' : '28px');
+    for (let c = 0; c < n; c++) { const d = document.createElement('div'); d.className = 'col'; grid.appendChild(d); cols.push(d); colH.push(0); }
+    items.forEach((it) => place(it.el, it));
+  }
+  function place(el, it) {
+    let k = 0; for (let c = 1; c < colCount; c++) if (colH[c] < colH[k] - 0.01) k = c;
+    cols[k].appendChild(el); colH[k] += it.h / it.w + 0.08;
+  }
+  const fadeIO = new IntersectionObserver((entries) => {
+    entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); fadeIO.unobserve(e.target); } });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+
+  function makeTile(it, delay) {
+    const fig = document.createElement('figure');
+    fig.className = 'tile'; fig.dataset.index = it.i; fig.style.transitionDelay = delay + 'ms';
+    fig.innerHTML = `<div class="card" style="aspect-ratio:${it.w}/${it.h}"><img alt="${it.title}, ${it.loc}" src="${it.src}" decoding="async" loading="lazy"><figcaption class="meta"><div class="font-serif text-2xl font-light">${it.title}</div><div class="text-[10px] uppercase tracking-[.3em] opacity-80 mt-1">${it.loc} · ${it.year}</div></figcaption></div>`;
+    fig.setAttribute('tabindex', '0'); fig.setAttribute('role', 'button'); fig.setAttribute('aria-label', `Open ${it.title}`);
+    return fig;
+  }
+  function loadBatch() {
+    if (loading) return; loading = true; loaderEl.style.opacity = 1;
+    setTimeout(() => {
+      const start = items.length;
+      for (let k = 0; k < BATCH; k++) {
+        const it = makeItem(start + k); it.el = makeTile(it, (k % 4) * 90);
+        items.push(it); place(it.el, it); fadeIO.observe(it.el);
+      }
+      loading = false; loaderEl.style.opacity = 0;
+      if (lb.open) renderLB();
+      if (autoBudget <= 0) { moreBtn.classList.remove('hidden'); }
+    }, items.length ? 650 : 0);
+  }
+  const sentIO = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && autoBudget > 0) { autoBudget--; loadBatch(); }
+  }, { rootMargin: '600px 0px' });
+  moreBtn.addEventListener('click', () => { moreBtn.classList.add('hidden'); autoBudget = 3; loadBatch(); });
+
+  buildCols();
+  loadBatch();
+  sentIO.observe($('#sentinel'));
+
+  // tile tilt (delegated)
+  let tiltEl = null;
+  grid.addEventListener('pointermove', (e) => {
+    if (!finePointer) return;
+    const t = e.target.closest('.tile'); if (!t) return;
+    const card = t.firstElementChild, r = card.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5;
+    card.style.transform = `rotateY(${px * 8}deg) rotateX(${-py * 8}deg) translateZ(10px)`;
+    if (tiltEl && tiltEl !== card) tiltEl.style.transform = '';
+    tiltEl = card;
+  });
+  grid.addEventListener('pointerleave', () => { if (tiltEl) tiltEl.style.transform = ''; tiltEl = null; });
+  grid.addEventListener('pointerout', (e) => { const t = e.target.closest('.tile'); if (t && !t.contains(e.relatedTarget)) { t.firstElementChild.style.transform = ''; } });
+  grid.addEventListener('click', (e) => { const t = e.target.closest('.tile'); if (t) openLB(+t.dataset.index); });
+  grid.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { const t = e.target.closest('.tile'); if (t) { e.preventDefault(); openLB(+t.dataset.index); } } });
+
+  /* ------------------------------------------------------------------
+     3D Lightbox
+  ------------------------------------------------------------------ */
+  const lbEl = $('#lightbox'), world = $('#lb-world'), stage = $('#lb-stage');
+  const lb = { open: false, cur: 0, els: new Map(), drag: 0, startX: 0, dragging: false, mx: 0, my: 0, rx: 0, ry: 0, lastFocus: null };
+  function slideSize(it) {
+    const maxW = innerWidth * (innerWidth < 700 ? 0.78 : 0.5), maxH = innerHeight * 0.68;
+    let w = maxW, h = w * it.h / it.w; if (h > maxH) { h = maxH; w = h * it.w / it.h; }
+    return [w, h];
+  }
+  function renderLB() {
+    const cur = lb.cur, spread = innerWidth < 700 ? 0.62 : 0.42;
+    for (let i = cur - 4; i <= cur + 4; i++) {
+      if (i < 0 || i >= items.length) continue;
+      let el = lb.els.get(i);
+      if (!el) {
+        el = document.createElement('div'); el.className = 'slide'; el.dataset.i = i;
+        el.innerHTML = `<img src="${items[i].src}" alt="${items[i].title}" draggable="false"><div class="reflect"><img src="${items[i].src}" alt="" draggable="false"></div>`;
+        const off0 = i - cur;
+        el.style.opacity = 0;
+        el.style.transform = `translate(-50%,-50%) translateX(${off0 * innerWidth * spread}px) translateZ(-900px) rotateY(${-off0 * 40}deg)`;
+        world.appendChild(el); lb.els.set(i, el);
+        el.getBoundingClientRect();
+      }
+      const [w, h] = slideSize(items[i]);
+      el.style.width = w + 'px'; el.style.height = h + 'px';
+      const off = i - cur + lb.drag;
+      const a = Math.abs(off);
+      const x = Math.sign(off) * (Math.min(a, 1) * innerWidth * spread + Math.max(0, a - 1) * innerWidth * spread * 0.38);
+      const z = -Math.min(a, 3) * 260;
+      const ry = -clamp(off, -1, 1) * 42;
+      el.style.transform = `translate(-50%,-50%) translateX(${x}px) translateZ(${z}px) rotateY(${ry}deg)`;
+      el.style.opacity = a > 3.2 ? 0 : (1 - a * 0.22).toFixed(3);
+      el.style.filter = `brightness(${(1 - Math.min(a, 2) * 0.28).toFixed(2)})`;
+      el.style.zIndex = 100 - Math.round(a * 10);
+      el.classList.toggle('current', i === cur);
+      el.style.transition = lb.dragging ? 'none' : '';
+    }
+    lb.els.forEach((el, i) => { if (Math.abs(i - cur) > 4) { el.remove(); lb.els.delete(i); } });
+    $('#lb-count').textContent = `${String(cur + 1).padStart(2, '0')} / ${String(items.length).padStart(2, '0')}`;
+  }
+  function setCaption() {
+    const cap = $('#lb-caption'); cap.classList.add('swap');
+    setTimeout(() => { const it = items[lb.cur]; $('#lb-title').textContent = it.title; $('#lb-loc').textContent = `${it.loc} — ${it.year}`; cap.classList.remove('swap'); }, 250);
+  }
+  function go(d) {
+    const n = clamp(lb.cur + d, 0, items.length - 1); if (n === lb.cur) return;
+    lb.cur = n; renderLB(); setCaption();
+    if (lb.cur > items.length - 4) loadBatch();
+  }
+  function openLB(i) {
+    lb.lastFocus = document.activeElement; lb.cur = i; lb.open = true;
+    lb.els.forEach((el) => el.remove()); lb.els.clear();
+    renderLB(); setCaption();
+    lbEl.classList.add('open'); document.documentElement.style.overflow = 'hidden';
+    $('#lb-close').focus({ preventScroll: true });
+  }
+  function closeLB() {
+    lb.open = false; lbEl.classList.remove('open'); document.documentElement.style.overflow = '';
+    if (lb.lastFocus) lb.lastFocus.focus({ preventScroll: true });
+  }
+  $('#lb-close').addEventListener('click', closeLB);
+  $('#lb-prev').addEventListener('click', () => go(-1));
+  $('#lb-next').addEventListener('click', () => go(1));
+  addEventListener('keydown', (e) => {
+    if (!lb.open) return;
+    if (e.key === 'Escape') closeLB(); else if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1);
+  });
+  world.addEventListener('click', (e) => { const s = e.target.closest('.slide'); if (s && !lb.moved) { const i = +s.dataset.i; if (i !== lb.cur) go(i - lb.cur); } });
+  stage.addEventListener('pointerdown', (e) => { lb.dragging = true; lb.moved = false; lb.startX = e.clientX; stage.setPointerCapture(e.pointerId); });
+  stage.addEventListener('pointermove', (e) => {
+    lb.mx = e.clientX / innerWidth - 0.5; lb.my = e.clientY / innerHeight - 0.5;
+    if (!lb.dragging) return;
+    const dx = e.clientX - lb.startX; if (Math.abs(dx) > 6) lb.moved = true;
+    lb.drag = clamp(dx / (innerWidth * 0.45), -1.5, 1.5); renderLB();
+  });
+  const endDrag = () => {
+    if (!lb.dragging) return; lb.dragging = false;
+    const d = lb.drag; lb.drag = 0;
+    if (Math.abs(d) > 0.18) go(d < 0 ? Math.max(1, Math.round(-d)) : -Math.max(1, Math.round(d))); else renderLB();
+    setTimeout(() => { lb.moved = false; }, 0);
+  };
+  stage.addEventListener('pointerup', endDrag); stage.addEventListener('pointercancel', endDrag);
+  let wheelLock = 0;
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault(); const now = performance.now(); if (now - wheelLock < 450) return;
+    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (Math.abs(d) > 8) { wheelLock = now; go(d > 0 ? 1 : -1); }
+  }, { passive: false });
+
+  /* ------------------------------------------------------------------
+     Journal
+  ------------------------------------------------------------------ */
+  const STORIES = [
+    { t: 'Six winters in Lofoten', c: 'Field notes', d: 'Jan 2026', x: 'On returning to the same fjord until the place begins returning the favour.', th: 'mountains' },
+    { t: 'The colour of salt', c: 'Essay', d: 'Nov 2025', x: 'A week on the Atacama flats, and why white is never really white.', th: 'dunes' },
+    { t: 'Learning to wait', c: 'Process', d: 'Sep 2025', x: 'Patience, tripods and the forty minutes before the light arrives.', th: 'sea' },
+    { t: 'A house of arches', c: 'Architecture', d: 'Jul 2025', x: 'Shadows moving through a whitewashed courtyard in Matera.', th: 'arches' },
+    { t: 'Night walks, Hokkaido', c: 'Field notes', d: 'Mar 2025', x: 'Snow, moonlight and the quietest town I have ever photographed.', th: 'moon' },
+    { t: 'Still life, slowly', c: 'Studio', d: 'Jan 2025', x: 'What a single stem on a table taught me about composition.', th: 'still' },
+  ];
+  const track = $('#journal-track');
+  track.innerHTML = STORIES.map((s, i) => `
+    <article class="story group">
+      <div class="inner">
+        <div class="pic relative"><img src="${scene(300 + i, 600, 750, s.th)}" alt="${s.t}" loading="lazy"><span class="num absolute top-4 left-4 font-serif italic text-white text-2xl">0${i + 1}</span></div>
+        <div class="pt-6">
+          <div class="flex justify-between text-[10px] uppercase tracking-[.3em] text-mute"><span>${s.c}</span><span>${s.d}</span></div>
+          <h3 class="font-serif text-3xl font-light mt-3 leading-tight">${s.t}</h3>
+          <p class="text-mute font-light text-sm leading-relaxed mt-3">${s.x}</p>
+          <a href="#" class="link-u inline-block mt-5 text-[11px] uppercase tracking-[.3em]">Read story →</a>
+        </div>
+      </div>
+    </article>`).join('');
+  const jPin = $('#journal-pin'), jBar = $('#jBar'), jCount = $('#jCount');
+  let jNative = false, jDist = 0;
+  function layoutJournal() {
+    jNative = innerWidth < 768 || !finePointer;
+    document.documentElement.classList.toggle('journal-native', jNative);
+    if (jNative) { jPin.style.height = ''; return; }
+    jDist = Math.max(0, track.scrollWidth - innerWidth);
+    jPin.style.height = (innerHeight + jDist) + 'px';
+  }
+  track.addEventListener('pointermove', (e) => {
+    if (!finePointer) return;
+    const s = e.target.closest('.story'); if (!s) return;
+    const inner = s.firstElementChild, r = inner.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5;
+    inner.style.transform = `rotateY(${px * 10}deg) rotateX(${-py * 8}deg)`;
+  });
+  track.addEventListener('pointerout', (e) => { const s = e.target.closest('.story'); if (s && !s.contains(e.relatedTarget)) s.firstElementChild.style.transform = ''; });
+
+  /* ------------------------------------------------------------------
+     Counters
+  ------------------------------------------------------------------ */
+  const countIO = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return; countIO.unobserve(e.target);
+      const el = e.target, end = +el.dataset.count, t0 = performance.now();
+      const step = (t) => { const p = clamp((t - t0) / 1600, 0, 1); el.textContent = Math.round(end * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
+  }, { threshold: 0.6 });
+  document.querySelectorAll('[data-count]').forEach((el) => countIO.observe(el));
+
+  /* ------------------------------------------------------------------
+     Contact form
+  ------------------------------------------------------------------ */
+  const form = $('#form');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    let ok = true;
+    form.querySelectorAll('.field').forEach((f) => {
+      const inp = f.querySelector('input,textarea');
+      const bad = !inp.value.trim() || (inp.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inp.value));
+      f.classList.toggle('err', bad); if (bad) ok = false;
+    });
+    if (!ok) return;
+    form.style.transition = 'opacity .6s, transform .6s'; form.style.opacity = 0; form.style.transform = 'translateY(-12px)'; form.style.pointerEvents = 'none';
+    const s = $('#sent'); s.style.opacity = 1; s.style.transform = 'none';
+  });
+  form.addEventListener('input', (e) => { const f = e.target.closest('.field'); if (f) f.classList.remove('err'); });
+
+  /* ------------------------------------------------------------------
+     Nav / menu / cursor
+  ------------------------------------------------------------------ */
+  const nav = $('#nav'), menu = $('#menu'), menuBtn = $('#menuBtn');
+  menuBtn.addEventListener('click', () => { const o = menu.classList.toggle('open'); menuBtn.style.color = o ? '#f6f2ec' : ''; });
+  menu.addEventListener('click', (e) => { if (e.target.tagName === 'A') { menu.classList.remove('open'); menuBtn.style.color = ''; } });
+  const cursor = $('#cursor'); const cur = { x: innerWidth / 2, y: innerHeight / 2, tx: innerWidth / 2, ty: innerHeight / 2 };
+  addEventListener('pointermove', (e) => { cur.tx = e.clientX; cur.ty = e.clientY; const v = e.target.closest && e.target.closest('.tile, .slide:not(.current), .story'); cursor.classList.toggle('view', !!v && !lb.open); });
+
+  /* ------------------------------------------------------------------
+     Main loop: hero tilt, parallax, journal, cursor
+  ------------------------------------------------------------------ */
+  const aboutSec = $('#about'), aboutMain = $('#aboutMain'), aboutSmall = $('#aboutSmall'), aboutText = $('#aboutText'), aboutWord = $('#aboutWord');
+  let vh = innerHeight;
+  function frame(t) {
+    const sy = scrollY;
+    // hero
+    if (sy < vh * 1.2) {
+      let tx = hState.tx, ty = hState.ty;
+      if (!hState.hasMouse || !finePointer) { tx = Math.sin(t / 2600) * 0.45; ty = Math.cos(t / 3300) * 0.35; }
+      hState.x = lerp(hState.x, tx, 0.06); hState.y = lerp(hState.y, ty, 0.06);
+      const floatY = reduceMotion ? 0 : Math.sin(t / 1800) * 8;
+      heroFrame.style.transform = `translate3d(0, ${floatY - sy * 0.12}px, 0) rotateY(${hState.x * 16}deg) rotateX(${-hState.y * 12}deg)`;
+      heroImg.style.transform = `translate3d(${-hState.x * 14}px, ${-hState.y * 14}px, 0)`;
+      heroGlare.style.setProperty('--gx', (50 + hState.x * 45) + '%'); heroGlare.style.setProperty('--gy', (40 + hState.y * 45) + '%');
+      heroBg.style.transform = `translate3d(${hState.x * -18}px, ${sy * 0.35 + hState.y * -12}px, 0) scale(${1.04 + sy / vh * 0.08})`;
+    }
+    // about parallax
+    const ar = aboutSec.getBoundingClientRect();
+    if (ar.top < vh && ar.bottom > 0) {
+      const p = (ar.top + ar.height / 2 - vh / 2) / vh; // ~ -1..1
+      aboutMain.style.transform = `translate3d(0, ${p * 40}px, 0)`;
+      aboutMain.firstElementChild.style.transform = `translate3d(0, ${p * -50}px, 0)`;
+      aboutSmall.style.transform = `translate3d(0, ${p * 110}px, 0)`;
+      aboutText.style.transform = `translate3d(0, ${p * 30}px, 0)`;
+      aboutWord.style.transform = `translate3d(${p * 260 - 120}px, 0, 0)`;
+    }
+    // journal
+    if (!jNative) {
+      const jr = jPin.getBoundingClientRect();
+      const p = clamp(-jr.top / Math.max(1, jDist), 0, 1);
+      track.style.transform = `translate3d(${-p * jDist}px, 0, 0)`;
+      jBar.style.transform = `scaleX(${p})`;
+      jCount.textContent = '0' + (1 + Math.round(p * (STORIES.length - 1)));
+    }
+    // lightbox tilt
+    if (lb.open) {
+      lb.rx = lerp(lb.rx, lb.my * -6, 0.06); lb.ry = lerp(lb.ry, lb.mx * 8, 0.06);
+      world.style.transform = `rotateX(${lb.rx}deg) rotateY(${lb.ry}deg)`;
+    }
+    // nav
+    nav.classList.toggle('scrolled', sy > vh * 0.85);
+    // cursor
+    cur.x = lerp(cur.x, cur.tx, 0.2); cur.y = lerp(cur.y, cur.ty, 0.2);
+    cursor.style.transform = `translate3d(${cur.x}px, ${cur.y}px, 0)`;
+    requestAnimationFrame(frame);
+  }
+
+  let resizeT;
+  addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => { vh = innerHeight; buildCols(); layoutJournal(); if (lb.open) renderLB(); }, 120);
+  });
+
+  layoutJournal();
+  requestAnimationFrame(frame);
+  const start = () => { $('#intro').classList.add('done'); document.body.classList.add('ready'); setTimeout(layoutJournal, 300); };
+  if (document.readyState === 'complete') setTimeout(start, 900); else addEventListener('load', () => setTimeout(start, 900));
+})();
+</script>
+</body>
+</html>

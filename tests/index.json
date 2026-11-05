@@ -17,12 +17,12 @@
   },
   "summary": {
    "total": 76,
-   "done": 30,
-   "ok": 30,
-   "v1_ok": 23,
-   "tokens": 3780786,
-   "usd": 54.49,
-   "minutes": 478.6
+   "done": 37,
+   "ok": 37,
+   "v1_ok": 30,
+   "tokens": 4562231,
+   "usd": 64.26,
+   "minutes": 642.1
   },
   "waves": {
    "1": "Флагманы 3D",
@@ -282,24 +282,34 @@
    "kind": "html",
    "wave": 3,
    "wave_name": "Сайты и моушен",
-   "status": "pending",
-   "entries": {},
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
    "shots": {
     "v1": "v1/screenshot.png",
     "v2": "v2/screenshot.png"
    },
-   "shot": "v2/screenshot.png",
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "shot": "screenshot.png",
+   "date": "2026-11-04",
+   "v1_worked": true,
+   "notes": "Scroll-driven longread, 7 pinned canvas scenes morphing by scroll progress, drop caps, spectrum progress bar, per-chapter color temperature. No libraries, no console errors on desktop and mobile.",
+   "v1_issues": "Fire core washed out to a white blob; near gas lamps blown out to huge white glare and near-camera windows rendered as giant flat rectangles; empty black hole in the centre of the laser mandala; progress-bar chapter labels not aligned with the track; 'g' descender clipped in hero title; heavy per-frame shadowBlur (neon) and per-bulb radial gradients (bulb grid) hurt FPS; on mobile the LED labels overlap.",
+   "v2_changes": "Reworked flame particles (warmer sprites, taller tongues, separate hot core); capped and distance-faded gas lamp glows, hid near windows; laser centre filled with rotating conic spectrum + glow, thicker beams on small screens; labels aligned to the track, active-only labels on mobile; neon glow via downsampled bloom instead of shadowBlur; bulb glows via pre-tinted Kelvin sprites and simplified distant bulbs; canvas pixel budget (~3.7 MP) for retina/4K; stage edge fades + film grain; mobile card spacing and typography; hero descender fix.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 180068,
+   "minutes": 58.7,
+   "usd": 3.12,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 180068,
+     "tool_uses": 50,
+     "duration_ms": 3524787
+    }
+   ]
   },
   {
    "n": 8,
@@ -623,23 +633,34 @@
    "kind": "html",
    "wave": 3,
    "wave_name": "Сайты и моушен",
-   "status": "pending",
-   "entries": {},
-   "shots": {
-    "v1": "v1/screenshot.png"
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
    },
-   "shot": "v1/screenshot.png",
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "12 CSS-only лоадеров с бесшовными циклами, SVG goo-фильтр, переключатель темы с сохранением в localStorage; ошибок консоли нет ни в v1, ни в v2.",
+   "v1_issues": "Тяжёлая отрисовка (backdrop-filter на 13 элементах, background-attachment: fixed, blur-фильтр, анимация top в liquid fill и DNA) — ~2 FPS в песочнице; орбитальные точки с задержкой 0.08 с слипались в один комок; на мобильном одна колонка с огромными карточками; тема применялась после отрисовки (вспышка).",
+   "v2_changes": "Убраны backdrop-filter/fixed-фон/blur, liquid и DNA переведены на translate/scale (compositor-only), content-visibility: auto для карточек (~9 FPS в песочнице вместо 2); хвост орбитальных точек разнесён; цветное свечение карточек по акценту, ступени-перекладины у спирали ДНК, блик на колбе; тема выставляется в head до первой отрисовки, плавный переход при переключении, aria-pressed; мобильная сетка 2 колонки с масштабированием лоадеров.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 84156,
+   "minutes": 68.9,
+   "usd": 0.87,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 84156,
+     "tool_uses": 26,
+     "duration_ms": 4131522
+    }
+   ]
   },
   {
    "n": 20,
@@ -911,21 +932,34 @@
    "kind": "image",
    "wave": 4,
    "wave_name": "Вектор и игры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/render.png",
+    "v2": "v2/render.png"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "POV-Ray 3.7 рендерит обе версии без ошибок. Пеликан узнаваем, сидит на седле, лапы на педалях (двухзвенная IK), крылья на руле. v2 ~15 с на 1280×720 с радиосити.",
+   "v1_issues": "Голова и хохолок обрезаны верхним краем кадра; строгий профиль; тело-эллипсоид как дирижабль; крылья — плоские серые эллипсы, чёрное пятно на хвосте выглядит отдельным предметом; плоский свет, пустой горизонт.",
+   "v2_changes": "Кадр 3/4 с запасом над головой; радиосити, мягкое закатное солнце + заполняющий и контровой свет, облака, холмы, деревья; каплевидное тело из sphere_sweep, веер хвостовых перьев, сложенные крылья с чёрными первостепенными, вторичные маховые на крыльях-руках, перепончатые лапы, гребень, глаз с кольцом, рельеф клюва и мешка; тангенциальные спицы, звенья цепи, звезда с вырезами, руль-«усы», звонок, фара, крыло; пыль за колесом; анимация через clock; флаг Quality для быстрого предпросмотра.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 95274,
+   "minutes": 6.1,
+   "usd": 1.04,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 95274,
+     "tool_uses": 24,
+     "duration_ms": 367988
+    }
+   ]
   },
   {
    "n": 28,
@@ -937,21 +971,34 @@
    "kind": "html",
    "wave": 4,
    "wave_name": "Вектор и игры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/index.html",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "12 icons generated by one isometric engine (true 30° projection, 9 three-tone ramps, 2px ink stroke, 128x128). Grid page with per-icon/all/sprite download, copy, inspector dialog, 30° grid overlay, dark mode. v2 also ships 12 standalone files in v2/icons/.",
+   "v1_issues": "Grid overlay not clipped (svg overflow:visible), so the lines covered the whole page and other cards; an empty toast pill was visible; on mobile the 2-column grid overflowed horizontally and the size switcher stayed on 160 while the icons rendered at 120; the softbox was a flat panel with weak depth; the tripod's front leg overlapped the centre column; the hard-drive platter arm looked like a keyhole; the separate SVGs existed only as blob downloads.",
+   "v2_changes": "Clip the grid to the 128 frame; hide the toast properly; mobile layout uses minmax(0,1fr), meta stacks and the default size follows the screen width; staggered card entrance plus reduced-motion support; deeper softbox with rim thickness, seams, highlight and speedring; tripod legs placed at 15/135/255 degrees and depth-sorted; hard-drive arm with pivot and status LED; 12 separate files exported to v2/icons/*.svg (valid XML) and linked from each card.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 151396,
+   "minutes": 14.2,
+   "usd": 1.94,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 151396,
+     "tool_uses": 20,
+     "duration_ms": 853527
+    }
+   ]
   },
   {
    "n": 29,
@@ -1313,21 +1360,34 @@
    "kind": "python",
    "wave": 4,
    "wave_name": "Вектор и игры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Python/tkinter без зависимостей; физика в системе отсчёта вращающейся стенки, мяч не вылетает. v2 — Python + canvas-порт, консоль чистая, десктоп и мобильная версия проверены.",
+   "v1_issues": "Критичных ошибок нет. Недочёты: шаг физики привязан к after() (симуляция замедляется при просадке FPS), мяч визуально заходит в толстую линию стены, у мяча нет собственного вращения (трение не закручивает), микродребезг при покоящемся контакте.",
+   "v2_changes": "Фиксированный шаг 480 Гц с аккумулятором по реальному времени; мяч как твёрдый шар со спином (импульс трения по Кулону с моментом инерции 2/5mR²); нулевая упругость для медленных контактов; стена толщиной наружу от поверхности коллизии, шлейф, вспышки ударов, пауза/реверс. Веб-порт canvas: неоновая стена с glow, искры, шлейф, вращающаяся сетка, HUD, слайдер скорости, тап = пинок, адаптив под мобильные и DPR.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 86810,
+   "minutes": 4.4,
+   "usd": 0.84,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 86810,
+     "tool_uses": 20,
+     "duration_ms": 261832
+    }
+   ]
   },
   {
    "n": 39,
@@ -1339,21 +1399,34 @@
    "kind": "python",
    "wave": 4,
    "wave_name": "Вектор и игры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Python/tkinter симуляция работает (Xvfb-скриншоты v1 и v2), веб-порт на canvas без ошибок консоли, мобильная версия проверена.",
+   "v1_issues": "Шаг симуляции привязан к частоте кадров; из-за медленной физики на numpy-векторах время шло на ~62% от реального — семиугольник крутился ~360°/8 с вместо 360°/5 с. Визуал простой.",
+   "v2_changes": "Фиксированный шаг 480 Гц с аккумулятором по реальному времени; физика на float (быстрее в десятки раз); шейдинг мячей, тени, свечение обода, HUD, пауза/рестарт; веб-порт v2/index.html (canvas, DPR, адаптив под мобильные).",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 93793,
+   "minutes": 5.7,
+   "usd": 1.02,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 93793,
+     "tool_uses": 24,
+     "duration_ms": 340824
+    }
+   ]
   },
   {
    "n": 40,
@@ -1365,21 +1438,34 @@
    "kind": "python",
    "wave": 4,
    "wave_name": "Вектор и игры",
-   "status": "pending",
-   "entries": {},
-   "shots": {},
-   "shot": null,
-   "date": null,
-   "v1_worked": null,
-   "notes": "",
-   "v1_issues": "",
-   "v2_changes": "",
+   "status": "ok",
+   "entries": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/index.html"
+   },
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "screenshot.png",
+   "date": "2026-11-05",
+   "v1_worked": true,
+   "notes": "Python/tkinter: 5 balls in 6 nested rotating hexagons with one missing wall each (except the outer one); gravity, friction, ball spin, momentum transfer from walls. Runs under Xvfb without errors. v2 adds a canvas web port with sliders; no console errors on desktop or mobile.",
+   "v1_issues": "Works with no errors, but energy drains: after ~40 s all balls collect in the outermost ring and just roll along it. Fixed frame dt (not real time), every frame redraws with delete('all'), plain visuals, parameters only as constants in the code.",
+   "v2_changes": "Tuned physics (gravity 500, wall friction 0.7, restitution 0.92, faster rotations) so balls keep mixing across all rings; no micro-bounces at rest; speed limit against tunnelling; outer-wall safety net; real-time dt; canvas items reused; trails, glow, highlights; runtime controls (G/F/S/[ ]/R/Space) with a HUD. Web port v2/index.html: fixed-timestep canvas simulation, neon render, sliders for every parameter, click to kick, mobile layout.",
    "effort": "high",
    "model": null,
-   "tokens": null,
-   "minutes": null,
-   "usd": null,
-   "runs": []
+   "tokens": 89948,
+   "minutes": 5.5,
+   "usd": 0.94,
+   "runs": [
+    {
+     "stage": "v1+v2",
+     "subagent_tokens": 89948,
+     "tool_uses": 23,
+     "duration_ms": 330775
+    }
+   ]
   },
   {
    "n": 41,
@@ -1510,8 +1596,11 @@
    "wave_name": "Вектор и игры",
    "status": "pending",
    "entries": {},
-   "shots": {},
-   "shot": null,
+   "shots": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/screenshot.png"
+   },
+   "shot": "v2/screenshot.png",
    "date": null,
    "v1_worked": null,
    "notes": "",

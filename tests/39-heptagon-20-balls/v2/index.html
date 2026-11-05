@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Heptagon · 20 Balls</title>
+<style>
+  :root { --bg: #111117; --ink: #8f8fa6; --accent: #f39800; }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: manipulation; }
+  #hud { position: fixed; left: 16px; right: 16px; bottom: 12px; color: var(--ink); font-size: 13px;
+    display: flex; flex-wrap: wrap; gap: 6px 16px; pointer-events: none; font-variant-numeric: tabular-nums; }
+  #hud b { color: #e9dcc4; font-weight: 600; }
+  #title { position: fixed; left: 16px; top: 12px; color: #e9dcc4; font-size: 14px; letter-spacing: .04em;
+    pointer-events: none; opacity: .85; }
+  #title span { color: var(--accent); }
+  .btns { position: fixed; right: 12px; top: 10px; display: flex; gap: 8px; }
+  .btns button { background: #22222c; color: #e9dcc4; border: 1px solid #3a3a48; border-radius: 8px;
+    padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .btns button:hover { border-color: var(--accent); }
+  @media (max-width: 560px) {
+    #title { top: auto; bottom: 34px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="title"><span>&#9671;</span> 20 balls · spinning heptagon</div>
+<div class="btns"><button id="pause">Pause</button><button id="reset">Drop again</button></div>
+<div id="hud"><span>t <b id="t">0.0</b> s</span><span>heptagon <b id="a">0</b>&deg;</span><span><b id="fps">0</b> fps</span></div>
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Port of v2/heptagon_balls.py: same units (px of an 800x800 world), same physics.
+// ---------------------------------------------------------------------------
+const W = 800, CX = 400, CY = 400;
+const HEPTAGON_RADIUS = 350, SIDES = 7, SPIN = 2 * Math.PI / 5;   // 360° per 5 s
+const APOTHEM = HEPTAGON_RADIUS * Math.cos(Math.PI / SIDES);
+const N = 20, R = 18, MASS = 1, INERTIA = 0.5 * MASS * R * R;
+const GRAVITY = 1000, WALL_E = 0.72, BALL_E = 0.85, WALL_MU = 0.35, BALL_MU = 0.15;
+const AIR_DRAG = 0.05, SPIN_DAMPING = 0.3, RESTING_SPEED = 25;
+const MAX_SPEED = Math.sqrt(2 * GRAVITY * (HEPTAGON_RADIUS - R));
+const PHYS_DT = 1 / 480, MAX_STEPS = 24;
+const COLORS = ["#f8b862","#f6ad49","#f39800","#f08300","#ec6d51","#ee7948","#ed6d3d","#ec6800","#ec6800","#ee7800",
+  "#eb6238","#ea5506","#ea5506","#eb6101","#e49e61","#e45e32","#e17b34","#dd7a56","#db8449","#d66a35"];
+
+function mix(a, b, t) {
+  const p = s => [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16));
+  const A = p(a), B = p(b);
+  return "rgb(" + A.map((v, k) => Math.round(v + (B[k] - v) * t)).join(",") + ")";
+}
+
+let balls, hepAngle, simTime;
+function reset() {
+  balls = [];
+  hepAngle = 0; simTime = 0;
+  for (let i = 0; i < N; i++) {
+    balls.push({
+      n: i + 1, color: COLORS[i],
+      x: CX + (Math.random() * 4 - 2), y: CY + (Math.random() * 4 - 2),
+      vx: Math.random() * 120 - 60, vy: -Math.random() * 30,
+      angle: 0, omega: 0, sprite: null
+    });
+  }
+  buildSprites();
+}
+
+function step(h) {
+  simTime += h;
+  hepAngle = (hepAngle + SPIN * h) % (2 * Math.PI);
+  const drag = Math.exp(-AIR_DRAG * h), sdrag = Math.exp(-SPIN_DAMPING * h), gh = GRAVITY * h;
+  const vmax2 = MAX_SPEED * MAX_SPEED;
+  for (const b of balls) {
+    b.vx *= drag; b.vy = (b.vy + gh) * drag;
+    const s2 = b.vx * b.vx + b.vy * b.vy;
+    if (s2 > vmax2) { const k = MAX_SPEED / Math.sqrt(s2); b.vx *= k; b.vy *= k; }
+    b.x += b.vx * h; b.y += b.vy * h;
+    b.omega *= sdrag; b.angle += b.omega * h;
+  }
+  // ball-ball
+  const minD = 2 * R, minD2 = minD * minD, invSum = 2 / MASS;
+  for (let i = 0; i < N; i++) {
+    const a = balls[i];
+    for (let j = i + 1; j < N; j++) {
+      const b = balls[j];
+      const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+      if (d2 >= minD2) continue;
+      let d = Math.sqrt(d2), nx, ny;
+      if (d < 1e-9) { nx = 1; ny = 0; d = 0; } else { nx = dx / d; ny = dy / d; }
+      const corr = (minD - d) / 2;
+      a.x -= nx * corr; a.y -= ny * corr; b.x += nx * corr; b.y += ny * corr;
+      const rvx = a.vx - b.vx, rvy = a.vy - b.vy;
+      const vn = rvx * nx + rvy * ny;
+      if (vn <= 0) continue;
+      const tx = -ny, ty = nx;
+      const vt = rvx * tx + rvy * ty + R * a.omega + R * b.omega;
+      const e = vn > RESTING_SPEED ? BALL_E : 0;
+      const jn = (1 + e) * vn / invSum;
+      a.vx -= jn * nx / MASS; a.vy -= jn * ny / MASS;
+      b.vx += jn * nx / MASS; b.vy += jn * ny / MASS;
+      const kt = invSum + 2 * R * R / INERTIA;
+      let jt = -vt / kt; const lim = BALL_MU * jn;
+      jt = Math.max(-lim, Math.min(lim, jt));
+      a.vx += jt * tx / MASS; a.vy += jt * ty / MASS;
+      b.vx -= jt * tx / MASS; b.vy -= jt * ty / MASS;
+      a.omega += R * jt / INERTIA; b.omega += R * jt / INERTIA;
+    }
+  }
+  // ball-wall (rotating walls: include wall velocity at the contact point)
+  const normals = [];
+  for (let k = 0; k < SIDES; k++) {
+    const m = hepAngle + 2 * Math.PI * (k + 0.5) / SIDES - Math.PI / 2;
+    normals.push(-Math.cos(m), -Math.sin(m));
+  }
+  for (const b of balls) {
+    for (let k = 0; k < SIDES; k++) {
+      const nx = normals[2 * k], ny = normals[2 * k + 1];
+      const dist = APOTHEM + (b.x - CX) * nx + (b.y - CY) * ny;
+      if (dist >= R) continue;
+      const pen = R - dist;
+      b.x += nx * pen; b.y += ny * pen;
+      const px = b.x - nx * R, py = b.y - ny * R;
+      const wvx = -SPIN * (py - CY), wvy = SPIN * (px - CX);
+      const rvx = b.vx + b.omega * ny * R - wvx, rvy = b.vy - b.omega * nx * R - wvy;
+      const vn = rvx * nx + rvy * ny;
+      if (vn >= 0) continue;
+      const e = -vn > RESTING_SPEED ? WALL_E : 0;
+      const jn = -(1 + e) * vn * MASS;
+      const tx = -ny, ty = nx;
+      const vt = rvx * tx + rvy * ty;
+      let jt = -vt / (1 / MASS + R * R / INERTIA); const lim = WALL_MU * jn;
+      jt = Math.max(-lim, Math.min(lim, jt));
+      b.vx += (jn * nx + jt * tx) / MASS; b.vy += (jn * ny + jt * ty) / MASS;
+      b.omega += -R * jt / INERTIA;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+let scale = 1, ox = 0, oy = 0, dpr = 1;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const w = window.innerWidth, h = window.innerHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const pad = w < 600 ? 8 : 40;
+  const avail = Math.min(w - 2 * pad, h - 2 * pad - (w < 600 ? 60 : 50));
+  scale = avail / (2 * HEPTAGON_RADIUS + 40);
+  ox = w / 2; oy = h / 2 + (w < 600 ? 4 : 6);
+  if (balls) buildSprites();
+}
+
+// pre-rendered shaded ball bodies (light from top-left stays fixed; the number spins on top)
+function buildSprites() {
+  const px = Math.ceil((R * 2 + 4) * scale * dpr);
+  for (const b of balls) {
+    const c = b.sprite || document.createElement("canvas");
+    c.width = c.height = px;
+    const g = c.getContext("2d");
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, px, px);
+    const s = px / (R * 2 + 4);
+    g.setTransform(s, 0, 0, s, px / 2, px / 2);
+    const grad = g.createRadialGradient(-R * 0.4, -R * 0.45, R * 0.1, 0, 0, R * 1.05);
+    grad.addColorStop(0, mix(b.color, "#ffffff", 0.55));
+    grad.addColorStop(0.35, b.color);
+    grad.addColorStop(1, mix(b.color, "#000000", 0.42));
+    g.fillStyle = grad;
+    g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.fill();
+    g.lineWidth = 1; g.strokeStyle = mix(b.color, "#000000", 0.5); g.stroke();
+    // label disc
+    g.fillStyle = "rgba(255,248,236,0.88)";
+    g.beginPath(); g.arc(0, 0, R * 0.56, 0, Math.PI * 2); g.fill();
+    b.sprite = c;
+  }
+}
+
+function hepPath(r) {
+  ctx.beginPath();
+  for (let k = 0; k < SIDES; k++) {
+    const a = hepAngle + 2 * Math.PI * k / SIDES - Math.PI / 2;
+    const x = CX + r * Math.cos(a), y = CY + r * Math.sin(a);
+    k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const bg = ctx.createRadialGradient(cv.width / 2, cv.height / 2, 0, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * 0.7);
+  bg.addColorStop(0, "#1c1b24"); bg.addColorStop(1, "#0d0d12");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, cv.width, cv.height);
+
+  const s = scale * dpr;
+  ctx.setTransform(s, 0, 0, s, ox * dpr - CX * s, oy * dpr - CY * s);
+
+  // heptagon floor + glow rim
+  hepPath(HEPTAGON_RADIUS);
+  const floor = ctx.createRadialGradient(CX, CY - 120, 20, CX, CY, HEPTAGON_RADIUS);
+  floor.addColorStop(0, "#2a2833"); floor.addColorStop(1, "#1a1a22");
+  ctx.fillStyle = floor; ctx.fill();
+  ctx.save();
+  ctx.shadowColor = "rgba(243,152,0,0.55)"; ctx.shadowBlur = 28 * s;
+  ctx.lineJoin = "round"; ctx.lineWidth = 6; ctx.strokeStyle = "#f3e3c3"; ctx.stroke();
+  ctx.restore();
+  hepPath(HEPTAGON_RADIUS - 14);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  ctx.beginPath(); ctx.arc(CX, CY, 3, 0, Math.PI * 2); ctx.fill();
+
+  // shadows
+  ctx.fillStyle = "rgba(0,0,0,0.38)";
+  for (const b of balls) { ctx.beginPath(); ctx.ellipse(b.x + 3, b.y + 5, R, R * 0.95, 0, 0, Math.PI * 2); ctx.fill(); }
+
+  const size = R * 2 + 4;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "700 12px ui-sans-serif, system-ui, Helvetica, Arial, sans-serif";
+  for (const b of balls) {
+    ctx.drawImage(b.sprite, b.x - size / 2, b.y - size / 2, size, size);
+    ctx.save();
+    ctx.translate(b.x, b.y); ctx.rotate(b.angle);
+    // spin marker on the rim
+    ctx.strokeStyle = mix(b.color, "#000000", 0.55); ctx.lineWidth = 2.2; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(0, -R * 0.68); ctx.lineTo(0, -R * 0.93); ctx.stroke();
+    ctx.fillStyle = "#2a1406"; ctx.fillText(String(b.n), 0, 0.5);
+    if (b.n === 6 || b.n === 9) { ctx.fillRect(-4, 6.5, 8, 1.4); }
+    ctx.restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Loop (fixed-step physics, wall-clock driven)
+// ---------------------------------------------------------------------------
+const elT = document.getElementById("t"), elA = document.getElementById("a"), elF = document.getElementById("fps");
+let last = performance.now(), acc = 0, fps = 60, paused = false, hudTimer = 0;
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  if (dt > 0) fps = fps * 0.92 + (1 / dt) * 0.08;
+  if (!paused) {
+    acc += Math.min(dt, MAX_STEPS * PHYS_DT);
+    let n = 0;
+    while (acc >= PHYS_DT && n < MAX_STEPS) { step(PHYS_DT); acc -= PHYS_DT; n++; }
+  }
+  draw();
+  if ((hudTimer += dt) > 0.15) {
+    hudTimer = 0;
+    elT.textContent = simTime.toFixed(1);
+    elA.textContent = (hepAngle * 180 / Math.PI).toFixed(0);
+    elF.textContent = fps.toFixed(0);
+  }
+  requestAnimationFrame(frame);
+}
+
+const pauseBtn = document.getElementById("pause");
+function togglePause() { paused = !paused; pauseBtn.textContent = paused ? "Play" : "Pause"; }
+pauseBtn.addEventListener("click", togglePause);
+document.getElementById("reset").addEventListener("click", reset);
+window.addEventListener("keydown", e => {
+  if (e.code === "Space") { e.preventDefault(); togglePause(); }
+  else if (e.key === "r" || e.key === "R") reset();
+});
+window.addEventListener("resize", resize);
+document.addEventListener("visibilitychange", () => { last = performance.now(); });
+
+resize(); reset();
+requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); });
+</script>
+</body>
+</html>

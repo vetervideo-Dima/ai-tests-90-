@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Six SVG Scenes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f3efe8; --bg2:#e9e1d4; --card:#fffdf9; --ink:#2a2420; --muted:#7a6f66; --accent:#e0702c;
+    --shadow:0 1px 2px rgba(60,40,20,.06), 0 8px 24px rgba(60,40,20,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1d1a17; --bg2:#141210; --card:#2a2622; --ink:#f1ebe3; --muted:#a99d90; --shadow:0 8px 28px rgba(0,0,0,.45); }
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  html { background:var(--bg2); }
+  body {
+    background:radial-gradient(ellipse 120% 70% at 50% 0%, var(--bg) 45%, var(--bg2));
+    min-height:100vh; color:var(--ink);
+    font-family:"Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { text-align:center; padding:36px 16px 4px; }
+  h1 { margin:0; font-family:"Fredoka", "Nunito", system-ui, sans-serif; font-weight:600; font-size:clamp(26px, 5vw, 40px); letter-spacing:.5px; }
+  h1 span { color:var(--accent); }
+  header p { margin:6px 0 0; color:var(--muted); font-size:15px; }
+  .grid {
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+    gap:22px; max-width:1240px; margin:26px auto; padding:0 16px 48px;
+  }
+  figure {
+    margin:0; background:var(--card); border-radius:18px; padding:12px; box-shadow:var(--shadow);
+    transition:transform .25s ease, box-shadow .25s ease; cursor:zoom-in;
+    opacity:0; transform:translateY(14px); animation:in .6s ease forwards;
+  }
+  figure:nth-child(2){animation-delay:.07s} figure:nth-child(3){animation-delay:.14s}
+  figure:nth-child(4){animation-delay:.21s} figure:nth-child(5){animation-delay:.28s} figure:nth-child(6){animation-delay:.35s}
+  @keyframes in { to { opacity:1; transform:none; } }
+  figure:hover { transform:translateY(-4px); box-shadow:0 14px 36px rgba(60,40,20,.18); }
+  figure img { width:100%; height:auto; aspect-ratio:1; display:block; border-radius:12px; background:#fff; }
+  figcaption { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 4px 2px; font-weight:700; }
+  figcaption small { font-weight:400; color:var(--muted); font-size:12px; white-space:nowrap; }
+  figcaption a { color:var(--muted); font-weight:400; font-size:13px; text-decoration:none; border:1px solid currentColor; border-radius:999px; padding:2px 9px; }
+  figcaption a:hover { color:var(--accent); }
+  dialog { border:0; padding:0; background:transparent; max-width:min(92vw, 720px); width:100%; }
+  dialog::backdrop { background:rgba(20,14,10,.75); backdrop-filter:blur(3px); }
+  dialog img { width:100%; height:auto; display:block; border-radius:16px; background:#fff; }
+  dialog p { color:#fff; text-align:center; font-weight:700; margin:12px 0 0; }
+  @media (prefers-reduced-motion: reduce) { figure { animation:none; opacity:1; transform:none; transition:none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Six <span>SVG</span> Scenes</h1>
+  <p>Six standalone 400 × 400 SVG files · click a card to enlarge</p>
+</header>
+<main class="grid" id="grid">
+  <figure><img src="hedgehog-accordion.svg" alt="A hedgehog playing an accordion" width="400" height="400"><figcaption><span>A hedgehog playing an accordion</span><a href="hedgehog-accordion.svg" download>.svg</a></figcaption></figure>
+  <figure><img src="starfish-bulldozer.svg" alt="A starfish driving a bulldozer" width="400" height="400"><figcaption><span>A starfish driving a bulldozer</span><a href="starfish-bulldozer.svg" download>.svg</a></figcaption></figure>
+  <figure><img src="penguin-chainsaws.svg" alt="A penguin juggling chainsaws" width="400" height="400"><figcaption><span>A penguin juggling chainsaws</span><a href="penguin-chainsaws.svg" download>.svg</a></figcaption></figure>
+  <figure><img src="chameleon-piano.svg" alt="A chameleon tuning a grand piano" width="400" height="400"><figcaption><span>A chameleon tuning a grand piano</span><a href="chameleon-piano.svg" download>.svg</a></figcaption></figure>
+  <figure><img src="lobster-harp.svg" alt="A lobster polishing a harp" width="400" height="400"><figcaption><span>A lobster polishing a harp</span><a href="lobster-harp.svg" download>.svg</a></figcaption></figure>
+  <figure><img src="sloth-excavator.svg" alt="A sloth steering an excavator" width="400" height="400"><figcaption><span>A sloth steering an excavator</span><a href="sloth-excavator.svg" download>.svg</a></figcaption></figure>
+</main>
+<dialog id="zoom"><img alt=""><p></p></dialog>
+<script>
+  const dlg = document.getElementById('zoom');
+  document.getElementById('grid').addEventListener('click', (e) => {
+    if (e.target.closest('a')) return;
+    const fig = e.target.closest('figure');
+    if (!fig || !dlg.showModal) return;
+    const img = fig.querySelector('img');
+    dlg.querySelector('img').src = img.src;
+    dlg.querySelector('img').alt = img.alt;
+    dlg.querySelector('p').textContent = img.alt;
+    dlg.showModal();
+  });
+  dlg.addEventListener('click', () => dlg.close());
+</script>
+</body>
+</html>

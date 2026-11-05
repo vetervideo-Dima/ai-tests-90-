@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <style>.bellows{transform-origin:200px 285px;animation:sq 1.6s ease-in-out infinite}.lbox{animation:lb 1.6s ease-in-out infinite}.rbox{animation:rb 1.6s ease-in-out infinite}@keyframes sq{50%{transform:scaleX(.82)}}@keyframes lb{50%{transform:translateX(9px)}}@keyframes rb{50%{transform:translateX(-9px)}}.body{transform-origin:200px 345px;animation:sway 3.2s ease-in-out infinite}@keyframes sway{25%{transform:rotate(-2.5deg)}75%{transform:rotate(2.5deg)}}.eye{transform-box:fill-box;transform-origin:center;animation:blink 4s infinite}@keyframes blink{0%,94%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}.n1,.n2{animation:float 3s ease-in-out infinite}.n2{animation-delay:-1.5s}@keyframes float{0%{transform:translateY(12px);opacity:0}30%{opacity:1}100%{transform:translateY(-26px);opacity:0}}@media (prefers-reduced-motion: reduce){*{animation:none!important}}</style>
+  <defs><radialGradient id="bg" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#fff7e6"/><stop offset="1" stop-color="#ead9b6"/></radialGradient><radialGradient id="belly" cx="45%" cy="35%" r="70%"><stop offset="0" stop-color="#f8e2c3"/><stop offset="1" stop-color="#dcb58a"/></radialGradient><linearGradient id="red" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e05545"/><stop offset="1" stop-color="#a82d20"/></linearGradient></defs>
+  <rect width="400" height="400" fill="url(#bg)"/>
+  <ellipse cx="200" cy="352" rx="130" ry="16" fill="#e2d2b0"/>
+  <g class="body">
+  <!-- spikes -->
+  <g fill="#4a2e1b">
+    <g transform="rotate(-80 200 220)"><polygon points="186,135 200,85 214,135"/></g>
+    <g transform="rotate(-60 200 220)"><polygon points="186,135 200,82 214,135"/></g>
+    <g transform="rotate(-40 200 220)"><polygon points="186,135 200,80 214,135"/></g>
+    <g transform="rotate(-20 200 220)"><polygon points="186,135 200,78 214,135"/></g>
+    <g transform="rotate(0 200 220)"><polygon points="186,135 200,76 214,135"/></g>
+    <g transform="rotate(20 200 220)"><polygon points="186,135 200,78 214,135"/></g>
+    <g transform="rotate(40 200 220)"><polygon points="186,135 200,80 214,135"/></g>
+    <g transform="rotate(60 200 220)"><polygon points="186,135 200,82 214,135"/></g>
+    <g transform="rotate(80 200 220)"><polygon points="186,135 200,85 214,135"/></g>
+    <g transform="rotate(100 200 220)"><polygon points="186,135 200,92 214,135"/></g>
+    <g transform="rotate(-100 200 220)"><polygon points="186,135 200,92 214,135"/></g>
+  </g>
+  <g fill="#6b4329">
+    <g transform="rotate(-70 200 220)"><polygon points="188,140 200,100 212,140"/></g>
+    <g transform="rotate(-50 200 220)"><polygon points="188,140 200,98 212,140"/></g>
+    <g transform="rotate(-30 200 220)"><polygon points="188,140 200,96 212,140"/></g>
+    <g transform="rotate(-10 200 220)"><polygon points="188,140 200,94 212,140"/></g>
+    <g transform="rotate(10 200 220)"><polygon points="188,140 200,94 212,140"/></g>
+    <g transform="rotate(30 200 220)"><polygon points="188,140 200,96 212,140"/></g>
+    <g transform="rotate(50 200 220)"><polygon points="188,140 200,98 212,140"/></g>
+    <g transform="rotate(70 200 220)"><polygon points="188,140 200,100 212,140"/></g>
+    <g transform="rotate(90 200 220)"><polygon points="188,140 200,104 212,140"/></g>
+    <g transform="rotate(-90 200 220)"><polygon points="188,140 200,104 212,140"/></g>
+  </g>
+  <ellipse cx="200" cy="225" rx="100" ry="95" fill="#5b3a24"/>
+  <!-- belly + face -->
+  <ellipse cx="200" cy="255" rx="70" ry="75" fill="url(#belly)"/>
+  <ellipse cx="200" cy="190" rx="62" ry="52" fill="#efd3ae"/>
+  <circle cx="152" cy="150" r="13" fill="#e9c9a1"/>
+  <circle cx="248" cy="150" r="13" fill="#e9c9a1"/>
+  <circle cx="152" cy="150" r="6" fill="#d9a77e"/>
+  <circle cx="248" cy="150" r="6" fill="#d9a77e"/>
+  <g class="eye"><circle cx="178" cy="182" r="8" fill="#1d1208"/><circle cx="180" cy="179" r="2.5" fill="#fff"/></g>
+  <g class="eye"><circle cx="222" cy="182" r="8" fill="#1d1208"/><circle cx="224" cy="179" r="2.5" fill="#fff"/></g>
+  <ellipse cx="200" cy="205" rx="10" ry="7" fill="#1d1208"/>
+  <path d="M186 218 Q200 230 214 218" fill="none" stroke="#1d1208" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="165" cy="205" rx="9" ry="6" fill="#f2a3a0" opacity="0.7"/>
+  <ellipse cx="235" cy="205" rx="9" ry="6" fill="#f2a3a0" opacity="0.7"/>
+  <!-- feet -->
+  <ellipse cx="165" cy="338" rx="22" ry="11" fill="#c99d74"/>
+  <ellipse cx="235" cy="338" rx="22" ry="11" fill="#c99d74"/>
+  <!-- accordion -->
+  <g class="bellows">
+  <rect x="150" y="248" width="100" height="72" fill="#2c3e50"/>
+  <g stroke="#9fb3c8" stroke-width="2">
+    <line x1="160" y1="248" x2="160" y2="320"/>
+    <line x1="170" y1="248" x2="170" y2="320"/>
+    <line x1="180" y1="248" x2="180" y2="320"/>
+    <line x1="190" y1="248" x2="190" y2="320"/>
+    <line x1="200" y1="248" x2="200" y2="320"/>
+    <line x1="210" y1="248" x2="210" y2="320"/>
+    <line x1="220" y1="248" x2="220" y2="320"/>
+    <line x1="230" y1="248" x2="230" y2="320"/>
+    <line x1="240" y1="248" x2="240" y2="320"/>
+  </g>
+  <polyline points="150,248 155,242 160,248 165,242 170,248 175,242 180,248 185,242 190,248 195,242 200,248 205,242 210,248 215,242 220,248 225,242 230,248 235,242 240,248 245,242 250,248" fill="none" stroke="#2c3e50" stroke-width="3"/>
+  <polyline points="150,320 155,326 160,320 165,326 170,320 175,326 180,320 185,326 190,320 195,326 200,320 205,326 210,320 215,326 220,320 225,326 230,320 235,326 240,320 245,326 250,320" fill="none" stroke="#2c3e50" stroke-width="3"/>
+  </g>
+  <g class="lbox">
+  <rect x="108" y="236" width="44" height="96" rx="6" fill="url(#red)" stroke="#7b241c" stroke-width="3"/>
+  <g fill="#f5e6c8">
+    <circle cx="122" cy="256" r="4"/><circle cx="138" cy="256" r="4"/>
+    <circle cx="122" cy="272" r="4"/><circle cx="138" cy="272" r="4"/>
+    <circle cx="122" cy="288" r="4"/><circle cx="138" cy="288" r="4"/>
+    <circle cx="122" cy="304" r="4"/><circle cx="138" cy="304" r="4"/>
+  </g>
+  <ellipse cx="112" cy="282" rx="12" ry="16" fill="#e9c9a1" stroke="#c99d74" stroke-width="2"/>
+  </g>
+  <g class="rbox">
+  <rect x="248" y="236" width="44" height="96" rx="6" fill="url(#red)" stroke="#7b241c" stroke-width="3"/>
+  <rect x="256" y="244" width="28" height="80" fill="#fffaf0"/>
+  <g stroke="#999" stroke-width="1">
+    <line x1="256" y1="254" x2="284" y2="254"/><line x1="256" y1="264" x2="284" y2="264"/>
+    <line x1="256" y1="274" x2="284" y2="274"/><line x1="256" y1="284" x2="284" y2="284"/>
+    <line x1="256" y1="294" x2="284" y2="294"/><line x1="256" y1="304" x2="284" y2="304"/>
+    <line x1="256" y1="314" x2="284" y2="314"/>
+  </g>
+  <g fill="#111">
+    <rect x="256" y="251" width="16" height="6"/><rect x="256" y="261" width="16" height="6"/>
+    <rect x="256" y="281" width="16" height="6"/><rect x="256" y="291" width="16" height="6"/>
+    <rect x="256" y="301" width="16" height="6"/>
+  </g>
+  <ellipse cx="288" cy="282" rx="12" ry="16" fill="#e9c9a1" stroke="#c99d74" stroke-width="2"/>
+  </g>
+  </g>
+    <!-- music notes -->
+  <g fill="#5b3a24">
+    <g class="n1"><ellipse cx="318" cy="120" rx="9" ry="7" transform="rotate(-20 318 120)"/>
+    <rect x="325" y="78" width="3" height="42"/>
+    <path d="M328 78 Q345 86 340 102 Q338 92 328 90 Z"/></g>
+    <g class="n2">
+    <ellipse cx="80" cy="150" rx="8" ry="6" transform="rotate(-20 80 150)"/>
+    <ellipse cx="106" cy="142" rx="8" ry="6" transform="rotate(-20 106 142)"/>
+    <rect x="86" y="112" width="3" height="38"/>
+    <rect x="112" y="104" width="3" height="38"/>
+    <polygon points="86,112 115,104 115,112 86,120"/></g>
+  </g>
+</svg>

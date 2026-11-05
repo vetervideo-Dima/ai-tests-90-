@@ -1,0 +1,30 @@
+{
+  "model": null,
+  "effort": "high",
+  "date": "2026-11-05",
+  "worked": true,
+  "v1_worked": true,
+  "kind": "python",
+  "entry": {
+    "v1": "v1/screenshot.png",
+    "v2": "v2/index.html"
+  },
+  "notes": "Python/tkinter: 5 balls in 6 nested rotating hexagons with one missing wall each (except the outer one); gravity, friction, ball spin, momentum transfer from walls. Runs under Xvfb without errors. v2 adds a canvas web port with sliders; no console errors on desktop or mobile.",
+  "v1_issues": "Works with no errors, but energy drains: after ~40 s all balls collect in the outermost ring and just roll along it. Fixed frame dt (not real time), every frame redraws with delete('all'), plain visuals, parameters only as constants in the code.",
+  "v2_changes": "Tuned physics (gravity 500, wall friction 0.7, restitution 0.92, faster rotations) so balls keep mixing across all rings; no micro-bounces at rest; speed limit against tunnelling; outer-wall safety net; real-time dt; canvas items reused; trails, glow, highlights; runtime controls (G/F/S/[ ]/R/Space) with a HUD. Web port v2/index.html: fixed-timestep canvas simulation, neon render, sliders for every parameter, click to kick, mobile layout.",
+  "usage": {
+    "runs": [
+      {
+        "stage": "v1+v2",
+        "subagent_tokens": 89948,
+        "tool_uses": 23,
+        "duration_ms": 330775
+      }
+    ],
+    "total_tokens": 89948,
+    "processed_tokens": 1719324,
+    "total_minutes": 5.5,
+    "est_usd": 0.94,
+    "note": "оценка: API-эквивалент по модели tools/cost.py, не реальное списание"
+  }
+}

@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Diamonds · LOVE</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "../../../vendor/three/build/three.module.js",
+  "three/addons/": "../../../vendor/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const LOOP = 15.0;           // seconds — seamless loop length
+const TAU = Math.PI * 2;
+
+// ---------------------------------------------------------------------------
+// Renderer / scene / camera
+// ---------------------------------------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.02, 2000);
+
+// ---------------------------------------------------------------------------
+// Brilliant-cut diamond as a convex polytope (set of half-spaces n·p <= d)
+// Girdle radius = 1. Proportions close to Tolkowsky ideal.
+// ---------------------------------------------------------------------------
+const planes = [];
+const deg = Math.PI / 180;
+function addPlane(az, tilt, up, px, py) {
+  // normal tilted from vertical (+y for crown, -y for pavilion) toward azimuth az
+  const s = Math.sin(tilt), c = Math.cos(tilt);
+  const n = new THREE.Vector3(s * Math.cos(az), up ? c : -c, s * Math.sin(az));
+  // plane passes through point at radius px along az, height py
+  const p = new THREE.Vector3(px * Math.cos(az), py, px * Math.sin(az));
+  planes.push(new THREE.Vector4(n.x, n.y, n.z, n.dot(p)));
+}
+const crownAngle = 34.5 * deg, pavAngle = 40.75 * deg;
+const girdleH = 0.03;
+const tableH = (1 - 0.56) * Math.tan(crownAngle);           // table at ~56% diameter
+planes.push(new THREE.Vector4(0, 1, 0, tableH));              // table
+for (let k = 0; k < 8; k++) addPlane(k * 45 * deg, crownAngle, true, 1.0, 0.0);                 // bezel
+for (let k = 0; k < 8; k++) addPlane((k + 0.5) * 45 * deg, 22 * deg, true, 0.585, tableH);       // star
+for (let k = 0; k < 8; k++) {                                                                 // upper girdle
+  addPlane(((k + 0.5) * 45 - 8) * deg, 42 * deg, true, 1.0, 0.0);
+  addPlane(((k + 0.5) * 45 + 8) * deg, 42 * deg, true, 1.0, 0.0);
+}
+for (let k = 0; k < 32; k++) {                                                                // girdle
+  const a = k * 11.25 * deg;
+  planes.push(new THREE.Vector4(Math.cos(a), 0, Math.sin(a), 1.0));
+}
+for (let k = 0; k < 8; k++) addPlane(k * 45 * deg, pavAngle, false, 1.0, -girdleH);           // pavilion mains
+for (let k = 0; k < 8; k++) {                                                                 // lower girdle
+  addPlane(((k + 0.5) * 45 - 8) * deg, 42.5 * deg, false, 1.0, -girdleH);
+  addPlane(((k + 0.5) * 45 + 8) * deg, 42.5 * deg, false, 1.0, -girdleH);
+}
+const NP = planes.length;
+
+function buildPolytope(pl) {
+  // all vertices = triple plane intersections inside every half-space
+  const verts = [];
+  const key = new Set();
+  const A = new THREE.Matrix3();
+  for (let i = 0; i < pl.length; i++) for (let j = i + 1; j < pl.length; j++) for (let k = j + 1; k < pl.length; k++) {
+    const a = pl[i], b = pl[j], c = pl[k];
+    A.set(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    const det = A.determinant();
+    if (Math.abs(det) < 1e-7) continue;
+    A.invert();
+    const v = new THREE.Vector3(a.w, b.w, c.w).applyMatrix3(A);
+    let ok = true;
+    for (let m = 0; m < pl.length; m++) {
+      const q = pl[m];
+      if (q.x * v.x + q.y * v.y + q.z * v.z - q.w > 1e-6) { ok = false; break; }
+    }
+    if (!ok) continue;
+    const kk = `${v.x.toFixed(5)},${v.y.toFixed(5)},${v.z.toFixed(5)}`;
+    if (key.has(kk)) continue;
+    key.add(kk); verts.push(v);
+  }
+  const pos = [], nor = [];
+  for (const q of pl) {
+    const n = new THREE.Vector3(q.x, q.y, q.z);
+    const on = verts.filter(v => Math.abs(n.dot(v) - q.w) < 1e-5);
+    if (on.length < 3) continue;
+    const cen = new THREE.Vector3();
+    on.forEach(v => cen.add(v)); cen.multiplyScalar(1 / on.length);
+    const u = new THREE.Vector3().subVectors(on[0], cen).normalize();
+    const w = new THREE.Vector3().crossVectors(n, u);
+    on.sort((p1, p2) => {
+      const d1 = p1.clone().sub(cen), d2 = p2.clone().sub(cen);
+      return Math.atan2(d1.dot(w), d1.dot(u)) - Math.atan2(d2.dot(w), d2.dot(u));
+    });
+    for (let t = 1; t < on.length - 1; t++) {
+      const a = on[0], b = on[t], c = on[t + 1];
+      const cr = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+      const tri = cr.dot(n) >= 0 ? [a, b, c] : [a, c, b];
+      for (const v of tri) { pos.push(v.x, v.y, v.z); nor.push(n.x, n.y, n.z); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.computeBoundingSphere();
+  return g;
+}
+const diamondGeo = buildPolytope(planes);
+
+// ---------------------------------------------------------------------------
+// Light rig used by the procedural environment (directions in world space)
+// ---------------------------------------------------------------------------
+const NL = 8;
+const lightBase = [];
+for (let i = 0; i < NL; i++) {
+  const polar = (14 + 58 * ((i * 0.618) % 1)) * deg;
+  const az = i / NL * TAU + 0.4 * Math.sin(i * 2.3);
+  const size = 0.9935 + 0.0055 * ((i * 0.371) % 1);     // cos of angular radius
+  const inten = 5 + 9 * ((i * 0.733) % 1);
+  lightBase.push({ polar, az, size, inten });
+}
+const uLights = Array.from({ length: NL }, () => new THREE.Vector4());
+const uLightSize = new Float32Array(NL);
+const uLightCol = Array.from({ length: NL }, (_, i) =>
+  new THREE.Color().setHSL(i % 3 === 0 ? 0.08 : i % 3 === 1 ? 0.6 : 0.0, i % 3 === 2 ? 0.0 : 0.25, 1.0));
+function updateLights(phase) {
+  const rot = phase * TAU;   // one full revolution per loop → seamless
+  lightBase.forEach((l, i) => {
+    const a = l.az + rot * (i % 2 ? 1 : -1);
+    const p = l.polar + 0.12 * Math.sin(phase * TAU * 2 + i);
+    uLights[i].set(Math.sin(p) * Math.cos(a), Math.sin(p) * Math.sin(a) + 0.15, Math.cos(p), l.inten);
+    const len = Math.hypot(uLights[i].x, uLights[i].y, uLights[i].z);
+    uLights[i].x /= len; uLights[i].y /= len; uLights[i].z /= len;
+    uLightSize[i] = l.size;
+  });
+}
+updateLights(0);
+
+// ---------------------------------------------------------------------------
+// Diamond shader: analytic ray tracing inside the convex polytope,
+// internal bounces with Fresnel/TIR, per-channel dispersion at every exit.
+// ---------------------------------------------------------------------------
+const diamondMat = new THREE.ShaderMaterial({
+  defines: { NP: NP, NL: NL, BOUNCES: 6 },
+  uniforms: {
+    uPlanes: { value: planes },
+    uLights: { value: uLights },
+    uLightSize: { value: uLightSize },
+    uLightCol: { value: uLightCol },
+    uPhase: { value: 0 },
+  },
+  vertexShader: /* glsl */`
+    varying vec3 vObjPos;
+    varying vec3 vObjDir;
+    varying vec3 vObjNormal;
+    varying vec3 vR0; varying vec3 vR1; varying vec3 vR2;
+    varying float vSeed;
+    void main() {
+      mat4 m = modelMatrix * instanceMatrix;
+      vec4 wp = m * vec4(position, 1.0);
+      mat3 m3 = mat3(m);
+      float s = length(m3[0]);
+      mat3 R = m3 / s;
+      vObjDir = transpose(R) * (wp.xyz - cameraPosition);
+      vObjPos = position;
+      vObjNormal = normal;
+      vR0 = R[0]; vR1 = R[1]; vR2 = R[2];
+      vSeed = float(gl_InstanceID);
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform vec4 uPlanes[NP];
+    uniform vec4 uLights[NL];
+    uniform float uLightSize[NL];
+    uniform vec3 uLightCol[NL];
+    uniform float uPhase;
+    varying vec3 vObjPos;
+    varying vec3 vObjDir;
+    varying vec3 vObjNormal;
+    varying vec3 vR0; varying vec3 vR1; varying vec3 vR2;
+    varying float vSeed;
+
+    const vec3 IOR = vec3(2.407, 2.426, 2.451);   // diamond dispersion (C, D, F lines) slightly exaggerated
+    const float PI = 3.14159265;
+
+    vec3 toWorld(vec3 d) { return normalize(vR0 * d.x + vR1 * d.y + vR2 * d.z); }
+
+    vec3 env(vec3 d) {
+      // black studio with sharp softboxes, a striped ring light and a soft dome
+      vec3 c = vec3(0.012, 0.012, 0.016) + vec3(0.05, 0.05, 0.06) * pow(0.5 + 0.5 * d.y, 2.0);
+      c += vec3(0.22, 0.22, 0.25) * pow(max(d.z, 0.0), 5.0);
+      for (int i = 0; i < NL; i++) {
+        float k = dot(d, uLights[i].xyz);
+        float disk = smoothstep(uLightSize[i], uLightSize[i] + 0.0015, k);
+        c += uLightCol[i] * uLights[i].w * (disk + 0.04 * pow(max(k, 0.0), 40.0));
+      }
+      float az = atan(d.y, d.x);
+      float band = 1.0 - smoothstep(0.0, 0.035, abs(d.z - 0.62));
+      float stripes = step(0.55, fract(az * 3.0 / PI + uPhase * 2.0));
+      c += vec3(1.6) * band * stripes;
+      return c;
+    }
+
+    float fresnelS(float cosT, float ior) {
+      float r0 = (ior - 1.0) / (ior + 1.0); r0 *= r0;
+      return r0 + (1.0 - r0) * pow(1.0 - clamp(cosT, 0.0, 1.0), 5.0);
+    }
+
+    void main() {
+      vec3 rd = normalize(vObjDir);
+      vec3 n = normalize(vObjNormal);
+      if (dot(rd, n) > 0.0) n = -n;
+      vec3 p = vObjPos;
+
+      float cosi = clamp(-dot(rd, n), 0.0, 1.0);
+      float Fr = fresnelS(cosi, IOR.g);
+      vec3 col = env(toWorld(reflect(rd, n))) * Fr;
+
+      vec3 d = refract(rd, n, 1.0 / IOR.g);
+      vec3 thr = vec3(1.0 - Fr);
+
+      for (int b = 0; b < BOUNCES; b++) {
+        float tmin = 1e9; vec3 nx = vec3(0.0, 1.0, 0.0);
+        for (int i = 0; i < NP; i++) {
+          vec4 pl = uPlanes[i];
+          float den = dot(pl.xyz, d);
+          if (den > 1e-5) {
+            float t = (pl.w - dot(pl.xyz, p)) / den;
+            if (t < tmin) { tmin = t; nx = pl.xyz; }
+          }
+        }
+        p += d * max(tmin, 0.0);
+        // faint warm absorption for depth
+        thr *= exp(-max(tmin, 0.0) * vec3(0.02, 0.03, 0.05));
+
+        float cosIn = dot(d, nx);
+        vec3 F;
+        // per-channel refraction out of the stone → rainbow fire
+        for (int c = 0; c < 3; c++) {
+          float eta = IOR[c];
+          vec3 t = refract(d, -nx, eta);
+          if (dot(t, t) < 1e-6) { F[c] = 1.0; }
+          else {
+            float f = fresnelS(dot(t, nx), eta);
+            F[c] = f;
+            col[c] += thr[c] * (1.0 - f) * env(toWorld(t))[c];
+          }
+        }
+        thr *= F;
+        d = reflect(d, nx);
+        if (max(thr.r, max(thr.g, thr.b)) < 0.02) break;
+      }
+      col += thr * env(toWorld(d)) * 0.35;
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+});
+
+// ---------------------------------------------------------------------------
+// "LOVE" layout — sample letter strokes at regular spacing
+// ---------------------------------------------------------------------------
+const SC = 1.3, SPACING = 2.05 * SC * 0.82;
+function ellipse(cx, cy, rx, ry, n = 240) {
+  const pts = [];
+  for (let i = 0; i < n; i++) { const a = Math.PI / 2 - i / n * TAU; pts.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]); }
+  return pts;
+}
+const letters = [
+  { off: 0.0, strokes: [{ pts: [[0, 10], [0, 0], [5, 0]] }] },
+  { off: 7.6, strokes: [{ pts: ellipse(3.5, 5, 3.5, 5), closed: true }] },
+  { off: 17.2, strokes: [{ pts: [[0, 10], [3.2, 0], [6.4, 10]] }] },
+  { off: 26.2, strokes: [{ pts: [[5, 10], [0, 10], [0, 0], [5, 0]] }, { pts: [[0, 5], [4.2, 5]], skipStart: true }] },
+];
+function sampleStroke(st, s) {
+  const pts = st.pts.map(p => [p[0] * SC, p[1] * SC]);
+  const out = [];
+  if (st.closed) {
+    let L = 0; const segs = [];
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; const l = Math.hypot(b[0] - a[0], b[1] - a[1]); segs.push(l); L += l; }
+    const n = Math.max(3, Math.floor(L / s + 0.15));
+    for (let k = 0; k < n; k++) {
+      let target = k * L / n, i = 0;
+      while (target > segs[i]) { target -= segs[i]; i++; }
+      const a = pts[i], b = pts[(i + 1) % pts.length], f = target / segs[i];
+      out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+    }
+    return out;
+  }
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = Math.max(1, Math.floor(l / s + 0.15));
+    for (let k = 0; k < n; k++) {
+      if (i === 0 && k === 0 && st.skipStart) continue;
+      out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+const dPos = [];
+letters.forEach((L, li) => L.strokes.forEach(st => sampleStroke(st, SPACING).forEach(p => dPos.push({ x: p[0] + L.off * SC, y: p[1], letter: li }))));
+const bb = { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9 };
+dPos.forEach(p => { bb.x0 = Math.min(bb.x0, p.x); bb.x1 = Math.max(bb.x1, p.x); bb.y0 = Math.min(bb.y0, p.y); bb.y1 = Math.max(bb.y1, p.y); });
+const cx = (bb.x0 + bb.x1) / 2, cy = (bb.y0 + bb.y1) / 2;
+const textW = bb.x1 - bb.x0 + 3, textH = bb.y1 - bb.y0 + 3;
+
+function rand(seed) { const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+const diamonds = dPos.map((p, i) => ({
+  pos: new THREE.Vector3(p.x - cx, p.y - cy, (rand(i) - 0.5) * 0.6),
+  scale: 0.8 + 0.12 * rand(i + 9),
+  spin: (rand(i + 3) < 0.5 ? -1 : 1) * (1 + Math.floor(rand(i + 5) * 2)), // multiples of 45° per loop (8-fold symmetry)
+  spin0: rand(i + 7) * TAU,
+  tilt: 0.12 + 0.1 * rand(i + 11),
+  tiltPh: rand(i + 13) * TAU,
+  letter: p.letter,
+}));
+// hero = top of the "O"
+let hero = 0;
+diamonds.forEach((d, i) => { if (d.letter === 1 && d.pos.y > diamonds[hero].pos.y - (diamonds[hero].letter === 1 ? 0 : 1e9)) hero = i; });
+diamonds[hero].scale = 0.9;
+diamonds[hero].pos.z = 0.0;
+
+const inst = new THREE.InstancedMesh(diamondGeo, diamondMat, diamonds.length);
+inst.frustumCulled = false;
+scene.add(inst);
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3();
+function updateDiamonds(phase) {
+  diamonds.forEach((d, i) => {
+    const spin = d.spin0 + d.spin * (Math.PI / 4) * phase;
+    const tx = d.tilt * Math.sin(phase * TAU + d.tiltPh);
+    const ty = d.tilt * Math.cos(phase * TAU + d.tiltPh * 1.3);
+    // +y (table axis) → +z (towards camera), then spin around table axis
+    _e.set(Math.PI / 2 + tx, ty, 0, 'XYZ');
+    _q.setFromEuler(_e);
+    const qs = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), spin);
+    _q.multiply(qs);
+    _s.setScalar(d.scale);
+    _m.compose(d.pos, _q, _s);
+    inst.setMatrixAt(i, _m);
+  });
+  inst.instanceMatrix.needsUpdate = true;
+}
+
+// ---------------------------------------------------------------------------
+// Swirling mist — layered fbm planes, noise domain travels on circles (periodic)
+// ---------------------------------------------------------------------------
+const mistMat = (z, tint, amp, seed) => new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uPhase: { value: 0 }, uZ: { value: z }, uTint: { value: tint }, uAmp: { value: amp }, uSeed: { value: seed } },
+  vertexShader: `
+    varying vec3 vW;
+    void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }
+  `,
+  fragmentShader: `
+    uniform float uPhase, uZ, uAmp, uSeed; uniform vec3 uTint;
+    varying vec3 vW;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+    float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+      return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
+    float fbm(vec2 p){ float a=0.5, s=0.0; mat2 r=mat2(0.8,-0.6,0.6,0.8);
+      for(int i=0;i<5;i++){ s+=a*noise(p); p=r*p*2.03+11.7; a*=0.5; } return s; }
+    void main(){
+      float A = uPhase * 6.2831853;
+      vec2 p = vW.xy * 0.075 + uSeed;
+      // swirl: rotate domain by an angle that depends on radius
+      float r = length(vW.xy);
+      float sw = 0.35 * sin(A + r * 0.08);
+      p = mat2(cos(sw),-sin(sw),sin(sw),cos(sw)) * p;
+      vec2 o1 = 1.6 * vec2(cos(A), sin(A));
+      vec2 o2 = 1.1 * vec2(cos(-A + 1.3), sin(-A + 1.3));
+      vec2 q = vec2(fbm(p + o1), fbm(p + vec2(5.2,1.3) - o1));
+      float f = fbm(p + 2.2 * q + o2);
+      float m = smoothstep(0.35, 0.95, f);
+      float camFade = smoothstep(0.6, 5.0, abs(cameraPosition.z - uZ));
+      float vfade = 1.0 - smoothstep(10.0, 60.0, length(vW.xy * vec2(0.6, 1.0)));
+      float low = 0.6 + 0.6 * smoothstep(6.0, -12.0, vW.y);
+      gl_FragColor = vec4(uTint * m * uAmp * camFade * vfade * low, 1.0);
+    }
+  `,
+});
+const mistLayers = [];
+[[-7, 0x6a7cff, 0.10, 0.0], [-3.5, 0xb9b6ff, 0.08, 3.1], [-1.2, 0xffffff, 0.05, 7.7], [2.5, 0xc0d4ff, 0.045, 12.4], [6.0, 0xff9ad0, 0.03, 17.9]]
+  .forEach(([z, c, a, s]) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(260, 160), mistMat(z, new THREE.Color(c), a, s));
+    m.position.z = z; m.renderOrder = 2;
+    scene.add(m); mistLayers.push(m);
+  });
+
+// ---------------------------------------------------------------------------
+// Sparkle highlights — 4/8-point star sprites flashing on the crowns
+// ---------------------------------------------------------------------------
+const SPK = diamonds.length * 3;
+const spPos = new Float32Array(SPK * 3), spData = new Float32Array(SPK * 3);
+for (let i = 0; i < SPK; i++) {
+  const d = diamonds[i % diamonds.length];
+  const a = rand(i * 1.7) * TAU, r = Math.sqrt(rand(i * 2.3)) * 0.65 * d.scale;
+  spPos[i * 3] = d.pos.x + Math.cos(a) * r;
+  spPos[i * 3 + 1] = d.pos.y + Math.sin(a) * r;
+  spPos[i * 3 + 2] = d.pos.z + 0.35 * d.scale;
+  spData[i * 3] = rand(i * 3.1);                       // phase offset
+  spData[i * 3 + 1] = 1 + Math.floor(rand(i * 4.7) * 4); // flashes per loop (integer → seamless)
+  spData[i * 3 + 2] = 0.6 + rand(i * 5.9) * 0.8;       // size
+}
+const spGeo = new THREE.BufferGeometry();
+spGeo.setAttribute('position', new THREE.BufferAttribute(spPos, 3));
+spGeo.setAttribute('aData', new THREE.BufferAttribute(spData, 3));
+const spMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uPhase: { value: 0 }, uPx: { value: 1 } },
+  vertexShader: `
+    attribute vec3 aData; uniform float uPhase, uPx; varying float vI; varying float vRot;
+    void main(){
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      float w = fract(uPhase * aData.y + aData.x);
+      float flash = pow(max(0.0, sin(w * 6.2831853)), 24.0);
+      vI = flash;
+      vRot = aData.x * 6.28;
+      gl_PointSize = clamp(aData.z * 26.0 * uPx * (12.0 / -mv.z) * (0.4 + flash), 0.0, 260.0 * uPx);
+      if (flash < 0.002) gl_PointSize = 0.0;
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader: `
+    varying float vI; varying float vRot;
+    void main(){
+      vec2 q = gl_PointCoord * 2.0 - 1.0;
+      float cr = cos(vRot * 0.1), sr = sin(vRot * 0.1);
+      q = mat2(cr, -sr, sr, cr) * q;
+      float d = length(q);
+      float core = exp(-d * d * 30.0);
+      float rx = exp(-abs(q.y) * 50.0) * (1.0 - smoothstep(0.0, 1.0, abs(q.x)));
+      float ry = exp(-abs(q.x) * 50.0) * (1.0 - smoothstep(0.0, 1.0, abs(q.y)));
+      vec2 r = mat2(0.7071, -0.7071, 0.7071, 0.7071) * q;
+      float rd = (exp(-abs(r.y) * 70.0) * (1.0 - smoothstep(0.0, 0.55, abs(r.x))) +
+                  exp(-abs(r.x) * 70.0) * (1.0 - smoothstep(0.0, 0.55, abs(r.y)))) * 0.45;
+      float a = (core * 2.5 + rx + ry + rd) * vI;
+      gl_FragColor = vec4(vec3(1.0, 0.97, 0.93) * a * 3.0, 1.0);
+    }
+  `,
+});
+const sparkles = new THREE.Points(spGeo, spMat);
+sparkles.renderOrder = 3; sparkles.frustumCulled = false;
+scene.add(sparkles);
+
+// floating dust motes — circular, periodic motion
+const DUST = 600;
+const duPos = new Float32Array(DUST * 3), duData = new Float32Array(DUST * 4);
+for (let i = 0; i < DUST; i++) {
+  duData[i * 4] = (rand(i + 0.1) - 0.5) * textW * 1.6;
+  duData[i * 4 + 1] = (rand(i + 0.2) - 0.5) * textH * 2.0;
+  duData[i * 4 + 2] = (rand(i + 0.3) - 0.5) * 16 - 2;
+  duData[i * 4 + 3] = rand(i + 0.4);
+}
+const duGeo = new THREE.BufferGeometry();
+duGeo.setAttribute('position', new THREE.BufferAttribute(duPos, 3));
+duGeo.setAttribute('aData', new THREE.BufferAttribute(duData, 4));
+const duMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uPhase: { value: 0 }, uPx: { value: 1 } },
+  vertexShader: `
+    attribute vec4 aData; uniform float uPhase, uPx; varying float vA;
+    void main(){
+      float a = 6.2831853 * (uPhase * (aData.w < 0.5 ? 1.0 : -1.0) + aData.w);
+      vec3 p = aData.xyz + vec3(cos(a), sin(a * 2.0) * 0.5, sin(a)) * (0.6 + aData.w * 1.2);
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      vA = (0.35 + 0.65 * pow(0.5 + 0.5 * sin(a * 3.0), 3.0)) * smoothstep(0.3, 2.0, -mv.z);
+      gl_PointSize = clamp(2.2 * uPx * (20.0 / -mv.z), 1.0, 6.0 * uPx);
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader: `
+    varying float vA;
+    void main(){ float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vec3(0.75, 0.8, 1.0) * vA * smoothstep(0.5, 0.0, d) * 0.6, 1.0); }
+  `,
+});
+const dust = new THREE.Points(duGeo, duMat);
+dust.frustumCulled = false; dust.renderOrder = 1;
+scene.add(dust);
+
+// ---------------------------------------------------------------------------
+// Post: bloom + vignette
+// ---------------------------------------------------------------------------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.85, 0.55, 0.82);
+composer.addPass(bloom);
+const vignette = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uAspect: { value: 1 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uAspect; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0);
+      float v = smoothstep(1.15, 0.25, length(q));
+      gl_FragColor = vec4(c.rgb * mix(0.35, 1.0, v), c.a);
+    }
+  `,
+});
+composer.addPass(vignette);
+composer.addPass(new OutputPass());
+
+// ---------------------------------------------------------------------------
+// Camera choreography — extreme macro → reveal "LOVE" → dive back in (seamless)
+// ---------------------------------------------------------------------------
+const smoother = x => { x = Math.min(1, Math.max(0, x)); return x * x * x * (x * (x * 6 - 15) + 10); };
+function zoomCurve(ph) {
+  if (ph < 0.68) return smoother(ph / 0.68);
+  if (ph < 0.82) return 1;
+  return 1 - smoother((ph - 0.82) / 0.18);
+}
+const center = new THREE.Vector3(0, 0, 0);
+let farDist = 44;
+function computeFar() {
+  const vf = 2 * Math.tan(camera.fov * deg / 2);
+  const byW = textW / (0.82 * vf * camera.aspect);
+  const byH = textH / (0.7 * vf);
+  farDist = Math.max(byW, byH, 20);
+}
+computeFar();
+const _tgt = new THREE.Vector3();
+function updateCamera(phase) {
+  const w = zoomCurve(phase);
+  const heroP = diamonds[hero].pos;
+  const nearD = 1.55;
+  const dist = Math.exp(THREE.MathUtils.lerp(Math.log(nearD), Math.log(farDist), w));
+  const tw = Math.pow(w, 1.4);
+  _tgt.lerpVectors(heroP, center, tw);
+  const az = THREE.MathUtils.lerp(0.28 + 0.12 * Math.sin(phase * TAU), 0.14 * Math.sin(phase * TAU + 0.6), w);
+  const el = THREE.MathUtils.lerp(0.42, 0.1 + 0.05 * Math.cos(phase * TAU), w);
+  camera.position.set(
+    _tgt.x + dist * Math.sin(az) * Math.cos(el),
+    _tgt.y + dist * Math.sin(el),
+    _tgt.z + dist * Math.cos(az) * Math.cos(el));
+  camera.up.set(Math.sin(0.04 * Math.sin(phase * TAU)), 1, 0).normalize();
+  camera.lookAt(_tgt);
+}
+
+// ---------------------------------------------------------------------------
+// Resize + loop
+// ---------------------------------------------------------------------------
+function onResize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h);
+  composer.setPixelRatio(dpr);
+  composer.setSize(w, h);
+  bloom.setSize(w * dpr, h * dpr);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  computeFar();
+  vignette.uniforms.uAspect.value = w / h;
+  spMat.uniforms.uPx.value = dpr * h / 720;
+  duMat.uniforms.uPx.value = dpr * h / 720;
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+const t0 = performance.now();
+function frame() {
+  const t = (performance.now() - t0) / 1000;
+  const phase = (t % LOOP) / LOOP;
+  updateLights(phase);
+  updateDiamonds(phase);
+  updateCamera(phase);
+  diamondMat.uniforms.uPhase.value = phase;
+  mistLayers.forEach(m => m.material.uniforms.uPhase.value = phase);
+  spMat.uniforms.uPhase.value = phase;
+  duMat.uniforms.uPhase.value = phase;
+  composer.render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kaleidoscope Crystal</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: pointer; touch-action: none; }
+  #hud {
+    position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    white-space: nowrap; user-select: none; -webkit-user-select: none;
+    font: 500 clamp(11px, 2.8vw, 13px)/1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: .25em; text-transform: uppercase; color: rgba(255,255,255,.85);
+    text-shadow: 0 0 12px rgba(180,140,255,.9); pointer-events: none;
+    transition: opacity 1.2s ease; opacity: 0;
+  }
+  #err { position: fixed; inset: 0; display: none; place-items: center; color: #fff; font: 16px system-ui; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="err">WebGL is not available.</div>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const hud = document.getElementById('hud');
+  const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+  if (!gl) { document.getElementById('err').style.display = 'grid'; return; }
+
+  const vsSrc = `
+    attribute vec2 aPos;
+    void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+  `;
+
+  const fsSrc = `
+    precision highp float;
+    uniform vec2  uRes;
+    uniform float uTime;
+    uniform float uN0;
+    uniform float uN1;
+    uniform float uMix;
+
+    #define PI 3.14159265359
+    #define TAU 6.28318530718
+    #define LAYERS 4.0
+
+    mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+
+    float hash11(float p) { p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
+    vec2 hash22(vec2 p) {
+      vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+      p3 += dot(p3, p3.yzx + 33.33);
+      return fract((p3.xx + p3.yz) * p3.zy);
+    }
+
+    // palette that drifts between pastel and neon
+    vec3 palette(float t, float neon) {
+      vec3 a = mix(vec3(0.78, 0.74, 0.86), vec3(0.50, 0.45, 0.55), neon);
+      vec3 b = mix(vec3(0.22, 0.24, 0.20), vec3(0.55, 0.55, 0.50), neon);
+      vec3 c = vec3(1.0, 1.0, 1.0);
+      vec3 d = mix(vec3(0.00, 0.20, 0.45), vec3(0.15, 0.45, 0.75), 0.5 + 0.5 * sin(uTime * 0.031));
+      return a + b * cos(TAU * (c * t + d));
+    }
+
+    // kaleidoscopic mirror fold with N-fold symmetry
+    vec2 kaleido(vec2 p, float n) {
+      float r = length(p);
+      float a = atan(p.y, p.x);
+      float sector = TAU / n;
+      a = mod(a + sector * 0.5, sector) - sector * 0.5;
+      a = abs(a);
+      return r * vec2(cos(a), sin(a));
+    }
+
+    // flowing plasma field
+    float plasma(vec2 p, float t, float seed) {
+      float v = 0.0;
+      v += sin(p.x * 3.1 + t * 1.10 + seed);
+      v += sin(p.y * 2.7 - t * 0.83 + seed * 1.7);
+      v += sin((p.x + p.y) * 2.3 + t * 0.71);
+      v += sin(length(p * 1.9 + vec2(sin(t * 0.37), cos(t * 0.29))) * 4.0 - t * 1.6);
+      vec2 w = p + 0.6 * vec2(sin(p.y * 1.7 + t * 0.5), cos(p.x * 1.9 - t * 0.43));
+      v += sin(w.x * 3.3 + w.y * 2.1 - t);
+      return v / 5.0;
+    }
+
+    // voronoi crystal facets: returns (edge distance, cell hash, cell center xy)
+    vec4 facets(vec2 p, float seed) {
+      vec2 ip = floor(p);
+      vec2 fp = fract(p);
+      float d1 = 8.0, d2 = 8.0;
+      vec2 bestId = vec2(0.0), bestC = vec2(0.0);
+      for (int j = -1; j <= 1; j++)
+      for (int i = -1; i <= 1; i++) {
+        vec2 g = vec2(float(i), float(j));
+        vec2 o = hash22(ip + g + seed * 17.13);
+        o = 0.5 + 0.42 * sin(uTime * 0.21 + TAU * o);
+        vec2 r = g + o - fp;
+        float d = dot(r, r);
+        if (d < d1) { d2 = d1; d1 = d; bestId = ip + g; bestC = r; }
+        else if (d < d2) { d2 = d; }
+      }
+      float edge = sqrt(d2) - sqrt(d1);
+      return vec4(edge, hash11(dot(bestId, vec2(7.31, 13.77)) + seed), bestC);
+    }
+
+    vec3 layer(vec2 p, float n, float seed, float t, float neon) {
+      // fold
+      vec2 q = kaleido(p * rot(t * 0.05 + seed), n);
+      q = q * rot(sin(t * 0.07 + seed) * 0.3);
+
+      // second, inner fold for a more mandala-like crystalline structure
+      vec2 k = q;
+      for (int i = 0; i < 3; i++) {
+        k = abs(k) - vec2(0.55 + 0.1 * sin(seed + float(i)), 0.25);
+        k *= rot(0.6 + 0.2 * sin(t * 0.05 + seed * 3.0 + float(i)));
+        k *= 1.25;
+      }
+
+      vec4 f = facets(k * 1.3 + vec2(seed * 3.1, 0.0), seed);
+      float edge = f.x;
+      float cid  = f.y;
+
+      // per-facet tilted normal -> refraction look
+      float ang = cid * TAU + t * 0.15;
+      vec3 nrm = normalize(vec3(cos(ang) * 0.6, sin(ang) * 0.6, 1.0) + vec3(f.zw * 0.8, 0.0));
+      vec2 refr = nrm.xy * (0.35 + 0.25 * cid);
+
+      // plasma seen through the crystal (refracted)
+      float pl = plasma(q * 2.0 + refr, t, seed);
+      float pl2 = plasma(q * 2.0 + refr * 1.08, t, seed);  // tiny dispersion
+      vec3 inside = palette(pl * 0.5 + cid * 0.35 + t * 0.02, neon);
+      inside = mix(inside, palette(pl2 * 0.5 + cid * 0.35 + t * 0.02 + 0.08, neon), 0.5);
+      inside *= 0.35 + 0.35 * smoothstep(-0.5, 1.0, pl);
+
+      // fresnel + specular sheen on facets
+      vec3 L = normalize(vec3(sin(t * 0.3), cos(t * 0.23), 1.2));
+      float spec = pow(max(dot(reflect(-L, nrm), vec3(0.0, 0.0, 1.0)), 0.0), 24.0);
+      float fres = pow(1.0 - nrm.z, 2.0) * 2.0;
+
+      // deepen facet interiors: darker toward the facet centre, glassy toward the rim
+      float rim = smoothstep(0.0, 0.45, edge);
+      vec3 col = inside * mix(1.0, 0.45 + 0.25 * cid, rim);
+      float twinkle = 0.55 + 0.45 * sin(t * 1.7 + cid * 47.0);
+      col += spec * twinkle * mix(vec3(0.9, 0.95, 1.0), palette(cid + 0.3, neon), 0.4) * 1.1;
+      col += fres * palette(cid + t * 0.03 + 0.5, neon) * 0.35;
+
+      // neon plasma streams flowing in the gaps between facets
+      float flow = plasma(k * 1.5 - vec2(t * 0.6, 0.0), t * 1.7, seed + 4.0);
+      float pulse = 0.55 + 0.6 * sin(flow * 6.0 + t * 2.0 + length(q) * 4.0);
+      float kk = 30.0 - 10.0 * neon;
+      // per-channel falloff = prismatic dispersion fringe along the facet seams
+      vec3 core = exp(-edge * kk * vec3(1.18, 1.0, 0.84));
+      vec3 halo = exp(-edge * kk * 0.3) * vec3(0.22);
+      vec3 neonCol = palette(flow * 0.7 + t * 0.05 + 0.25, max(neon, 0.65));
+      col += (core + halo) * pulse * neonCol * (1.1 + 1.4 * neon);
+
+      // thin bright crystal edges with a soft white-hot core
+      col += smoothstep(0.03, 0.0, edge) * vec3(1.0, 0.96, 1.0) * (0.45 + 0.35 * twinkle);
+
+      return col;
+    }
+
+    vec3 scene(vec2 uv, float n) {
+      float t = uTime;
+      // palette drift between pastel and neon, non-commensurate frequencies
+      float neon = 0.5 + 0.5 * sin(t * 0.073 + 0.7 * sin(t * 0.0311));
+      neon = smoothstep(0.0, 1.0, neon);
+
+      // breathing but strictly monotonic zoom (derivative always > 0)
+      float zoom = t * 0.11 + 0.06 * sin(t * 0.23);
+      vec3 col = vec3(0.0);
+      float wsum = 0.0;
+      for (float i = 0.0; i < LAYERS; i += 1.0) {
+        float z = zoom + i / LAYERS;
+        float d = fract(z);               // 0..1 lifetime of this layer
+        float id = floor(z) * LAYERS + i; // unique layer id -> never repeats
+        float scale = exp2((1.0 - d) * LAYERS) * 0.35;
+        // sharper window -> one dominant layer, less muddy averaging;
+        // goes continuously to 0 so faint layers are skipped (uniform branch)
+        float s = sin(d * PI);
+        float w = max(s * s * s * s - 0.03, 0.0);
+        if (w > 0.0) {
+          float seed = hash11(id * 1.618) * 100.0;
+          col += layer(uv * scale, n, seed, t + id * 13.0, neon) * w;
+          wsum += w;
+        }
+      }
+      col /= max(wsum, 1e-3);
+
+      // breathing central glow
+      float r = length(uv);
+      col += palette(t * 0.04 + 0.6, neon) * 0.25 * exp(-r * 3.0) * (0.7 + 0.3 * sin(t * 0.9));
+      return col;
+    }
+
+    void main() {
+      vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
+      vec3 col = scene(uv, uN1);
+      if (uMix < 0.999) {
+        vec3 old = scene(uv, uN0);
+        col = mix(old, col, smoothstep(0.0, 1.0, uMix));
+      }
+      // soft vignette, tonemap, gamma
+      float vig = 1.0 - 0.38 * dot(uv, uv);
+      col *= max(vig, 0.0);
+      // ACES-like filmic curve: deeper blacks, neon highlights roll off softly
+      col *= 0.95;
+      col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
+      col = pow(col, vec3(0.9));
+      // dither
+      col += (hash22(gl_FragCoord.xy + fract(uTime)).x - 0.5) / 255.0;
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(s));
+      throw new Error('Shader compile failed');
+    }
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vsSrc));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fsSrc));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return; }
+  gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const U = {
+    res: gl.getUniformLocation(prog, 'uRes'),
+    time: gl.getUniformLocation(prog, 'uTime'),
+    n0: gl.getUniformLocation(prog, 'uN0'),
+    n1: gl.getUniformLocation(prog, 'uN1'),
+    mix: gl.getUniformLocation(prog, 'uMix'),
+  };
+
+  // resolution handling with devicePixelRatio and adaptive quality
+  const coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  const maxDpr = coarse ? 1.5 : 2;   // phones: full-screen fragment shader at 3x is wasted fill-rate
+  let quality = coarse ? 0.85 : 1.0;
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr) * quality;
+    const w = Math.max(1, Math.floor(window.innerWidth * dpr));
+    const h = Math.max(1, Math.floor(window.innerHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // symmetry order: 6..12
+  const orders = [6, 7, 8, 9, 10, 11, 12];
+  let idx = 0;
+  let nPrev = orders[0], nCur = orders[0];
+  let mixT = 1.0;
+  let hudTimer = 0;
+  function showHud(text) {
+    hud.textContent = text;
+    hud.style.opacity = '1';
+    clearTimeout(hudTimer);
+    hudTimer = setTimeout(() => hud.style.opacity = '0', 1800);
+  }
+  function step(dir) {
+    idx = (idx + dir + orders.length) % orders.length;
+    // if a crossfade is still running, start from whatever dominates now
+    nPrev = mixT < 0.5 ? nPrev : nCur;
+    nCur = orders[idx];
+    mixT = 0.0;
+    showHud(nCur + '-fold symmetry');
+  }
+  canvas.addEventListener('pointerdown', (e) => step(e.button === 2 || e.shiftKey ? -1 : 1));
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === ' ') { step(1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { step(-1); e.preventDefault(); }
+  });
+  setTimeout(() => showHud((coarse ? 'tap' : 'click') + ' to change symmetry'), 400);
+
+  const start = performance.now();
+  let last = start;
+  let frames = 0, acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    mixT = Math.min(1.0, mixT + dt / 0.9);
+
+    // adaptive resolution to hold ~60 FPS
+    frames++; acc += dt;
+    if (acc > 1.0) {
+      const fps = frames / acc;
+      if (fps < 45 && quality > 0.4) { quality = Math.max(0.4, quality - 0.15); resize(); }
+      else if (fps > 58 && quality < 1.0) { quality = Math.min(1.0, quality + 0.05); resize(); }
+      frames = 0; acc = 0;
+    }
+
+    gl.uniform2f(U.res, canvas.width, canvas.height);
+    gl.uniform1f(U.time, (now - start) / 1000);
+    gl.uniform1f(U.n0, nPrev);
+    gl.uniform1f(U.n1, nCur);
+    gl.uniform1f(U.mix, mixT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neon Audio Grid — 128 BPM</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05010d; overflow: hidden; font-family: "Orbitron", "Segoe UI", system-ui, sans-serif; }
+  canvas { display: block; }
+  #overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; color: #fff; text-align: center; z-index: 10;
+    background: radial-gradient(ellipse at center, rgba(40,0,70,0.35), rgba(0,0,0,0.75));
+    transition: opacity .8s ease;
+  }
+  #overlay h1 {
+    margin: 0; font-size: clamp(28px, 6vw, 72px); letter-spacing: .25em; font-weight: 800;
+    color: #ff4fd8; text-shadow: 0 0 8px #ff4fd8, 0 0 24px #b400ff, 0 0 48px #5a00ff;
+  }
+  #overlay p { margin-top: 1.2em; font-size: clamp(12px, 2vw, 18px); letter-spacing: .4em; color: #7fe7ff; text-shadow: 0 0 10px #00c8ff; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+  #hud { position: fixed; left: 16px; bottom: 14px; color: #9af; font-size: 11px; letter-spacing: .2em; opacity: .6; pointer-events: none; z-index: 5; }
+</style>
+</head>
+<body>
+<div id="overlay"><h1>NEON GRID</h1><p>CLICK TO START · 128 BPM</p></div>
+<div id="hud">NEON AUDIO GRID · 128 BPM</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../../vendor/three/build/three.module.js",
+  "three/addons/": "../../../vendor/three/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* =========================================================
+   AUDIO ENGINE — generated 128 BPM techno
+   ========================================================= */
+const BPM = 128;
+const STEP = 60 / BPM / 4; // 16th note
+let ctx = null, master, comp, analyser, freqData, noiseBuf, delaySend;
+let started = false;
+let step = 0, nextTime = 0;
+const kickQueue = []; // times of upcoming kicks for visuals
+
+function initAudio() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  master = ctx.createGain(); master.gain.value = 0.8;
+  comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.15;
+  analyser = ctx.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.75;
+  master.connect(comp); comp.connect(analyser); analyser.connect(ctx.destination);
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+
+  // white noise buffer
+  noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+
+  // ping-pong-ish delay for lead
+  const delay = ctx.createDelay(1);
+  delay.delayTime.value = STEP * 3;
+  const fb = ctx.createGain(); fb.gain.value = 0.38;
+  const dlp = ctx.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 3000;
+  delaySend = ctx.createGain(); delaySend.gain.value = 0.5;
+  delaySend.connect(delay); delay.connect(dlp); dlp.connect(fb); fb.connect(delay); dlp.connect(master);
+}
+
+function kick(t) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(160, t);
+  o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(1.0, t + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+  o.connect(g); g.connect(master);
+  o.start(t); o.stop(t + 0.5);
+  // click
+  const n = ctx.createBufferSource(); n.buffer = noiseBuf;
+  const nf = ctx.createBiquadFilter(); nf.type = 'highpass'; nf.frequency.value = 2000;
+  const ng = ctx.createGain(); ng.gain.setValueAtTime(0.25, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
+  n.connect(nf); nf.connect(ng); ng.connect(master); n.start(t); n.stop(t + 0.02);
+}
+
+function hat(t, open) {
+  const n = ctx.createBufferSource(); n.buffer = noiseBuf;
+  const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = open ? 7000 : 9000;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 10000; bp.Q.value = 0.8;
+  const g = ctx.createGain();
+  const len = open ? 0.22 : 0.045;
+  g.gain.setValueAtTime(open ? 0.22 : 0.16, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + len);
+  n.connect(f); f.connect(bp); bp.connect(g); g.connect(master);
+  n.start(t, Math.random() * 0.5); n.stop(t + len + 0.01);
+}
+
+function clap(t) {
+  const n = ctx.createBufferSource(); n.buffer = noiseBuf;
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1500; f.Q.value = 1.2;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  [0, 0.01, 0.02].forEach(o => { g.gain.setValueAtTime(0.35, t + o); g.gain.exponentialRampToValueAtTime(0.05, t + o + 0.009); });
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  n.connect(f); f.connect(g); g.connect(master); n.start(t, Math.random() * 0.5); n.stop(t + 0.25);
+}
+
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+
+function bass(t, note, accent) {
+  const o = ctx.createOscillator(), o2 = ctx.createOscillator();
+  o.type = 'sawtooth'; o2.type = 'square';
+  o.frequency.value = mtof(note); o2.frequency.value = mtof(note - 12);
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 9;
+  f.frequency.setValueAtTime(accent ? 1800 : 900, t);
+  f.frequency.exponentialRampToValueAtTime(160, t + STEP * 0.9);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.32, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, t + STEP * 0.95);
+  const g2 = ctx.createGain(); g2.gain.value = 0.4;
+  o.connect(f); o2.connect(g2); g2.connect(f); f.connect(g); g.connect(master);
+  o.start(t); o2.start(t); o.stop(t + STEP); o2.stop(t + STEP);
+}
+
+function lead(t, note, len) {
+  const g = ctx.createGain();
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 3;
+  f.frequency.setValueAtTime(4500, t); f.frequency.exponentialRampToValueAtTime(1200, t + len);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.11, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, t + len);
+  [-7, 7].forEach(det => {
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.value = mtof(note); o.detune.value = det;
+    o.connect(f); o.start(t); o.stop(t + len + 0.02);
+  });
+  f.connect(g); g.connect(master); g.connect(delaySend);
+}
+
+// Patterns (16 steps)
+const KICK = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0];
+const CLAP = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+const HATC = [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,1];
+const HATO = [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0];
+const BASS = [0,1,1,0, 0,1,1,1, 0,1,1,0, 0,1,0,1];
+// A-minor progression roots per bar: Am, F, C, G
+const ROOTS = [45, 41, 48, 43];
+const LEAD = [ // per bar (16 steps), -1 = rest; semitone offsets from 69 (A4)
+  [0,-1,3,-1, 7,-1,3,-1, 10,-1,7,-1, 3,-1,7,-1],
+  [-4,-1,0,-1, 3,-1,0,-1, 8,-1,3,-1, 0,-1,3,-1],
+  [3,-1,7,-1, 10,-1,7,-1, 15,-1,10,-1, 7,-1,10,-1],
+  [-2,-1,2,-1, 5,-1,2,-1, 10,-1,5,-1, 14,-1,12,-1],
+];
+
+function scheduleStep(s, t) {
+  const i = s % 16;
+  const bar = Math.floor(s / 16);
+  const section = Math.floor(bar / 4) % 4; // structure: build-ups
+  const root = ROOTS[bar % 4];
+
+  if (KICK[i]) { kick(t); kickQueue.push(t); }
+  if (CLAP[i] && section !== 0) clap(t);
+  if (HATC[i] || (section >= 2 && i % 2 === 1)) hat(t, false);
+  if (HATO[i] && section >= 1) hat(t, true);
+  if (BASS[i]) bass(t, root + (i === 7 || i === 15 ? 12 : 0), i % 4 === 1);
+  if (section >= 1) {
+    const n = LEAD[bar % 4][i];
+    if (n >= 0 || n < 0 && n !== -1) {
+      if (n !== -1) lead(t, 69 + n, STEP * 1.6);
+    }
+  }
+}
+
+function scheduler() {
+  while (nextTime < ctx.currentTime + 0.12) {
+    scheduleStep(step, nextTime);
+    nextTime += STEP;
+    step++;
+  }
+}
+
+/* =========================================================
+   THREE.JS SCENE
+   ========================================================= */
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05010d);
+scene.fog = new THREE.FogExp2(0x12002a, 0.012);
+
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 600);
+const camBase = new THREE.Vector3(0, 4.2, 14);
+camera.position.copy(camBase);
+camera.lookAt(0, 3, -100);
+
+// ---- Sky gradient dome
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    varying vec3 vP; uniform float uTime;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+    void main(){
+      float h = vP.y;
+      vec3 top = vec3(0.01, 0.0, 0.05);
+      vec3 mid = vec3(0.18, 0.02, 0.30);
+      vec3 hor = vec3(0.85, 0.12, 0.55);
+      vec3 col = mix(hor, mid, smoothstep(0.0, 0.18, h));
+      col = mix(col, top, smoothstep(0.15, 0.6, h));
+      // stars
+      vec2 g = vP.xz / (vP.y + 0.3) * 120.0;
+      vec2 id = floor(g);
+      float s = hash(id);
+      float star = step(0.985, s) * smoothstep(0.5, 0.0, length(fract(g) - 0.5)) * smoothstep(0.08, 0.4, h);
+      star *= 0.6 + 0.4 * sin(uTime * 3.0 + s * 50.0);
+      col += vec3(star);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), skyMat);
+scene.add(sky);
+
+// ---- Sun
+const sunMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, fog: false,
+  uniforms: { uTime: { value: 0 }, uPulse: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    varying vec2 vUv; uniform float uTime; uniform float uPulse;
+    void main(){
+      vec2 p = vUv - 0.5;
+      float r = length(p);
+      float disc = smoothstep(0.5, 0.49, r);
+      vec3 c = mix(vec3(1.0, 0.1, 0.55), vec3(1.0, 0.85, 0.2), smoothstep(-0.45, 0.45, p.y));
+      // retro stripes in lower half
+      float y = p.y + 0.5;
+      float stripes = 1.0;
+      if (p.y < 0.05) {
+        float freq = 22.0;
+        float s = fract(y * freq - uTime * 0.6);
+        float w = mix(0.55, 0.02, smoothstep(-0.5, 0.05, p.y));
+        stripes = step(w, s);
+      }
+      float glow = smoothstep(0.5, 0.2, r) * 0.0 + exp(-pow(max(r - 0.48, 0.0) * 9.0, 1.5)) * (1.0 - disc);
+      vec3 col = c * disc * stripes * (1.6 + uPulse * 1.5) + vec3(1.0, 0.2, 0.6) * glow * (0.6 + uPulse);
+      float a = max(disc * stripes, glow * 0.8);
+      gl_FragColor = vec4(col, a);
+    }`
+});
+const sun = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), sunMat);
+sun.position.set(0, 26, -300);
+scene.add(sun);
+
+// ---- Mountains (wireframe silhouettes)
+function makeMountains(side) {
+  const w = 160, d = 60, sx = 40, sz = 14;
+  const geo = new THREE.PlaneGeometry(w, d, sx, sz);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const edge = Math.abs(x) / (w / 2);
+    let h = Math.pow(edge, 1.6) * 28 * (0.6 + 0.4 * Math.sin(x * 0.21 + side * 3.1) * Math.cos(z * 0.17 + side));
+    h += Math.random() * 3 * edge;
+    pos.setY(i, Math.max(0, h));
+  }
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x0a0018 }));
+  const wire = new THREE.LineSegments(new THREE.WireframeGeometry(geo), new THREE.LineBasicMaterial({ color: 0x6a2cff, transparent: true, opacity: 0.55 }));
+  const g = new THREE.Group(); g.add(mesh); g.add(wire);
+  g.position.set(0, -0.01, -230 + side * 0);
+  return { g, wire };
+}
+const mtn = makeMountains(1);
+mtn.g.scale.set(2.2, 1, 1);
+scene.add(mtn.g);
+
+// ---- Infinite synthwave grid (shader)
+const gridMat = new THREE.ShaderMaterial({
+  transparent: false, fog: false,
+  uniforms: {
+    uTime: { value: 0 }, uScroll: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uKick: { value: 0 },
+    uFogColor: { value: new THREE.Color(0x2a0050) }
+  },
+  vertexShader: `
+    varying vec3 vW; uniform float uBass; uniform float uTime;
+    void main(){
+      vec3 p = position;
+      vec4 w = modelMatrix * vec4(p,1.0);
+      // gentle valleys on the sides that bounce with bass
+      float side = smoothstep(14.0, 40.0, abs(w.x));
+      w.y += side * (sin(w.x * 0.15 + uTime) * 1.5 + 2.0) * (0.4 + uBass * 1.6);
+      vW = w.xyz;
+      gl_Position = projectionMatrix * viewMatrix * w;
+    }`,
+  fragmentShader: `
+    varying vec3 vW;
+    uniform float uScroll, uBass, uMid, uHigh, uKick, uTime;
+    uniform vec3 uFogColor;
+    float gridLine(float c, float w){
+      float d = fwidth(c);
+      float f = abs(fract(c - 0.5) - 0.5) / max(d, 1e-4);
+      return 1.0 - min(f / w, 1.0);
+    }
+    void main(){
+      float cell = 4.0;
+      vec2 c = vec2(vW.x / cell, (vW.z + uScroll) / cell);
+      float lx = gridLine(c.x, 1.2);
+      float lz = gridLine(c.y, 1.2);
+      float line = max(lx, lz);
+      float dist = length(vW.xz);
+      // color across X: purple -> blue -> pink
+      float t = sin(vW.x * 0.03 + uTime * 0.3) * 0.5 + 0.5;
+      vec3 purple = vec3(0.65, 0.15, 1.0);
+      vec3 blue   = vec3(0.10, 0.55, 1.0);
+      vec3 pink   = vec3(1.0, 0.15, 0.75);
+      vec3 col = mix(mix(purple, blue, t), pink, smoothstep(0.0, 1.0, sin(vW.z * 0.02 + uScroll*0.02) * 0.5 + 0.5) * 0.6);
+      float intensity = 1.2 + uBass * 2.2 + uKick * 1.5;
+      // traveling pulse rings from camera
+      float ring = smoothstep(0.6, 0.0, abs(fract(dist * 0.02 - uTime * 0.5) - 0.5) * 6.0) * uMid * 2.0;
+      vec3 lineCol = col * line * (intensity + ring);
+      vec3 base = vec3(0.03, 0.0, 0.07) + col * 0.04 * (1.0 + uBass);
+      vec3 outc = base + lineCol;
+      float fogF = smoothstep(40.0, 260.0, dist);
+      outc = mix(outc, uFogColor * 0.7, fogF);
+      gl_FragColor = vec4(outc, 1.0);
+    }`,
+  extensions: { derivatives: true }
+});
+const grid = new THREE.Mesh(new THREE.PlaneGeometry(600, 600, 120, 120), gridMat);
+grid.rotation.x = -Math.PI / 2;
+grid.position.z = -200;
+scene.add(grid);
+
+// ---- Neon colors
+const NEON = [0xb026ff, 0x2b8cff, 0xff2fb9, 0x00e5ff, 0x8a2bff, 0xff4fd8];
+
+// ---- Equalizer pillars along the road
+const BANDS = 24;
+const pillars = [];
+const pillarGeo = new THREE.BoxGeometry(1, 1, 1);
+const pillarEdges = new THREE.EdgesGeometry(pillarGeo);
+pillarGeo.translate(0, 0.5, 0);
+pillarEdges.translate(0, 0.5, 0);
+for (let s = -1; s <= 1; s += 2) {
+  for (let i = 0; i < BANDS; i++) {
+    const color = new THREE.Color(NEON[i % 3 === 0 ? 0 : i % 3 === 1 ? 1 : 2]);
+    const fill = new THREE.Mesh(pillarGeo, new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(0.25), transparent: true, opacity: 0.35, depthWrite: false }));
+    const edge = new THREE.LineSegments(pillarEdges, new THREE.LineBasicMaterial({ color }));
+    const g = new THREE.Group();
+    g.add(fill); g.add(edge);
+    g.position.set(s * (11 + (i % 2) * 0.0), 0, 6 - i * 7);
+    g.scale.set(1.2, 0.1, 1.2);
+    scene.add(g);
+    pillars.push({ g, edge, fill, band: i, color, side: s });
+  }
+}
+
+// ---- Floating geometric shapes
+const shapes = [];
+const shapeGeos = [
+  new THREE.IcosahedronGeometry(2.2, 0),
+  new THREE.OctahedronGeometry(2.4, 0),
+  new THREE.TorusGeometry(2.4, 0.06, 6, 48),
+  new THREE.TetrahedronGeometry(2.4, 0),
+  new THREE.DodecahedronGeometry(2.0, 0),
+  new THREE.TorusKnotGeometry(1.5, 0.35, 64, 6),
+];
+for (let i = 0; i < 14; i++) {
+  const geo = shapeGeos[i % shapeGeos.length];
+  const color = new THREE.Color(NEON[i % NEON.length]);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1 });
+  const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 1), mat);
+  if (geo.type === 'TorusGeometry' || geo.type === 'TorusKnotGeometry') {
+    wire.geometry = new THREE.WireframeGeometry(geo);
+  }
+  const side = i % 2 === 0 ? -1 : 1;
+  const x = side * (4 + Math.random() * 18);
+  const y = 6 + Math.random() * 12;
+  const z = -20 - Math.random() * 120;
+  wire.position.set(x, y, z);
+  scene.add(wire);
+  shapes.push({ m: wire, base: new THREE.Vector3(x, y, z), band: Math.floor(Math.random() * 3), spin: new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.8), phase: Math.random() * 6.28, color });
+}
+
+// ---- Central pulsing ring tunnel (arches over the road)
+const arches = [];
+for (let i = 0; i < 8; i++) {
+  const geo = new THREE.TorusGeometry(9, 0.08, 6, 64, Math.PI);
+  const mat = new THREE.MeshBasicMaterial({ color: NEON[i % 2 === 0 ? 2 : 3] });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(0, 0, -i * 25);
+  scene.add(m);
+  arches.push(m);
+}
+
+// ---- Post-processing
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.6, 0.1);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* =========================================================
+   ANALYSIS + ANIMATION
+   ========================================================= */
+let bass = 0, mid = 0, high = 0, kickEnv = 0;
+const bandVals = new Float32Array(BANDS);
+
+function readBands() {
+  if (!analyser) {
+    // idle animation before audio starts
+    const t = performance.now() / 1000;
+    for (let i = 0; i < BANDS; i++) bandVals[i] = 0.15 + 0.1 * Math.sin(t * 2 + i * 0.5);
+    bass = 0.1; mid = 0.1; high = 0.1;
+    return;
+  }
+  analyser.getByteFrequencyData(freqData);
+  const N = freqData.length;
+  // logarithmic band mapping
+  for (let i = 0; i < BANDS; i++) {
+    const lo = Math.floor(Math.pow(N, i / BANDS));
+    const hi = Math.max(lo + 1, Math.floor(Math.pow(N, (i + 1) / BANDS)));
+    let s = 0;
+    for (let k = lo; k < hi && k < N; k++) s += freqData[k];
+    const v = s / (hi - lo) / 255;
+    bandVals[i] += (v - bandVals[i]) * 0.5;
+  }
+  const avg = (a, b) => { let s = 0; for (let k = a; k < b; k++) s += freqData[k]; return s / (b - a) / 255; };
+  bass = avg(1, 8);
+  mid = avg(8, 80);
+  high = avg(80, 400);
+}
+
+const clock = new THREE.Clock();
+let scroll = 0;
+let bump = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  if (started) scheduler();
+  readBands();
+
+  // kick detection (scheduled, sample-accurate)
+  if (ctx) {
+    while (kickQueue.length && kickQueue[0] <= ctx.currentTime) {
+      kickQueue.shift();
+      kickEnv = 1;
+      bump = 1;
+    }
+  }
+  kickEnv *= Math.pow(0.02, dt);
+  bump *= Math.pow(0.004, dt);
+
+  const speed = started ? 28 + bass * 30 : 10;
+  scroll += speed * dt;
+
+  // uniforms
+  gridMat.uniforms.uTime.value = t;
+  gridMat.uniforms.uScroll.value = scroll;
+  gridMat.uniforms.uBass.value = bass;
+  gridMat.uniforms.uMid.value = mid;
+  gridMat.uniforms.uHigh.value = high;
+  gridMat.uniforms.uKick.value = kickEnv;
+  skyMat.uniforms.uTime.value = t;
+  sunMat.uniforms.uTime.value = t;
+  sunMat.uniforms.uPulse.value = bass * 0.8 + kickEnv * 0.5;
+  sun.scale.setScalar(1 + kickEnv * 0.04 + bass * 0.05);
+
+  // pillars move toward camera & dance
+  const loopLen = BANDS * 7;
+  for (const p of pillars) {
+    p.g.position.z += speed * dt;
+    if (p.g.position.z > 14) p.g.position.z -= loopLen;
+    const v = bandVals[p.band];
+    const h = 0.3 + v * v * 22;
+    p.g.scale.y += (h - p.g.scale.y) * 0.4;
+    const k = 0.5 + v * 2.5;
+    p.edge.material.color.copy(p.color).multiplyScalar(k);
+    p.fill.material.opacity = 0.15 + v * 0.5;
+  }
+
+  // arches move toward camera, pulse with kick
+  for (let i = 0; i < arches.length; i++) {
+    const a = arches[i];
+    a.position.z += speed * dt;
+    if (a.position.z > 14) a.position.z -= arches.length * 25;
+    const s = 1 + kickEnv * 0.15 + mid * 0.2;
+    a.scale.set(s, s, s);
+    a.material.color.setHex(NEON[(i + Math.floor(t * 2)) % NEON.length]).multiplyScalar(1 + kickEnv * 2 + high * 2);
+  }
+
+  // shapes dance
+  const bandsArr = [bass, mid, high];
+  for (const s of shapes) {
+    const v = bandsArr[s.band];
+    s.m.rotation.x += s.spin.x * dt * (1 + v * 4);
+    s.m.rotation.y += s.spin.y * dt * (1 + v * 4);
+    s.m.rotation.z += s.spin.z * dt;
+    s.base.z += speed * dt * 0.6;
+    if (s.base.z > 10) { s.base.z -= 140; s.base.x = (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 18); }
+    s.m.position.set(s.base.x + Math.sin(t + s.phase) * 1.5, s.base.y + Math.sin(t * 2 + s.phase) * 1.2 + v * 3, s.base.z);
+    const sc = 0.8 + v * 1.3 + kickEnv * 0.25;
+    s.m.scale.setScalar(sc);
+    s.m.material.color.copy(s.color).multiplyScalar(0.8 + v * 2.5);
+  }
+
+  // mountains glow
+  mtn.wire.material.opacity = 0.35 + mid * 0.6;
+
+  // camera bump on every kick
+  camera.position.set(
+    camBase.x + Math.sin(t * 0.4) * 1.2,
+    camBase.y - bump * 0.55 + Math.sin(t * 0.7) * 0.2,
+    camBase.z + bump * 0.6
+  );
+  camera.fov = 65 + bump * 3;
+  camera.updateProjectionMatrix();
+  camera.lookAt(Math.sin(t * 0.3) * 2, 3 - bump * 0.3, -100);
+  camera.rotation.z += Math.sin(t * 0.5) * 0.02;
+
+  bloom.strength = 1.0 + bass * 0.9 + kickEnv * 0.5;
+
+  composer.render();
+}
+animate();
+
+/* =========================================================
+   START / RESIZE
+   ========================================================= */
+const overlay = document.getElementById('overlay');
+overlay.addEventListener('click', async () => {
+  if (started) return;
+  initAudio();
+  await ctx.resume();
+  nextTime = ctx.currentTime + 0.1;
+  step = 0;
+  started = true;
+  overlay.classList.add('hidden');
+});
+
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h);
+  composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  composer.setSize(w, h);
+  bloom.resolution.set(w, h);
+});
+</script>
+</body>
+</html>

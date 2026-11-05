@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Fractal Valley</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+  #hud{position:fixed;left:12px;bottom:10px;font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;color:rgba(255,255,255,.55);
+       letter-spacing:.05em;pointer-events:none;text-shadow:0 0 6px #000;user-select:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<script>
+(() => {
+"use strict";
+const canvas = document.getElementById('c');
+const hud = document.getElementById('hud');
+const gl = canvas.getContext('webgl2', {antialias:false, depth:false, stencil:false, alpha:false, powerPreference:'high-performance', preserveDrawingBuffer:false})
+        || canvas.getContext('webgl', {antialias:false, depth:false, alpha:false});
+if (!gl) { document.body.innerHTML = '<p style="color:#fff;font-family:sans-serif;padding:2em">WebGL not available.</p>'; return; }
+const isGL2 = (typeof WebGL2RenderingContext !== 'undefined') && gl instanceof WebGL2RenderingContext;
+
+const VS = `
+attribute vec2 a;
+void main(){ gl_Position = vec4(a,0.,1.); }`;
+
+const FS = `
+precision highp float;
+uniform vec2  uRes;
+uniform float uTime;
+uniform float uZ;      // camera travel distance
+uniform float uSteps;  // adaptive quality
+
+#define PI 3.14159265
+
+mat2 rot(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
+
+// ---- the flight path through the valley (non-periodic: incommensurate frequencies)
+vec2 path(float z){
+  return vec2(sin(z*0.071)*3.2 + sin(z*0.0233+1.3)*5.1 + sin(z*0.137)*0.9,
+              sin(z*0.053)*0.35 + sin(z*0.0191)*0.5);
+}
+
+// slowly cycling palette (iq cosine palette)
+vec3 pal(float t){
+  float ph = uTime*0.035;
+  return 0.5 + 0.5*cos(6.28318*(vec3(1.0,1.0,1.0)*t + vec3(0.0,0.33,0.67) + ph));
+}
+
+float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float vnoise(vec2 p){
+  vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y);
+}
+
+float gTrap;   // orbit trap for colouring
+float gMat;    // 0 = fractal rock, 1 = valley floor
+
+// ---- kaleidoscopic IFS (folded space). Parameters drift with world-z so no two
+//      stretches of the valley are alike.
+float kifs(vec3 p, float wz){
+  float a1 = 0.55 + 0.35*sin(wz*0.021) + 0.15*sin(wz*0.0067+2.0);
+  float a2 = 0.35 + 0.30*sin(wz*0.017+1.0);
+  float sc = 2.05 + 0.18*sin(wz*0.013+0.5);
+  vec3 off = vec3(1.0, 0.95+0.15*sin(wz*0.029), 0.85+0.2*sin(wz*0.011+3.0));
+  mat2 r1 = rot(a1), r2 = rot(a2);
+  float s = 1.0;
+  float trap = 1e9;
+  for(int i=0;i<7;i++){
+    p = abs(p);
+    if(p.x<p.y) p.xy = p.yx;
+    if(p.x<p.z) p.xz = p.zx;
+    if(p.y<p.z) p.yz = p.zy;
+    p.xy *= r1;
+    p.yz *= r2;
+    p = p*sc - off*(sc-1.0);
+    if(p.z < -0.5*off.z*(sc-1.0)) p.z += off.z*(sc-1.0);
+    s *= sc;
+    trap = min(trap, dot(p,p));
+  }
+  gTrap = trap;
+  vec3 d = abs(p) - vec3(1.0);
+  return (min(max(d.x,max(d.y,d.z)),0.0) + length(max(d,0.0)))/s;
+}
+
+float map(vec3 p){
+  vec2 c = path(p.z);
+  vec3 q = p; q.x -= c.x;
+  float vw = abs(q.x);
+
+  // valley floor (with soft dunes) — the river runs along the centre line
+  float floorH = -1.25 + 0.12*vnoise(p.xz*0.8) + 0.25*smoothstep(0.6, 3.0, vw);
+  float dFloor = p.y - floorH;
+
+  // fractal mountains: mirror-tile the kifs in xz (continuous across seams)
+  const float P = 3.0;
+  vec3 k = p;
+  k.xz = abs(mod(k.xz + P, 2.0*P) - P);
+  k.y -= -0.3;
+  float S = 1.6;
+  float dM = kifs(k/S, p.z)*S;
+  // envelope: mountains grow away from the valley, valley carved out
+  float env = -0.6 + 0.55*pow(max(vw-1.0,0.0),1.25);
+  dM = max(dM, p.y - env - 1.2);
+  dM = max(dM, 1.6 - vw);
+  float trap = gTrap;
+
+  float d = min(dFloor, dM);
+  gMat = dFloor < dM ? 1.0 : 0.0;
+  gTrap = trap;
+  return d;
+}
+
+vec3 calcNormal(vec3 p, float t){
+  vec2 e = vec2(1.0,-1.0)*(0.0008 + 0.0006*t);
+  return normalize(e.xyy*map(p+e.xyy) + e.yyx*map(p+e.yyx) + e.yxy*map(p+e.yxy) + e.xxx*map(p+e.xxx));
+}
+
+float calcAO(vec3 p, vec3 n){
+  float o=0.0, w=1.0;
+  for(int i=1;i<=4;i++){
+    float h = 0.06*float(i);
+    o += w*(h - map(p+n*h));
+    w *= 0.6;
+  }
+  return clamp(1.0 - 3.5*o, 0.0, 1.0);
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/uRes.y;
+
+  // ---- camera
+  float z = uZ;
+  vec2 cp = path(z);
+  vec3 ro = vec3(cp.x, cp.y - 0.35, z);
+  vec2 cl = path(z+2.5);
+  vec3 ta = vec3(cl.x, cl.y - 0.55, z+2.5);
+  vec3 fw = normalize(ta-ro);
+  float roll = (path(z+4.0).x - cp.x)*-0.08;
+  vec3 up = vec3(sin(roll), cos(roll), 0.0);
+  vec3 rt = normalize(cross(up, fw));
+  vec3 uu = cross(fw, rt);
+  vec3 rd = normalize(uv.x*rt + uv.y*uu + 1.25*fw);
+
+  // ---- raymarch with in-scattering accumulation (volumetric fog + river glow)
+  float t = 0.02;
+  float hit = -1.0;
+  vec3 fogAcc = vec3(0.0);
+  float trans = 1.0;
+  const float TMAX = 40.0;
+  for(int i=0;i<160;i++){
+    if(float(i) >= uSteps) break;
+    vec3 p = ro + rd*t;
+    float d = map(p);
+    // volumetric: dense low fog lit by the river below
+    float dens = 0.045*exp(-max(p.y+1.0,0.0)*1.4) + 0.006;
+    float rx = abs(p.x - path(p.z).x);
+    float glow = exp(-rx*rx*1.8) * exp(-max(p.y+1.2,0.0)*1.1);
+    float tc = p.z*0.012 + 0.15;
+    vec3 lightC = pal(tc)*glow*1.6 + vec3(0.05,0.06,0.1);
+    float stepLen = max(d*0.8, 0.01);
+    fogAcc += trans*dens*lightC*stepLen;
+    trans *= exp(-dens*stepLen);
+    if(d < 0.0006*t){ hit = t; break; }
+    t += d*0.8;
+    if(t > TMAX) break;
+  }
+
+  // ---- sky
+  vec3 sky = mix(pal(0.6)*0.25, pal(0.85)*0.06, clamp(rd.y*2.0+0.3,0.0,1.0));
+  sky += pal(0.15)*0.25*pow(max(dot(rd, normalize(vec3(0.0,0.15,1.0))),0.0), 8.0);
+  vec3 col = sky;
+
+  if(hit > 0.0){
+    vec3 p = ro + rd*hit;
+    float mat = gMat;
+    float trap = gTrap;
+    vec3 n = calcNormal(p, hit);
+    float ao = calcAO(p, n);
+    vec3 L = normalize(vec3(0.3, 0.8, 0.6));
+    float dif = clamp(dot(n,L),0.0,1.0);
+    float rim = pow(clamp(1.0+dot(n,rd),0.0,1.0),3.0);
+
+    vec2 c = path(p.z);
+    float rx = abs(p.x - c.x);
+    vec3 riverC = pal(p.z*0.012 + 0.15);
+
+    if(mat > 0.5){
+      // valley floor: dark wet stone with glowing river
+      vec3 base = vec3(0.03,0.03,0.05);
+      col = base*(0.2+dif);
+      float riv = smoothstep(0.55, 0.0, rx + 0.08*sin(p.z*3.0+uTime*2.0));
+      float flow = 0.6 + 0.4*sin(p.z*6.0 - uTime*4.0 + vnoise(p.xz*4.0)*6.0);
+      col += riverC*riv*(1.4 + 0.8*flow);
+      col += riverC*0.35*exp(-rx*1.5);
+    } else {
+      vec3 base = pal(0.4 + sqrt(trap)*0.15 + p.y*0.05);
+      base = mix(base, vec3(0.9), 0.15);
+      float bounce = exp(-rx*0.6)*exp(-max(p.y+1.2,0.0)*0.6);
+      col = base*0.6*(0.15*ao + dif*ao*0.8);
+      col += riverC*bounce*1.2*ao*clamp(0.4 - n.y*0.2 + abs(n.x)*0.6, 0.0, 1.0);
+      col += pal(0.7)*rim*0.25*ao;
+      // glowing veins from the orbit trap
+      col += pal(0.1+trap*0.3)*smoothstep(0.03,0.0,trap)*1.2;
+    }
+    float fogAmt = 1.0 - exp(-hit*0.06);
+    col = mix(col, sky, fogAmt);
+  }
+  col = col*trans + fogAcc;
+
+  // tonemap + grade
+  col = col/(1.0+col);
+  col = pow(col, vec3(0.85));
+  col *= 1.0 - 0.35*dot(uv,uv);
+  gl_FragColor = vec4(col,1.0);
+}`;
+
+function sh(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(s)); throw new Error('shader'); }
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return; }
+gl.useProgram(prog);
+
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, 'a');
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+const uRes = gl.getUniformLocation(prog,'uRes');
+const uTime = gl.getUniformLocation(prog,'uTime');
+const uZ = gl.getUniformLocation(prog,'uZ');
+const uSteps = gl.getUniformLocation(prog,'uSteps');
+
+// ---- adaptive resolution
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+let scale = 0.6;              // fraction of device pixels rendered
+const MIN_S = 0.25, MAX_S = 1.0;
+let steps = 120;
+function resize(){
+  const w = Math.max(1, Math.round(innerWidth * dpr * scale));
+  const h = Math.max(1, Math.round(innerHeight * dpr * scale));
+  if (canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
+  gl.viewport(0,0,w,h);
+}
+addEventListener('resize', resize);
+resize();
+
+let showHud = true;
+addEventListener('keydown', e => { if(e.key === 'h' || e.key === 'H'){ showHud = !showHud; hud.style.display = showHud?'':'none'; } });
+
+let last = performance.now(), t0 = last;
+let travel = 0;
+let acc = 0, frames = 0, fpsShown = 60;
+function frame(now){
+  const dt = Math.min((now - last)/1000, 0.1);
+  last = now;
+  travel += dt * 1.35;
+
+  // adapt every ~0.5s based on average frame time
+  acc += dt; frames++;
+  if (acc > 0.5){
+    const avg = acc/frames*1000;
+    fpsShown = 1000/avg;
+    if (avg > 19.5 && scale > MIN_S){ scale = Math.max(MIN_S, scale*0.85); resize(); }
+    else if (avg > 19.5 && steps > 70){ steps -= 10; }
+    else if (avg < 17.4){
+      if (steps < 140) steps += 5;
+      if (scale < MAX_S){ scale = Math.min(MAX_S, scale*1.06); resize(); }
+    }
+    acc = 0; frames = 0;
+    hud.textContent = `${fpsShown.toFixed(0)} fps · ${canvas.width}×${canvas.height} (${(scale*100).toFixed(0)}%) · ${steps} steps · H hides`;
+  }
+
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.uniform1f(uTime, (now - t0)/1000);
+  gl.uniform1f(uZ, travel);
+  gl.uniform1f(uSteps, steps);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Powers of Ten — Infinite Zoom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;}
+  canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;}
+  .hud{position:fixed;font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#e8eef8;
+       pointer-events:none;user-select:none;text-shadow:0 1px 6px rgba(0,0,0,.7);}
+  #title{top:18px;left:20px;font-size:11px;letter-spacing:.32em;opacity:.55;text-transform:uppercase;}
+  #scale{left:20px;bottom:20px;}
+  #exp{font-size:30px;font-weight:500;line-height:1;}
+  #exp sup{font-size:16px;vertical-align:top;position:relative;top:-2px;margin-left:1px;}
+  #exp .u{font-size:16px;opacity:.7;margin-left:6px;font-weight:300;}
+  #name{font-size:11px;letter-spacing:.22em;text-transform:uppercase;opacity:.65;margin-top:6px;}
+  #bar{width:140px;height:2px;background:rgba(255,255,255,.15);margin-top:9px;position:relative;}
+  #bar i{position:absolute;left:0;top:0;bottom:0;background:#9fd0ff;width:0;}
+  #hint{right:20px;bottom:20px;font-size:10px;letter-spacing:.15em;opacity:.4;text-align:right;}
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;color:#f88;font:14px monospace;padding:30px;white-space:pre-wrap;}
+  .glitch{animation:gl .09s steps(2) infinite;}
+  @keyframes gl{0%{transform:translate(0,0);opacity:1}50%{transform:translate(2px,-1px);opacity:.6}100%{transform:translate(-1px,1px);opacity:1}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud" id="title">Powers of Ten · infinite zoom</div>
+<div class="hud" id="scale">
+  <div id="exp">10<sup id="n">7</sup><span class="u">m</span></div>
+  <div id="name">Earth from orbit</div>
+  <div id="bar"><i id="bi"></i></div>
+</div>
+<div class="hud" id="hint">space / tap — pause · wheel — speed</div>
+<div id="err"></div>
+
+<script>
+(() => {
+'use strict';
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+const errBox = document.getElementById('err');
+function fail(msg){ errBox.style.display='flex'; errBox.textContent = msg; throw new Error(msg); }
+if (!gl) fail('WebGL2 is not available in this browser.');
+
+const VS = `#version 300 es
+void main(){
+  vec2 p = vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2));
+  gl_Position = vec4(p*2.0-1.0, 0.0, 1.0);
+}`;
+
+const FS = `#version 300 es
+precision highp float;
+uniform vec2 uRes;
+uniform float uS;   // level position in [0,8)
+uniform float uT;   // seconds
+out vec4 fragColor;
+
+const float PI  = 3.14159265;
+const float TAU = 6.28318531;
+const float LF  = 3.68887945;   // ln(40): zoom factor per level
+
+mat2 rot(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
+float sst(float a, float b, float x){ float t=clamp((x-a)/(b-a),0.,1.); return t*t*(3.-2.*t); }
+float tri(float x){ return abs(fract(x)-.5)*2.; }
+
+// ---------- hashing & noise ----------
+float h12(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+vec2  h22(vec2 p){ vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973)); p3+=dot(p3,p3.yzx+33.33); return fract((p3.xx+p3.yz)*p3.zy); }
+float h13(vec3 p3){ p3=fract(p3*.1031); p3+=dot(p3,p3.zyx+31.32); return fract((p3.x+p3.y)*p3.z); }
+float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(h12(i),h12(i+vec2(1,0)),f.x), mix(h12(i+vec2(0,1)),h12(i+vec2(1,1)),f.x), f.y); }
+float vn3(vec3 p){ vec3 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(mix(h13(i),h13(i+vec3(1,0,0)),f.x), mix(h13(i+vec3(0,1,0)),h13(i+vec3(1,1,0)),f.x), f.y),
+             mix(mix(h13(i+vec3(0,0,1)),h13(i+vec3(1,0,1)),f.x), mix(h13(i+vec3(0,1,1)),h13(i+vec3(1,1,1)),f.x), f.y), f.z); }
+const mat2 M2 = mat2(1.6,1.2,-1.2,1.6);
+float fbm(vec2 p){ float s=0., a=.5; for(int i=0;i<8;i++){ s+=a*vn(p); p=M2*p+vec2(3.1,1.7); a*=.5; } return s; }
+float fbm4(vec2 p){ float s=0., a=.5; for(int i=0;i<4;i++){ s+=a*vn(p); p=M2*p+vec2(3.1,1.7); a*=.5; } return s; }
+float fbm3(vec3 p){ float s=0., a=.5; for(int i=0;i<8;i++){ s+=a*vn3(p); p=p*2.03+vec3(1.3,7.1,3.7); a*=.5; } return s; }
+
+vec3 voro(vec2 x, out vec2 cid){
+  vec2 n=floor(x), f=fract(x), mg=vec2(0), mr=vec2(0); float md=8.;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g=vec2(float(i),float(j)); vec2 r=g+h22(n+g)-f; float d=dot(r,r);
+    if(d<md){ md=d; mr=r; mg=g; }
+  }
+  float me=8.;
+  for(int j=-2;j<=2;j++) for(int i=-2;i<=2;i++){
+    vec2 g=mg+vec2(float(i),float(j)); vec2 r=g+h22(n+g)-f; vec2 dr=r-mr;
+    if(dot(dr,dr)>1e-5) me=min(me, dot(.5*(mr+r), normalize(dr)));
+  }
+  cid=n+mg;
+  return vec3(sqrt(md), me, h12(cid));
+}
+
+vec3 starfield(vec2 p, float px, float dens){
+  vec3 c=vec3(0);
+  for(int i=0;i<4;i++){
+    float sc=8.*pow(4.,float(i));
+    vec2 q=p*sc, id=floor(q), f=fract(q);
+    float r=h12(id+float(i)*31.7);
+    if(r>1.-dens){
+      vec2 o=.15+.7*h22(id+float(i)*13.1);
+      float d=length(f-o)/sc;
+      float s=px*(.5+1.5*fract(r*91.3));
+      float b=1.-sst(0.,s*1.6,d);
+      b+=.12*(1.-sst(0.,s*6.,d));
+      float tw=.75+.25*sin(uT*3.+r*80.);
+      c+=b*tw*mix(vec3(1.,.78,.55),vec3(.65,.8,1.),fract(r*13.7))*(.4+fract(r*47.));
+    }
+  }
+  return c;
+}
+
+vec3 rotY(vec3 v, float a){ float c=cos(a), s=sin(a); return vec3(c*v.x+s*v.z, v.y, -s*v.x+c*v.z); }
+
+// =============== LEVEL 0 : EARTH (10^7 m) ===============
+vec4 lvEarth(vec2 p, float tau, float px){
+  vec3 col=vec3(.004,.006,.016)+starfield(p,px,.10);
+  const vec2 C=vec2(.34,.2); const float R=.82;
+  vec2 d=(p-C)/R; float r=length(d);
+  vec3 L=normalize(vec3(-.6,.4,.7));
+  float al=0.;
+  vec2 dn=d/max(r,1e-4);
+  float lit=clamp(dot(dn,normalize(L.xy))*.7+.4,0.,1.);
+  float halo=exp(-max(r-1.,0.)*16.)*step(1.,r);
+  col+=halo*vec3(.25,.5,1.)*lit;
+  al=max(al,halo);
+  if(r<1.+2.*px/R){
+    float rr=min(r,1.);
+    vec3 n=vec3(d/max(r,1e-4)*rr, sqrt(max(0.,1.-rr*rr)));
+    float spin=uT*.004;
+    vec3 q=rotY(n,spin);
+    vec2 d0=-C/R; vec3 q0=rotY(vec3(d0,sqrt(1.-dot(d0,d0))),spin);
+    float h=fbm3(q*2.2)-fbm3(q0*2.2);
+    float dif=dot(n,L);
+    float day=sst(-.12,.3,dif);
+    float m=fbm3(q*5.+3.);
+    vec3 ocean=mix(vec3(.0,.03,.12),vec3(.02,.16,.36),sst(-.25,0.,h));
+    ocean=mix(ocean,vec3(.05,.42,.5),sst(-.03,0.,h)*.7);
+    vec3 land=mix(vec3(.10,.27,.07),vec3(.42,.38,.2),sst(.42,.6,m));
+    land=mix(land,vec3(.66,.55,.36),(1.-sst(0.,.18,abs(abs(q.y)-.33)))*sst(.45,.55,m));
+    land*=.85+.35*sst(0.,.2,h);
+    land=mix(land,vec3(.92,.95,.98),sst(.78,.86,abs(q.y)+h*.3));
+    float aa=px/R*4.;
+    float isl=sst(-aa,aa,h);
+    vec3 surf=mix(ocean,land,isl);
+    float cl=fbm3(q*3.5+vec3(0.,0.,uT*.006));
+    cl=sst(.52,.78,cl)*sst(.02,.35,length(p));
+    float spec=pow(max(dot(reflect(-L,n),vec3(0,0,1)),0.),30.)*(1.-isl)*(1.-cl);
+    vec3 c=surf*(day*1.15+.02)+spec*vec3(1.,.9,.7)*.8*day;
+    float nl=sst(.62,.75,vn3(q*90.))*isl*(1.-day)*sst(.4,.6,m);
+    c+=nl*vec3(1.,.65,.3)*.7;
+    c=mix(c,vec3(1.)*(day*1.05+.03),cl*.85);
+    float fr=pow(1.-n.z,2.5);
+    c+=vec3(.3,.55,1.)*fr*(day*.9+.05);
+    float edge=1.-sst(1.-1.5*px/R,1.,r);
+    col=mix(col,c,edge);
+    al=max(al,edge);
+  }
+  return vec4(col,al);
+}
+
+// =============== LEVEL 1 : COASTLINE (10^5 m) ===============
+float coastH(vec2 p){
+  vec2 w=p*1.6;
+  vec2 wp=vec2(fbm(w+vec2(3.1,1.2)),fbm(w+vec2(7.7,4.3)))-.5;
+  return fbm(w*1.3+wp*1.6);
+}
+vec4 lvCoast(vec2 p, float tau, float px){
+  float h0=coastH(vec2(0));
+  vec2 G=vec2(.8,-.6);
+  float h=coastH(p)-h0+.10*dot(p,G);
+  vec2 ld=normalize(vec2(-.6,.4));
+  float e=px*3.;
+  float h2=coastH(p+ld*e)-h0+.10*dot(p+ld*e,G);
+  float slope=(h2-h)/e;
+  float aa=px*3.;
+  // sea
+  vec3 deep=vec3(.01,.07,.19), shallow=vec3(.07,.45,.52);
+  vec3 sea=mix(deep,shallow,exp(min(h,0.)*30.));
+  sea*=.9+.2*fbm4(p*60.+uT*vec2(.3,.1));
+  float fb=1.-sst(0.,.012,-h);
+  float foam=fb*pow(.5+.5*sin(-h*900.+uT*2.5),6.)*step(h,0.);
+  sea=mix(sea,vec3(.85,.92,.95),foam*.7);
+  // land
+  vec3 veg=mix(vec3(.15,.32,.1),vec3(.34,.42,.17),fbm4(p*30.));
+  veg=mix(veg,vec3(.45,.4,.32),sst(.22,.3,h));
+  veg=mix(veg,vec3(.93,.94,.96),sst(.36,.42,h));
+  veg*=clamp(.85+slope*.05,.45,1.35);
+  vec3 sand=vec3(.82,.74,.55);
+  vec3 land=mix(sand,veg,sst(.002,.008,h));
+  // urban area around the zoom point
+  float urb=1.-sst(.03,.14,length(p));
+  vec2 gq=fract(p*400.); vec2 ge=min(gq,1.-gq);
+  float street=1.-sst(.08,.14,min(ge.x,ge.y));
+  vec3 city=mix(vec3(.52,.5,.48)*(.8+.4*h12(floor(p*400.))),vec3(.25,.25,.27),street);
+  land=mix(land,city,urb*sst(.0,.01,h));
+  vec3 col=mix(sea,land,sst(-aa,aa,h));
+  // clouds
+  float cl=sst(.55,.78,fbm(p*4.+uT*.01))*sst(.03,.3,length(p));
+  col=mix(col,vec3(.97),cl*.75);
+  return vec4(col,1.);
+}
+
+// =============== LEVEL 2 : CITY (10^3 m) ===============
+float box2(vec2 v, float lo, float hi, float a){
+  return sst(lo,lo+a,v.x)*(1.-sst(hi-a,hi,v.x))*sst(lo,lo+a,v.y)*(1.-sst(hi-a,hi,v.y));
+}
+vec4 lvCity(vec2 p, float tau, float px){
+  float aa=px*1.5;
+  float wl=dot(p,vec2(.8,-.6))+.55+.3*(fbm4(p*1.7+5.)-.5);
+  const float B=.1, SW=.011;
+  vec2 q=p/B, id=floor(q), f=fract(q);
+  vec2 e2=min(f,1.-f); float st=min(e2.x,e2.y)*B;
+  float park=length(p*vec2(1.,1.15))-.19-.04*(fbm4(p*12.)-.5);
+  vec3 col=vec3(.2,.205,.22)*(.9+.1*vn(p*800.));
+  if(park<0.){
+    vec3 g=mix(vec3(.18,.36,.12),vec3(.28,.46,.17),fbm4(p*60.));
+    col=g;
+    float ring=abs(length(p)-.12);
+    col=mix(col,vec3(.72,.66,.52),1.-sst(.003,.003+aa,ring));
+    col=mix(col,vec3(.6,.58,.52),1.-sst(-.006,-.006+aa,park)*0.+ (1.-sst(-.008,-.008+aa,park))*0.);
+    // trees
+    vec2 tid; vec3 tv=voro(p/.024,tid);
+    vec2 tc=(tid+h22(tid))*.024;
+    float tr=(.3+.15*h12(tid+3.))*.024;
+    bool ok = length(tc)>.05 && abs(length(tc)-.12)>.014 && park< -.01;
+    if(ok){
+      float ds=length(p-tc-vec2(.004,-.004));
+      col*=1.-.45*(1.-sst(tr*.8,tr*1.05,ds));
+      float dt=length(p-tc);
+      if(dt<tr+aa){
+        vec2 nn=(p-tc)/tr;
+        float li=.55+.5*dot(-nn,normalize(vec2(1.,-1.)))*.6;
+        vec3 cc=mix(vec3(.06,.2,.05),vec3(.2,.42,.12),fbm4(p*500.))*li;
+        col=mix(col,cc,1.-sst(tr-aa,tr+aa,dt));
+      }
+    }
+    // the central tree
+    const float R0=.03;
+    float ds0=length(p-vec2(.005,-.005));
+    col*=1.-.5*(1.-sst(R0*.8,R0*1.08,ds0));
+    float d0=length(p);
+    if(d0<R0+aa){
+      vec2 nn=p/R0;
+      float clump=fbm(p*250.);
+      vec2 lid; vec3 lv=voro(p*600.,lid);
+      float li=.6+.45*dot(-nn,normalize(vec2(1.,-1.)))*.7;
+      vec3 cc=mix(vec3(.05,.18,.04),vec3(.25,.5,.13),clump);
+      cc*=.8+.4*sst(.0,.25,lv.y);
+      cc+=vec3(.15,.2,.05)*pow(1.-lv.x,4.)*clump;
+      col=mix(col,cc*li,1.-sst(R0-aa,R0+aa,d0));
+    }
+  } else if(st<SW){
+    bool hz=e2.y<e2.x;
+    float along=hz?p.x:p.y;
+    float dash=step(.5,fract(along*120.))*(1.-sst(.0006,.0006+aa,st));
+    col=mix(col,vec3(.75,.7,.5),dash*.6);
+    float lane=st/SW;
+    float side=hz?(f.y>.5?1.:-1.):(f.x>.5?1.:-1.);
+    float sid=hz?id.y:id.x;
+    float ca=along*25.+uT*.9*side+h12(vec2(sid,side))*9.;
+    float ci=floor(ca), cf=fract(ca);
+    float hc=h12(vec2(ci,sid+side*3.1));
+    float car=step(.55,hc)*sst(.0,.06,cf)*(1.-sst(.4,.46,cf))*sst(.25,.35,lane)*(1.-sst(.75,.85,lane));
+    vec3 ccol=.5+.5*cos(TAU*(hc*3.+vec3(0,.33,.67)));
+    col=mix(col,ccol*.9,car);
+  } else {
+    vec2 bf=(f*B-SW)/(B-2.*SW);
+    float hb=h12(id+.5);
+    if(hb<.07){
+      col=mix(vec3(.2,.38,.15),vec3(.3,.45,.2),vn(p*300.));
+    } else {
+      vec2 nl=vec2(2.+floor(hb*2.),2.+floor(fract(hb*7.)*2.));
+      vec2 lq=bf*nl, lid=floor(lq), lf=fract(lq);
+      float hh=h12(id*3.7+lid);
+      col=vec3(.5,.49,.46);
+      float sz=(B-2.*SW)/max(nl.x,nl.y);
+      float a2=px/sz*1.5;
+      float o=.06+.3*hh*hh;
+      float inSh=box2(lf-vec2(o,-o),.1,.9,a2);
+      col*=1.-.55*inSh;
+      vec3 roof=hh<.3?vec3(.72,.72,.7):hh<.55?vec3(.66,.36,.25):hh<.78?vec3(.3,.32,.36):vec3(.88,.87,.84);
+      roof*=.92+.16*h12(id+lid*9.1);
+      float par=1.-box2(lf,.14,.86,a2);
+      roof=mix(roof,roof*1.18,par);
+      vec2 ac=fract(lf*7.); float acu=step(.82,h12(floor(lf*7.)+id*5.))*box2(ac,.25,.75,a2*7.);
+      roof=mix(roof,vec3(.6),acu*.7);
+      col=mix(col,roof,box2(lf,.1,.9,a2));
+    }
+  }
+  // water
+  vec3 wat=mix(vec3(.03,.12,.18),vec3(.05,.2,.26),fbm4(p*20.+uT*.05));
+  wat+=pow(vn(p*400.+uT*vec2(.5,.2)),12.)*.8;
+  vec3 emb=vec3(.55,.55,.52);
+  col=mix(col,emb,1.-sst(.006,.006+aa,wl));
+  col=mix(col,wat,1.-sst(-aa,aa,wl));
+  return vec4(col,1.);
+}
+
+// =============== LEVEL 3 : LEAF (10^-1 m) ===============
+vec4 lvLeaf(vec2 p, float tau, float px){
+  float aa=px*1.5;
+  vec3 col=mix(vec3(.02,.06,.03),vec3(.09,.2,.07),fbm4(p*1.5+3.));
+  for(int i=0;i<2;i++){
+    float sc=2.5+float(i)*2.;
+    vec2 q=p*sc, id=floor(q);
+    vec2 o=h22(id+float(i)*7.);
+    float dd=length(fract(q)-o);
+    col+=vec3(.5,.6,.2)*.12*(1.-sst(.18,.24,dd))*step(.6,h12(id+9.));
+  }
+  vec2 lp=rot(.6)*p+vec2(.1,.18);
+  float t=(lp.x+.95)/1.9;
+  float W=.46*pow(max(sin(PI*clamp(t,0.,1.)),0.),.8)*(1.-.15*t);
+  W*=1.+.025*sin(t*90.);
+  // shadow on background
+  vec2 sp=lp+vec2(.04,-.05);
+  float ts=(sp.x+.95)/1.9;
+  float Ws=.46*pow(max(sin(PI*clamp(ts,0.,1.)),0.),.8)*(1.-.15*ts);
+  col*=1.-.4*(1.-sst(-.03,.03,abs(sp.y)-Ws))*step(0.,ts)*step(ts,1.);
+  float stem=(1.-sst(.012,.012+aa,abs(lp.y)))*step(lp.x,-.9)*step(-1.7,lp.x);
+  col=mix(col,vec3(.35,.5,.12),stem);
+  float inside=(1.-sst(-aa,aa,abs(lp.y)-W))*step(0.,t)*step(t,1.);
+  float al=max(inside,stem);
+  if(inside>0.){
+    vec3 base=mix(vec3(.17,.43,.06),vec3(.42,.68,.12),fbm(lp*6.));
+    float dm=abs(lp.y)-.012*(1.-t*.7);
+    float mid=1.-sst(0.,aa+.002,dm);
+    float v=lp.x*.9-abs(lp.y)*1.1+.05*sin(abs(lp.y)*8.);
+    float S=.17;
+    float dv=abs(fract(v/S+.5)-.5)*S;
+    float vw=.006*(1.-abs(lp.y)/max(W,1e-3))+.0015;
+    float sec=1.-sst(vw,vw+aa,dv);
+    vec2 c1; vec3 v1=voro(lp*28.,c1);
+    float ter=1.-sst(.035,.035+aa*28.,v1.y);
+    vec2 c2; vec3 v2=voro(lp*55.,c2);
+    float qua=1.-sst(.03,.03+aa*55.,v2.y);
+    vec2 c3; vec3 v3=voro(lp*135.,c3);
+    float epi=1.-sst(.04,.04+aa*135.,v3.y);
+    vec3 c=base*(.85+.3*v3.y);
+    c=mix(c,c*1.25+vec3(.04,.05,0.),epi*.35);
+    c=mix(c,vec3(.6,.8,.3),qua*.45);
+    c=mix(c,vec3(.68,.85,.32),ter*.6);
+    c=mix(c,vec3(.75,.88,.38),sec*.85);
+    c=mix(c,vec3(.8,.9,.45),mid);
+    float rim=1.-sst(0.,.04,W-abs(lp.y));
+    c=mix(c,vec3(.75,.9,.3),rim*.5);
+    c*=.85+.3*sst(-.9,.9,lp.x);
+    col=mix(col,c,inside);
+  }
+  return vec4(col,al);
+}
+
+// =============== LEVEL 4 : PLANT CELLS (10^-4 m) ===============
+vec4 lvCells(vec2 p, float tau, float px){
+  const vec2 S=vec2(2.6,3.8); const vec2 OF=vec2(.37,.21);
+  vec2 cp=p*S+OF;
+  vec2 cid; vec3 v=voro(cp,cid);
+  vec2 cc=cid+h22(cid);
+  vec2 rel=cp-cc;
+  float hs=v.z;
+  float aaC=px*3.2*1.5;
+  vec3 cyto=mix(vec3(.42,.62,.22),vec3(.55,.72,.3),hs);
+  float vac=sst(.1,.35,v.y);
+  vec3 col=mix(cyto,vec3(.78,.9,.6),vac*.45);
+  // streaming granules
+  float gr=pow(vn(rel*40.+uT*vec2(.6,-.4)*(hs-.5)*4.),8.);
+  col+=vec3(.2,.25,.1)*gr;
+  // nucleus
+  vec2 nuc=vec2(cos(hs*TAU),sin(hs*TAU))*.18;
+  float dn=length(rel-nuc)/.11;
+  if(dn<1.){
+    float z=sqrt(1.-dn*dn);
+    vec3 nc=mix(vec3(.4,.38,.5),vec3(.7,.66,.8),z)*(.8+.2*vn(rel*60.));
+    nc=mix(nc,vec3(.3,.25,.4),1.-sst(.25,.32,dn));
+    col=mix(col,nc,1.-sst(.9,1.,dn));
+  }
+  // chloroplasts circling the cell
+  for(int i=0;i<8;i++){
+    float fi=float(i);
+    float ang=TAU*fi/8.+uT*(.12+.1*hs)*(hs>.5?1.:-1.)+hs*5.;
+    vec2 rd=vec2(cos(ang),sin(ang));
+    vec2 cpos=rd*(.26+.04*sin(fi*2.3+hs*9.));
+    vec2 wpos=(cc+cpos-OF)/S;
+    if(length(wpos)<.1) continue;
+    vec2 dd=rel-cpos;
+    vec2 lc=vec2(dot(dd,rd),dot(dd,vec2(-rd.y,rd.x)));
+    float e=length(lc/vec2(.055,.095));
+    if(e<1.){
+      float z=sqrt(1.-e*e);
+      vec3 cg=mix(vec3(.05,.28,.05),vec3(.22,.55,.1),z);
+      cg*=.75+.35*sst(.3,.7,vn(lc*90.));
+      col=mix(col,cg,1.-sst(1.-aaC/.055,1.,e));
+    }
+  }
+  // cell walls
+  float wall=1.-sst(.035,.035+aaC,v.y);
+  float lam=1.-sst(.007,.007+aaC,v.y);
+  col=mix(col,vec3(.82,.93,.5),wall);
+  col=mix(col,vec3(.45,.56,.2),lam*.7);
+  col+=vec3(.08,.12,.04)*exp(-pow((v.y-.05)*60.,2.));
+  // the focus chloroplast at the zoom centre
+  vec2 fp=rot(.35)*p; const vec2 AX=vec2(.085,.05);
+  float fe=length(fp/AX);
+  if(fe<1.05){
+    float z=sqrt(max(0.,1.-fe*fe));
+    vec3 fc=mix(vec3(.07,.3,.06),vec3(.25,.6,.12),z);
+    vec2 gq=fp/vec2(.016,.013)+.5; vec2 gid=floor(gq); vec2 gf=fract(gq)-.5;
+    gf+=(h22(gid)-.5)*.15;
+    float inSt=(1.-sst(.3,.34,abs(gf.x)))*(1.-sst(.36,.4,abs(gf.y)));
+    float lmb=.5+.5*cos(fp.y*TAU/.0016);
+    vec3 gcol=mix(vec3(.02,.17,.04),vec3(.18,.52,.12),lmb);
+    float strl=1.-sst(.05,.09,abs(fract(fp.y/.0065)-.5));
+    fc=mix(fc,vec3(.14,.42,.1),strl*.5);
+    fc=mix(fc,gcol,inSt*pow(z,.3));
+    fc*=.75+.25*z;
+    fc=mix(fc,vec3(.5,.75,.3),1.-sst(.0,.12,1.-fe));
+    col=mix(col,fc,1.-sst(1.-px*1.5/AX.y,1.,fe));
+  }
+  return vec4(col,1.);
+}
+
+// =============== LEVEL 5 : MOLECULE (10^-9 m) ===============
+vec2 J(vec2 b){ return b+.004*vec2(sin(uT*6.+b.x*40.),cos(uT*5.3+b.y*37.)); }
+float segD(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h); }
+void bond(inout vec3 col, inout float al, vec2 p, vec2 a, vec2 b, float w, float aa){
+  float d=segD(p,a,b);
+  float cov=1.-sst(w-aa,w+aa,d);
+  if(cov>0.){
+    float n=clamp(d/w,0.,1.); float sh=sqrt(1.-n*n);
+    vec3 c=vec3(.55,.6,.72)*(.3+.75*sh)+pow(sh,8.)*.3;
+    col=mix(col,c,cov); al=max(al,cov);
+  }
+}
+void atom(inout vec3 col, inout float al, inout float glow, vec2 p, vec2 c, float r, vec3 base, float aa){
+  vec2 d=(p-c)/r; float l=length(d);
+  glow+=exp(-l*l*.35)*r;
+  float cov=1.-sst(1.-aa/r,1.+aa/r,l);
+  if(cov>0.){
+    float lc=min(l,1.);
+    vec3 n=vec3(d/max(l,1e-4)*lc,sqrt(max(0.,1.-lc*lc)));
+    vec3 L=normalize(vec3(-.5,.6,.8));
+    float dif=max(dot(n,L),0.);
+    float sp=pow(max(dot(reflect(-L,n),vec3(0,0,1)),0.),40.);
+    vec3 c2=base*(.15+.9*dif)+sp*.6+base*pow(1.-n.z,3.)*.5;
+    col=mix(col,c2,cov); al=max(al,cov);
+  }
+}
+vec4 lvMol(vec2 p, float tau, float px){
+  float aa=px*1.5;
+  vec3 col=vec3(.008,.012,.035)+vec3(.02,.05,.12)*fbm4(p*2.+uT*.02);
+  // ghost lattice of distant molecules
+  vec2 hq=p*1.3; vec2 hc=vec2(.5*sin(hq.y*5.)+hq.x,hq.y);
+  col+=vec3(.03,.06,.12)*pow(abs(sin(hc.x*6.)*sin(hc.y*6.)),6.);
+  float al=0., glow=0.;
+  const vec3 CN=vec3(.25,.42,1.), CC=vec3(.33,.34,.38), CH=vec3(.9,.92,.96), CMg=vec3(.35,.9,.35);
+  // bonds
+  for(int i=0;i<4;i++){
+    float ang=float(i)*PI*.5+PI*.25;
+    vec2 dir=vec2(cos(ang),sin(ang)), Pc=dir*.47;
+    vec2 V[5];
+    for(int j=0;j<5;j++){ float th=ang+PI+float(j)*TAU/5.; V[j]=J(Pc+.17*vec2(cos(th),sin(th))); }
+    for(int j=0;j<5;j++) bond(col,al,p,V[j],V[(j+1)%5],(j==1||j==3)?.03:.02,aa);
+    float a2=ang+PI*.5; vec2 Pc2=vec2(cos(a2),sin(a2))*.47; float th2=a2+PI+TAU/5.;
+    vec2 V1n=J(Pc2+.17*vec2(cos(th2),sin(th2)));
+    vec2 M=J(vec2(cos(ang+PI*.25),sin(ang+PI*.25))*.495);
+    bond(col,al,p,V[4],M,.02,aa); bond(col,al,p,M,V1n,.026,aa);
+    vec2 HM=J(vec2(cos(ang+PI*.25),sin(ang+PI*.25))*.62);
+    bond(col,al,p,M,HM,.015,aa);
+    for(int j=2;j<=3;j++){ vec2 H=J(V[j]+normalize(V[j]-Pc)*.13); bond(col,al,p,V[j],H,.015,aa); }
+    // coordinate bond to Mg (dashed)
+    vec2 a=J(vec2(0)), b=V[0];
+    float hpar=clamp(dot(p-a,b-a)/dot(b-a,b-a),0.,1.);
+    float dash=step(.5,fract(hpar*6.));
+    float dd=segD(p,a,b);
+    float cv=(1.-sst(.01-aa,.01+aa,dd))*dash;
+    col=mix(col,vec3(.5,.9,.6),cv*.8);
+  }
+  // atoms
+  for(int i=0;i<4;i++){
+    float ang=float(i)*PI*.5+PI*.25;
+    vec2 dir=vec2(cos(ang),sin(ang)), Pc=dir*.47;
+    for(int j=0;j<5;j++){
+      float th=ang+PI+float(j)*TAU/5.;
+      vec2 V=J(Pc+.17*vec2(cos(th),sin(th)));
+      atom(col,al,glow,p,V,j==0?.075:.068,j==0?CN:CC,aa);
+      if(j==2||j==3){ vec2 H=J(Pc+.17*vec2(cos(th),sin(th))+vec2(cos(th),sin(th))*.13); atom(col,al,glow,p,H,.042,CH,aa); }
+    }
+    vec2 md=vec2(cos(ang+PI*.25),sin(ang+PI*.25));
+    atom(col,al,glow,p,J(md*.495),.066,CC,aa);
+    atom(col,al,glow,p,J(md*.62),.042,CH,aa);
+  }
+  atom(col,al,glow,p,J(vec2(0)),.11,CMg,aa);
+  col+=vec3(.15,.35,.8)*glow*.35;
+  al=max(al,clamp(glow*2.,0.,1.));
+  // inside the magnesium atom: electron shells & nucleus
+  float rv=sst(.2,.6,tau);
+  float r=length(p);
+  if(r<.115 && rv>0.){
+    float a=atan(p.y,p.x);
+    vec3 ic=vec3(.01,.02,.06);
+    for(int s=0;s<3;s++){
+      float fs=float(s);
+      float R=.018*pow(2.1,fs);
+      float wob=.003*(fs+1.)*sin(a*(fs+2.)*2.+uT*(1.+fs));
+      ic+=vec3(.2,.6,1.)*exp(-pow((r-R-wob)/(.003+.003*fs),2.))*.8;
+    }
+    vec2 qq=rot(log(r+1e-6)*3.+uT*.6)*(p/max(r,1e-6));
+    float nz=fbm4(qq*2.+vec2(log(r+1e-6)*1.5,0.));
+    ic+=vec3(.4,.3,1.)*nz*nz*.7;
+    ic+=vec3(1.,.8,.6)*exp(-r/.0015)*2.+vec3(1.,.5,.8)*exp(-r/.006)*.4;
+    col=mix(col,ic,rv*(1.-sst(.09,.11,r)));
+  }
+  return vec4(col,clamp(al,0.,1.));
+}
+
+// =============== LEVEL 6 : COSMIC FRACTAL ===============
+vec4 lvFrac(vec2 p, float tau, float px){
+  float r=length(p)+1e-7, a=atan(p.y,p.x), L=log(r);
+  float t=uT*.12;
+  float v=a*(3./TAU)+L*.7+t;
+  float w=L*.35-t*.5;
+  vec2 z=vec2(tri(v),tri(w))*1.3-.15;
+  vec2 c=vec2(.72,.53)+.05*vec2(sin(uT*.05),cos(uT*.037));
+  float t1=1e9, t2=1e9, acc=0.;
+  for(int i=0;i<10;i++){
+    z=abs(z)/max(dot(z,z),1e-4)-c;
+    t1=min(t1,abs(z.y));
+    t2=min(t2,length(z-vec2(.3,.1)));
+    acc+=exp(-abs(dot(z,z)-1.)*6.);
+  }
+  vec3 col=vec3(.01,.0,.03);
+  col+=vec3(.35,.15,.9)*exp(-t1*14.)*1.2;
+  col+=vec3(.1,.8,1.)*exp(-t2*6.)*.8;
+  col+=vec3(1.,.55,.2)*acc*.06;
+  col+=exp(-r*3.)*vec3(1.,.7,.4)*.3;
+  float m=sst(.35,1.,tau);
+  float arms=pow(.5+.5*cos(2.*a+L*2.6-uT*.1),4.);
+  vec3 gcol=(vec3(.4,.55,1.)*arms*.9+vec3(1.,.8,.5)*exp(-r*4.))*(.4+.6*exp(-r*.8));
+  col=mix(col,col*.5+gcol,m*.7);
+  col+=starfield(p,px,.08)*.7;
+  col=mix(vec3(.3,.2,.4),col,sst(px*4.,px*60.,r));
+  return vec4(col,1.);
+}
+
+// =============== LEVEL 7 : GALAXY (10^21 m) ===============
+vec4 lvGal(vec2 p, float tau, float px){
+  const vec2 GC=vec2(-.42,.2);
+  vec2 g=rot(.4)*(p-GC); g.y/=.75;
+  float r=length(g)+1e-5, a=atan(g.y,g.x), L=log(r);
+  vec2 g0=rot(.4)*(-GC); g0.y/=.75;
+  float r0=length(g0), a0=atan(g0.y,g0.x);
+  const float K=2.6;
+  float ph=2.*(a-a0)-K*(L-log(r0));
+  float arm=pow(.5+.5*cos(ph+.4*(fbm4(g*6.)-.5)),3.);
+  float disk=exp(-r/.32);
+  float bulge=exp(-r*r/.008);
+  float dust=sst(.45,.75,fbm(g*9.+3.))*pow(.5+.5*cos(ph+.9),6.);
+  vec3 col=vec3(.002,.003,.01);
+  col+=disk*(.25+1.4*arm)*vec3(.45,.6,1.)*.8;
+  col+=exp(-r/.12)*vec3(1.,.75,.5)*.5;
+  col+=bulge*vec3(1.,.82,.6)*2.;
+  col*=1.-dust*.75*sst(.0,.2,disk);
+  vec2 kq=g*40.; vec2 kid=floor(kq); float kr=h12(kid);
+  if(kr>.9){ float d=length(fract(kq)-h22(kid)); col+=vec3(1.,.35,.6)*exp(-d*d*80.)*arm*disk*2.; }
+  col+=starfield(p,px,.06+.5*disk*(.3+.7*arm));
+  vec2 sunP=vec2(-.0035,.0022);
+  float sd=length(p-sunP);
+  col+=vec3(1.,.9,.7)*(exp(-sd/.0004)*3.+.00012/(sd+.0004));
+  float al=clamp(disk*1.6+bulge,0.,1.);
+  return vec4(col,al);
+}
+
+vec4 level(int k, vec2 p, float tau, float px){
+  if(k==0) return lvEarth(p,tau,px);
+  if(k==1) return lvCoast(p,tau,px);
+  if(k==2) return lvCity(p,tau,px);
+  if(k==3) return lvLeaf(p,tau,px);
+  if(k==4) return lvCells(p,tau,px);
+  if(k==5) return lvMol(p,tau,px);
+  if(k==6) return lvFrac(p,tau,px);
+  return lvGal(p,tau,px);
+}
+
+void main(){
+  float mn=min(uRes.x,uRes.y);
+  vec2 uv=(gl_FragCoord.xy*2.-uRes)/mn;
+  float pxs=2./mn;
+  float s=uS;
+  int k=int(floor(s)); float u=fract(s);
+  uv=rot(s*TAU/8.)*uv;
+  float zc=exp(-u*LF), zn=exp((1.-u)*LF);
+  vec2 pc=uv*zc, pn=uv*zn;
+  float rn=length(pn);
+  float edgeN=.35*(vn(normalize(pn+1e-6)*2.5+uT*.25)-.5);
+  float Rf=1.5*exp(max(0.,u-.38)*2.4*LF);
+  float Rb=1.5*exp(max(0.,u-.62)*3.4*LF);
+  float wf=(1.-sst(.55,1.,rn/Rf*(1.+edgeN)))*sst(.25,.45,u);
+  float wb=(1.-sst(.55,1.,rn/Rb*(1.+edgeN)))*sst(.55,.75,u);
+  vec4 nx=vec4(0); float w=0.;
+  if(max(wf,wb)>.001){
+    nx=level((k+1)%8,pn,u-1.,pxs*zn);
+    w=max(wb,wf*nx.a);
+  }
+  vec3 col;
+  if(w<.999){ vec4 cu=level(k,pc,u,pxs*zc); col=mix(cu.rgb,nx.rgb,w); }
+  else col=nx.rgb;
+  col=1.-exp(-col*1.6);
+  vec2 sq=gl_FragCoord.xy/uRes-.5;
+  col*=1.-.35*dot(sq,sq)*1.6;
+  col+=(h12(gl_FragCoord.xy+fract(uT)*100.)-.5)/255.;
+  fragColor=vec4(col,1.);
+}`;
+
+function sh(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail('Shader error:\n' + gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) fail('Link error:\n' + gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const uRes = gl.getUniformLocation(prog, 'uRes');
+const uS = gl.getUniformLocation(prog, 'uS');
+const uT = gl.getUniformLocation(prog, 'uT');
+const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+
+// ---------- sizing with adaptive quality ----------
+let quality = 1;
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let w = Math.floor(innerWidth * dpr * quality), h = Math.floor(innerHeight * dpr * quality);
+  const maxPix = 2.6e6, pix = w*h;
+  if (pix > maxPix){ const k = Math.sqrt(maxPix/pix); w = Math.floor(w*k); h = Math.floor(h*k); }
+  w = Math.max(w, 64); h = Math.max(h, 64);
+  if (canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, w, h);
+}
+addEventListener('resize', resize);
+resize();
+
+// ---------- timeline ----------
+const LEVELS = [
+  { name: 'Earth from orbit',        e: 7,   to: 5   },
+  { name: 'Coastline',               e: 5,   to: 3   },
+  { name: 'City',                    e: 3,   to: -1  },
+  { name: 'A single leaf',           e: -1,  to: -4  },
+  { name: 'Plant cells',             e: -4,  to: -9  },
+  { name: 'Chlorophyll molecule',    e: -9,  to: -14 },
+  { name: 'Cosmic fractal',          e: -14, to: -35 },
+  { name: 'Spiral galaxy',           e: 21,  to: 7   },
+];
+const DUR = 6.0;                 // seconds per level
+let speed = 1, paused = false, s = 0, last = performance.now();
+const elN = document.getElementById('n'), elName = document.getElementById('name'), elExp = document.getElementById('exp'), elBar = document.getElementById('bi');
+let lastLabel = '';
+
+function togglePause(){ paused = !paused; }
+addEventListener('keydown', e => { if (e.code === 'Space'){ e.preventDefault(); togglePause(); } });
+canvas.addEventListener('pointerdown', togglePause);
+addEventListener('wheel', e => { speed = Math.min(4, Math.max(.25, speed * (e.deltaY > 0 ? .9 : 1.1))); }, { passive: true });
+
+let frames = 0, acc = 0;
+canvas.addEventListener('webglcontextlost', e => e.preventDefault());
+
+function frame(now){
+  const dt = Math.min((now - last) / 1000, .1); last = now;
+  if (!paused) s = (s + dt * speed / DUR) % 8;
+  // adaptive resolution
+  acc += dt; frames++;
+  if (frames >= 30){
+    const avg = acc / frames;
+    if (avg > 1/40 && quality > .35){ quality = Math.max(.35, quality * .85); resize(); }
+    else if (avg < 1/58 && quality < 1){ quality = Math.min(1, quality * 1.08); resize(); }
+    frames = 0; acc = 0;
+  }
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.uniform1f(uS, s);
+  gl.uniform1f(uT, (now / 1000) % 3600);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // scale label
+  const k = Math.floor(s), u = s - k, L = LEVELS[k];
+  let n = Math.round(L.e + (L.to - L.e) * u);
+  let name = L.name;
+  let glitch = false;
+  if (k === 6 && u > .82){ glitch = true; if (Math.random() < .5){ n = 21; name = 'Spiral galaxy'; } }
+  if (k === 7 && u < .06) glitch = true;
+  const label = n + '|' + name + '|' + glitch;
+  if (label !== lastLabel){
+    elN.textContent = (n > 0 ? '' : '') + String(n).replace('-', '−');
+    elName.textContent = name;
+    elExp.classList.toggle('glitch', glitch);
+    lastLabel = label;
+  }
+  elBar.style.width = (s / 8 * 100).toFixed(1) + '%';
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

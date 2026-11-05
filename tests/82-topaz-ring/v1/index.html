@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Topaz Ring — Macro Product Shot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #ffffff; overflow: hidden; }
+  canvas { display: block; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  .card {
+    position: fixed; left: 32px; top: 28px; pointer-events: none; color: #3b3326;
+    font-family: "Cormorant Garamond", "Times New Roman", Georgia, serif;
+  }
+  .card h1 { font-weight: 400; font-size: 30px; margin: 0; letter-spacing: .02em; }
+  .card p { margin: 4px 0 0; font-family: Inter, "Helvetica Neue", Arial, sans-serif; font-size: 11px;
+    letter-spacing: .22em; text-transform: uppercase; color: #8a7f6c; font-weight: 300; }
+  .hint { position: fixed; bottom: 22px; left: 0; right: 0; text-align: center; pointer-events: none;
+    font-family: Inter, "Helvetica Neue", Arial, sans-serif; font-size: 11px; letter-spacing: .25em;
+    text-transform: uppercase; color: #9a907f; transition: opacity 1.2s; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "../../../vendor/three/build/three.module.js",
+  "three/addons/": "../../../vendor/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="card"><h1>Azure Halo</h1><p>18k gold · blue topaz 8×6 mm · 8 diamonds</p></div>
+<div class="hint" id="hint">Drag to rotate · Scroll to zoom</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ---------- renderer ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const BG = new THREE.Color(10, 10, 10); // HDR white -> pure white after tone mapping
+scene.fog = new THREE.Fog(BG.clone(), 110, 520);
+
+const camera = new THREE.PerspectiveCamera(28, window.innerWidth / window.innerHeight, 1, 5000);
+
+// background dome (pure white)
+const bgDome = new THREE.Mesh(
+  new THREE.SphereGeometry(2400, 32, 16),
+  new THREE.MeshBasicMaterial({ color: BG, side: THREE.BackSide, fog: false, depthWrite: false })
+);
+scene.add(bgDome);
+
+// ---------- studio environment (for reflections) ----------
+function buildEnv() {
+  const env = new THREE.Scene();
+  // gradient dome
+  const g = new THREE.SphereGeometry(50, 64, 32);
+  const col = [];
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i) / 50;
+    const t = THREE.MathUtils.smoothstep(y, -0.6, 0.9);
+    const v = THREE.MathUtils.lerp(0.06, 1.1, t);
+    col.push(v, v * 0.99, v * 0.97);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  env.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const panel = (w, h, intensity, pos, color = 0xffffff) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.DoubleSide }));
+    m.position.copy(pos); m.lookAt(0, 0, 0); env.add(m); return m;
+  };
+  // the two soft boxes at 45° left / right
+  panel(22, 26, 6, new THREE.Vector3(-26, 26, 6));
+  panel(22, 26, 6, new THREE.Vector3(26, 26, 6));
+  // crisp strip lights for sharp highlights on polished gold
+  panel(2.2, 40, 14, new THREE.Vector3(0, 32, -30));
+  panel(40, 1.6, 10, new THREE.Vector3(0, 44, 10));
+  panel(1.5, 30, 12, new THREE.Vector3(-36, 12, -20));
+  panel(1.5, 30, 12, new THREE.Vector3(36, 12, -20));
+  // dark flags for contrast in the metal
+  panel(30, 18, 0.0, new THREE.Vector3(0, 6, 40), 0x000000);
+  panel(18, 30, 0.0, new THREE.Vector3(-40, 4, -6), 0x000000);
+  return env;
+}
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(buildEnv(), 0.015).texture;
+
+// ---------- two soft key lights at 45° from either side (no shadows) ----------
+const keyL = new THREE.DirectionalLight(0xfffaf2, 1.25); keyL.position.set(-1, 1, 0.3);
+const keyR = new THREE.DirectionalLight(0xf6f8ff, 1.25); keyR.position.set(1, 1, 0.3);
+scene.add(keyL, keyR);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xe8e2d6, 0.35));
+
+// ---------- procedural linen ----------
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function makeLinen(size = 1024, threads = 64) {
+  const rnd = mulberry32(1337);
+  const cell = size / threads;
+  const mk = () => {
+    const arr = [];
+    for (let i = 0; i < threads; i++) {
+      const o = { off: (rnd() - 0.5) * 0.14 * cell, w: 0.36 + rnd() * 0.1, tint: 0.95 + rnd() * 0.07,
+        slub: new Float32Array(size) };
+      const a1 = rnd() * 0.35, a2 = rnd() * 0.25, p1 = rnd() * 6.283, p2 = rnd() * 6.283;
+      const f1 = 1 + Math.floor(rnd() * 4), f2 = 5 + Math.floor(rnd() * 9);
+      const knot = rnd() < 0.18 ? Math.floor(rnd() * size) : -1;
+      for (let s = 0; s < size; s++) {
+        const t = s / size;
+        let v = 1 + a1 * Math.sin(6.2832 * f1 * t + p1) + a2 * Math.sin(6.2832 * f2 * t + p2);
+        if (knot >= 0) { let d = Math.abs(s - knot); d = Math.min(d, size - d); v += 0.55 * Math.exp(-d * d / (2 * 18 * 18)); }
+        o.slub[s] = v;
+      }
+      arr.push(o);
+    }
+    return arr;
+  };
+  const warp = mk(), weft = mk();
+  const H = new Float32Array(size * size);
+  const T = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    const fy = y / cell, j = Math.floor(fy);
+    for (let x = 0; x < size; x++) {
+      const fx = x / cell, i = Math.floor(fx);
+      const W = warp[i], F = weft[j];
+      // warp thread (vertical)
+      let hw = cell * W.w * W.slub[y];
+      let dx = (x + 0.5 - (i + 0.5) * cell - W.off) / hw;
+      let warpH = -2, weftH = -2;
+      if (Math.abs(dx) < 1) warpH = 0.45 * Math.cos(Math.PI * (fy - 0.5 + i)) + 0.55 * Math.sqrt(1 - dx * dx);
+      let hf = cell * F.w * F.slub[x];
+      let dy = (y + 0.5 - (j + 0.5) * cell - F.off) / hf;
+      if (Math.abs(dy) < 1) weftH = -0.45 * Math.cos(Math.PI * (fx - 0.5 + j)) + 0.55 * Math.sqrt(1 - dy * dy);
+      const k = y * size + x;
+      if (warpH < -1 && weftH < -1) { H[k] = -0.75; T[k] = 0.8; }
+      else if (warpH >= weftH) { H[k] = warpH; T[k] = W.tint; }
+      else { H[k] = weftH; T[k] = F.tint; }
+    }
+  }
+  // colour
+  const cc = document.createElement('canvas'); cc.width = cc.height = size;
+  const cx = cc.getContext('2d'); const img = cx.createImageData(size, size);
+  const cn = document.createElement('canvas'); cn.width = cn.height = size;
+  const nx = cn.getContext('2d'); const nimg = nx.createImageData(size, size);
+  const base = [244, 240, 231];
+  const strength = 2.2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const k = y * size + x;
+      const h = H[k];
+      const shade = 0.8 + 0.2 * THREE.MathUtils.clamp((h + 0.8) / 1.8, 0, 1);
+      const fib = 1 + (rnd() - 0.5) * 0.05;
+      const m = shade * T[k] * fib;
+      img.data[k * 4] = Math.min(255, base[0] * m);
+      img.data[k * 4 + 1] = Math.min(255, base[1] * m);
+      img.data[k * 4 + 2] = Math.min(255, base[2] * m);
+      img.data[k * 4 + 3] = 255;
+      const xl = H[y * size + ((x - 1 + size) % size)], xr = H[y * size + ((x + 1) % size)];
+      const yu = H[((y - 1 + size) % size) * size + x], yd = H[((y + 1) % size) * size + x];
+      let n = new THREE.Vector3((xl - xr) * strength, (yd - yu) * strength, 1).normalize();
+      nimg.data[k * 4] = (n.x * 0.5 + 0.5) * 255;
+      nimg.data[k * 4 + 1] = (n.y * 0.5 + 0.5) * 255;
+      nimg.data[k * 4 + 2] = (n.z * 0.5 + 0.5) * 255;
+      nimg.data[k * 4 + 3] = 255;
+    }
+  }
+  cx.putImageData(img, 0, 0); nx.putImageData(nimg, 0, 0);
+  const map = new THREE.CanvasTexture(cc); map.colorSpace = THREE.SRGBColorSpace;
+  const nmap = new THREE.CanvasTexture(cn); nmap.colorSpace = THREE.NoColorSpace;
+  for (const t of [map, nmap]) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  }
+  return { map, nmap };
+}
+const linenTex = makeLinen();
+const CLOTH = 1400, TILE = 20; // mm; 64 threads per 20 mm ≈ 0.31 mm threads
+linenTex.map.repeat.set(CLOTH / TILE, CLOTH / TILE);
+linenTex.nmap.repeat.copy(linenTex.map.repeat);
+const clothGeo = new THREE.PlaneGeometry(CLOTH, CLOTH, 220, 220);
+clothGeo.rotateX(-Math.PI / 2);
+{
+  const p = clothGeo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    const r = Math.hypot(x, z);
+    const far = THREE.MathUtils.smoothstep(r, 35, 140);
+    const fold = 2.4 * Math.sin(x * 0.028 + z * 0.012 + 1.3) + 1.6 * Math.sin(z * 0.041 - x * 0.017) + 0.8 * Math.sin((x + z) * 0.07);
+    p.setY(i, fold * far);
+  }
+  clothGeo.computeVertexNormals();
+}
+const cloth = new THREE.Mesh(clothGeo, new THREE.MeshPhysicalMaterial({
+  map: linenTex.map, normalMap: linenTex.nmap, normalScale: new THREE.Vector2(0.9, 0.9),
+  roughness: 0.92, metalness: 0, sheen: 0.6, sheenRoughness: 0.75, sheenColor: new THREE.Color(0xffffff),
+  envMapIntensity: 0.55
+}));
+scene.add(cloth);
+
+// soft contact occlusion (not a cast shadow)
+function radialTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+const aoTex = radialTex();
+const mkAO = (w, d, o) => {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({
+    color: 0x2a2014, alphaMap: aoTex, transparent: true, opacity: o, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -2 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.05; scene.add(m); return m;
+};
+
+// ---------- materials ----------
+const gold = new THREE.MeshPhysicalMaterial({
+  color: new THREE.Color().setRGB(1.0, 0.72, 0.31), metalness: 1, roughness: 0.075,
+  clearcoat: 0.25, clearcoatRoughness: 0.03, envMapIntensity: 1.25
+});
+const topazFront = new THREE.MeshPhysicalMaterial({
+  color: new THREE.Color().setRGB(0.62, 0.88, 1.0), metalness: 0, roughness: 0, transmission: 1,
+  thickness: 3.5, ior: 1.62, dispersion: 0.25, attenuationColor: new THREE.Color().setRGB(0.25, 0.68, 1.0),
+  attenuationDistance: 7, specularIntensity: 1, envMapIntensity: 2.2, flatShading: true
+});
+const topazBack = new THREE.MeshStandardMaterial({
+  color: new THREE.Color().setRGB(0.2, 0.58, 0.95), metalness: 1, roughness: 0.02, side: THREE.BackSide,
+  envMapIntensity: 1.6, flatShading: true
+});
+const diaFront = new THREE.MeshPhysicalMaterial({
+  color: 0xffffff, metalness: 0, roughness: 0, transmission: 1, thickness: 1.2, ior: 2.42,
+  dispersion: 1.0, specularIntensity: 1, envMapIntensity: 2.6, flatShading: true
+});
+const diaBack = new THREE.MeshStandardMaterial({
+  color: new THREE.Color().setRGB(0.92, 0.95, 1.0), metalness: 1, roughness: 0.0, side: THREE.BackSide,
+  envMapIntensity: 1.8, flatShading: true
+});
+
+// ---------- gem geometry (brilliant cut via convex hull) ----------
+function brilliantGeometry(girdleSegs = 32) {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const pts = [];
+  const TAU = Math.PI * 2;
+  for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; pts.push(V(0.56 * Math.cos(a), 0.33, 0.56 * Math.sin(a))); }
+  for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * TAU; pts.push(V(0.84 * Math.cos(a), 0.19, 0.84 * Math.sin(a))); }
+  for (let k = 0; k < girdleSegs; k++) {
+    const a = k / girdleSegs * TAU;
+    pts.push(V(Math.cos(a), 0.025, Math.sin(a)), V(Math.cos(a), -0.025, Math.sin(a)));
+  }
+  for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; pts.push(V(0.62 * Math.cos(a), -0.36, 0.62 * Math.sin(a))); }
+  pts.push(V(0, -0.86, 0));
+  return new ConvexGeometry(pts);
+}
+function gem(geo, front, back) {
+  const g = new THREE.Group();
+  const b = new THREE.Mesh(geo, back); b.scale.setScalar(0.992); b.renderOrder = 0;
+  const f = new THREE.Mesh(geo, front); f.renderOrder = 1;
+  g.add(b, f); return g;
+}
+
+// ---------- ring ----------
+const ring = new THREE.Group();
+scene.add(ring);
+
+// band (lathe of a rounded profile)
+const Rc = 9.5, A = 0.9, B = 1.1; // centre radius, half-thickness, half-width (mm)
+{
+  const prof = [];
+  const N = 64;
+  for (let i = 0; i <= N; i++) {
+    const t = -Math.PI / 2 + i / N * Math.PI * 2;
+    const c = Math.cos(t), s = Math.sin(t);
+    prof.push(new THREE.Vector2(Rc + A * Math.sign(c) * Math.pow(Math.abs(c), 0.55), B * Math.sign(s) * Math.pow(Math.abs(s), 0.55)));
+  }
+  const bandGeo = new THREE.LatheGeometry(prof.reverse(), 220);
+  bandGeo.rotateX(Math.PI / 2);
+  ring.add(new THREE.Mesh(bandGeo, gold));
+}
+
+// helper: closed elliptical curve
+class Ellipse3 extends THREE.Curve {
+  constructor(a, b, y) { super(); this.a = a; this.b = b; this.y = y; }
+  getPoint(t, out = new THREE.Vector3()) { const u = t * Math.PI * 2; return out.set(this.a * Math.cos(u), this.y, this.b * Math.sin(u)); }
+}
+const ell = (a, b, y, r) => new THREE.Mesh(new THREE.TubeGeometry(new Ellipse3(a, b, y), 128, r, 12, true), gold);
+
+const GIRDLE_Y = 13.4;     // topaz girdle height above band centre
+const TA = 3, TB = 4;      // topaz semi-axes (6 × 8 mm)
+const HALO_A = 4.05, HALO_B = 5.05, HALO_Y = 13.15, DR = 0.95; // halo diamonds
+
+// gallery / under-halo basket
+{
+  const g = new THREE.CylinderGeometry(1, 0.72, 3.0, 96, 1, true);
+  g.scale(HALO_A + 0.55, 1, HALO_B + 0.55);
+  g.translate(0, 12.45 - 1.5 + 0.0, 0);
+  g.computeVertexNormals();
+  const m = gold.clone(); m.side = THREE.DoubleSide;
+  ring.add(new THREE.Mesh(g, m));
+}
+ring.add(ell(HALO_A + 1.0, HALO_B + 1.0, 12.95, 0.24)); // outer rail
+ring.add(ell(TA + 0.12, TB + 0.12, 12.9, 0.2));          // inner rail / topaz seat
+ring.add(ell(2.6, 3.5, 11.2, 0.28));                      // lower gallery rail
+
+// topaz
+const topazGeo = brilliantGeometry(48);
+topazGeo.scale(TA, 3.4, TB);
+topazGeo.computeVertexNormals();
+const topaz = gem(topazGeo, topazFront, topazBack);
+topaz.position.y = GIRDLE_Y;
+ring.add(topaz);
+
+// four claws
+for (let k = 0; k < 4; k++) {
+  const a = Math.PI / 4 + k * Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(2.45 * c, 11.0, 3.3 * s),
+    new THREE.Vector3(3.05 * c, 12.6, 4.05 * s),
+    new THREE.Vector3(3.15 * c, 13.55, 4.15 * s),
+    new THREE.Vector3(2.8 * c, 13.95, 3.75 * s)
+  ]);
+  ring.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.3, 12, false), gold));
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 14), gold);
+  tip.position.copy(curve.getPoint(1)); ring.add(tip);
+}
+
+// halo of eight diamonds
+const diaGeo = brilliantGeometry(32);
+diaGeo.scale(DR, DR, DR);
+diaGeo.computeVertexNormals();
+const diamonds = [];
+const collet = new THREE.CylinderGeometry(DR * 1.02, DR * 0.5, 0.95, 32, 1, true);
+const bezel = new THREE.TorusGeometry(DR * 1.04, 0.1, 8, 40); bezel.rotateX(Math.PI / 2);
+const bead = new THREE.SphereGeometry(0.27, 16, 12);
+for (let k = 0; k < 8; k++) {
+  const a = (k + 0.5) / 8 * Math.PI * 2;
+  const x = HALO_A * Math.cos(a), z = HALO_B * Math.sin(a);
+  const d = gem(diaGeo, diaFront, diaBack);
+  d.position.set(x, HALO_Y, z);
+  d.rotation.y = k * 0.37;
+  ring.add(d); diamonds.push(d);
+  const cm = new THREE.Mesh(collet, gold); cm.position.set(x, HALO_Y - 0.5, z); ring.add(cm);
+  const bz = new THREE.Mesh(bezel, gold); bz.position.set(x, HALO_Y, z); ring.add(bz);
+  // shared beads between stones
+  const b2 = k / 8 * Math.PI * 2;
+  const bm = new THREE.Mesh(bead, gold);
+  bm.position.set((HALO_A + 0.05) * Math.cos(b2), HALO_Y + 0.12, (HALO_B + 0.05) * Math.sin(b2));
+  ring.add(bm);
+}
+
+// place ring: standing on its shank, leaning slightly toward the lens, nestled into the cloth
+const TILT = 0.13;
+ring.rotation.x = TILT;
+const RO = Rc + A;
+ring.position.y = RO * Math.cos(TILT) + B * 0.8 * Math.sin(TILT) - 0.28;
+mkAO(9, 4.5, 0.55).position.z = -RO * Math.sin(TILT);
+mkAO(34, 16, 0.14).position.z = -RO * Math.sin(TILT);
+
+// ---------- sparkle glints ----------
+function starTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.12, 'rgba(255,255,255,0.55)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,0.08)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+  x.globalCompositeOperation = 'lighter';
+  const ray = (ang, len, w, alpha) => {
+    x.save(); x.translate(64, 64); x.rotate(ang);
+    const lg = x.createLinearGradient(-len, 0, len, 0);
+    lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, `rgba(255,255,255,${alpha})`); lg.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = lg; x.beginPath(); x.ellipse(0, 0, len, w, 0, 0, Math.PI * 2); x.fill(); x.restore();
+  };
+  ray(0, 62, 2.2, 1); ray(Math.PI / 2, 62, 2.2, 1); ray(Math.PI / 4, 34, 1.2, 0.5); ray(-Math.PI / 4, 34, 1.2, 0.5);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const sparkScene = new THREE.Scene();
+const starTex = starTexture();
+const sparkles = [];
+const rnd = mulberry32(99);
+function addSparkle(localPos, size, tint) {
+  const tilt = rnd() * 0.75, az = rnd() * Math.PI * 2;
+  const n = new THREE.Vector3(Math.sin(tilt) * Math.cos(az), Math.cos(tilt), Math.sin(tilt) * Math.sin(az));
+  const mat = new THREE.SpriteMaterial({ map: starTex, color: tint, blending: THREE.AdditiveBlending,
+    depthTest: false, depthWrite: false, transparent: true, opacity: 0, rotation: rnd() * 0.5 });
+  const sp = new THREE.Sprite(mat); sp.visible = false;
+  sparkScene.add(sp);
+  sparkles.push({ sp, local: localPos, n, size, ph: rnd() * 10, rate: 2 + rnd() * 5 });
+}
+for (let i = 0; i < 16; i++) {
+  const r = Math.sqrt(rnd()) * 0.92, a = rnd() * Math.PI * 2;
+  const yk = 0.33 - 0.305 * Math.max(0, (r - 0.56) / 0.44);
+  addSparkle(new THREE.Vector3(TA * r * Math.cos(a), GIRDLE_Y + 3.4 * yk + 0.02, TB * r * Math.sin(a)), 1.1,
+    new THREE.Color().setRGB(2.2, 2.8, 3.4));
+}
+for (const d of diamonds) {
+  for (let i = 0; i < 6; i++) {
+    const r = Math.sqrt(rnd()) * 0.9, a = rnd() * Math.PI * 2;
+    const yk = 0.33 - 0.305 * Math.max(0, (r - 0.56) / 0.44);
+    const fire = [[3.6, 3.4, 3.2], [3.6, 2.6, 1.8], [2.0, 2.8, 3.8], [3.2, 3.6, 2.4]][Math.floor(rnd() * 4)];
+    addSparkle(new THREE.Vector3(d.position.x + DR * r * Math.cos(a), HALO_Y + DR * yk + 0.02, d.position.z + DR * r * Math.sin(a)),
+      0.85, new THREE.Color().setRGB(...fire));
+  }
+}
+const glintLights = [
+  new THREE.Vector3(-1, 1, 0.3).normalize(), new THREE.Vector3(1, 1, 0.3).normalize(),
+  new THREE.Vector3(0, 1, -0.6).normalize(), new THREE.Vector3(0, 1, 0.15).normalize()
+];
+const _p = new THREE.Vector3(), _n = new THREE.Vector3(), _v = new THREE.Vector3(), _h = new THREE.Vector3(), _nm = new THREE.Matrix3();
+function updateSparkles(t) {
+  ring.updateMatrixWorld();
+  _nm.getNormalMatrix(ring.matrixWorld);
+  for (const s of sparkles) {
+    _p.copy(s.local).applyMatrix4(ring.matrixWorld);
+    _n.copy(s.n).applyMatrix3(_nm).normalize();
+    _v.copy(camera.position).sub(_p).normalize();
+    let I = 0;
+    if (_n.dot(_v) > 0.05) {
+      for (const L of glintLights) {
+        _h.copy(L).add(_v).normalize();
+        I += Math.pow(Math.max(_n.dot(_h), 0), 260);
+      }
+    }
+    I *= 0.75 + 0.25 * Math.sin(t * s.rate + s.ph);
+    if (I < 0.02) { s.sp.visible = false; continue; }
+    I = Math.min(I, 1.6);
+    s.sp.visible = true;
+    s.sp.position.copy(_p);
+    s.sp.scale.setScalar(s.size * (0.35 + I * 1.6));
+    s.sp.material.opacity = Math.min(1, I);
+  }
+}
+
+// ---------- camera & controls ----------
+const target = new THREE.Vector3(0, 15.5, 0);
+const camDist = 72, elev = THREE.MathUtils.degToRad(30), az = THREE.MathUtils.degToRad(28);
+camera.position.set(target.x + camDist * Math.cos(elev) * Math.sin(az), target.y + camDist * Math.sin(elev), target.z + camDist * Math.cos(elev) * Math.cos(az));
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(target);
+controls.enableDamping = true; controls.dampingFactor = 0.06;
+controls.enablePan = false;
+controls.minDistance = 38; controls.maxDistance = 150;
+controls.minPolarAngle = THREE.MathUtils.degToRad(25);
+controls.maxPolarAngle = THREE.MathUtils.degToRad(82);
+controls.autoRotate = true; controls.autoRotateSpeed = 0.55;
+controls.rotateSpeed = 0.6;
+const hint = document.getElementById('hint');
+controls.addEventListener('start', () => { controls.autoRotate = false; hint.style.opacity = 0; });
+controls.update();
+
+// ---------- post: macro depth of field ----------
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+composer.setSize(window.innerWidth, window.innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+const bokeh = new BokehPass(scene, camera, { focus: camDist, aperture: 0.00032, maxblur: 0.012 });
+composer.addPass(bokeh);
+const sparkPass = new RenderPass(sparkScene, camera);
+sparkPass.clear = false;
+composer.addPass(sparkPass);
+composer.addPass(new OutputPass());
+
+const focusPoint = new THREE.Vector3();
+function onResize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.fov = w < h ? 38 : 28;
+  camera.updateProjectionMatrix();
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  renderer.setPixelRatio(dpr); renderer.setSize(w, h);
+  composer.setPixelRatio(dpr); composer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  controls.update();
+  topaz.getWorldPosition(focusPoint);
+  // focus distance measured along the view axis
+  const fwd = _v.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  bokeh.uniforms.focus.value = focusPoint.clone().sub(camera.position).dot(fwd);
+  updateSparkles(t);
+  composer.render();
+});
+</script>
+</body>
+</html>

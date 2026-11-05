@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Perfume Shot</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  #preset {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    width: 56px; height: 56px; border-radius: 50%;
+    border: 1px solid rgba(212,165,74,.45);
+    background: radial-gradient(circle at 50% 35%, rgba(60,48,30,.55), rgba(10,10,10,.75));
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    cursor: pointer; display: grid; place-items: center;
+    box-shadow: 0 0 24px rgba(212,165,74,.15), inset 0 1px 0 rgba(255,255,255,.08);
+    transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #preset:hover { transform: translateX(-50%) scale(1.06); box-shadow: 0 0 36px rgba(212,165,74,.3); border-color: rgba(212,165,74,.8); }
+  #preset:active { transform: translateX(-50%) scale(.96); }
+  #preset svg { width: 26px; height: 26px; }
+  #dots { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 7px; }
+  #dots i { width: 5px; height: 5px; border-radius: 50%; background: rgba(212,165,74,.25); transition: background .3s; }
+  #dots i.on { background: rgba(212,165,74,.95); }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "../../../vendor/three/build/three.module.js",
+  "three/addons/": "../../../vendor/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<button id="preset" aria-label="Cycle lighting preset">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#d4a54a" stroke-width="1.6" stroke-linecap="round">
+    <circle cx="12" cy="12" r="4.2"/>
+    <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M5.3 18.7L7 17M17 7l1.7-1.7"/>
+  </svg>
+</button>
+<div id="dots"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
+
+// ---------- renderer ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.18;
+
+const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.01, 20);
+camera.position.set(0, 0.17, 0.62);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.075, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.enablePan = false;
+controls.minDistance = 0.32;
+controls.maxDistance = 1.1;
+controls.minPolarAngle = 0.9;
+controls.maxPolarAngle = 1.62;
+controls.update();
+
+// ---------- dimensions (meters) ----------
+const PED = 0.20;          // 20 x 20 cm pedestal
+const PED_H = 0.05;
+const TOP = 0;             // pedestal top at y = 0
+
+const turntable = new THREE.Group();
+scene.add(turntable);
+
+// ---------- pedestal: black polished acrylic ----------
+const pedMat = new THREE.MeshPhysicalMaterial({
+  color: 0x020202, roughness: 0.06, metalness: 0.0,
+  clearcoat: 1.0, clearcoatRoughness: 0.03, ior: 1.49, specularIntensity: 1
+});
+const pedestal = new THREE.Mesh(new RoundedBoxGeometry(PED, PED_H, PED, 4, 0.0025), pedMat);
+pedestal.position.y = TOP - PED_H / 2;
+pedestal.receiveShadow = true;
+turntable.add(pedestal);
+
+// mirror top surface
+const mirror = new Reflector(new THREE.PlaneGeometry(PED - 0.004, PED - 0.004), {
+  clipBias: 0.002,
+  textureWidth: Math.min(2048, window.innerWidth * renderer.getPixelRatio()),
+  textureHeight: Math.min(2048, window.innerHeight * renderer.getPixelRatio()),
+  color: 0x4a4a4a,
+  multisample: 4
+});
+mirror.rotation.x = -Math.PI / 2;
+mirror.position.y = TOP + 0.0004;
+turntable.add(mirror);
+
+// contact shadows on top of the mirror
+const shadowCatcher = new THREE.Mesh(
+  new THREE.PlaneGeometry(PED - 0.004, PED - 0.004),
+  new THREE.ShadowMaterial({ opacity: 0.55 })
+);
+shadowCatcher.rotation.x = -Math.PI / 2;
+shadowCatcher.position.y = TOP + 0.0006;
+shadowCatcher.receiveShadow = true;
+turntable.add(shadowCatcher);
+
+// ---------- bottle ----------
+const bottle = new THREE.Group();
+turntable.add(bottle);
+
+const BW = 0.064, BH = 0.096, BD = 0.034;
+
+const glassMat = new THREE.MeshPhysicalMaterial({
+  color: 0x15171b,
+  metalness: 0.0,
+  roughness: 0.42,
+  transmission: 0.55,
+  thickness: 0.012,
+  ior: 1.52,
+  attenuationColor: new THREE.Color(0x0b0d10),
+  attenuationDistance: 0.02,
+  clearcoat: 1.0,
+  clearcoatRoughness: 0.35,
+  specularIntensity: 0.9,
+  envMapIntensity: 1.2
+});
+const body = new THREE.Mesh(new RoundedBoxGeometry(BW, BH, BD, 8, 0.0055), glassMat);
+body.position.y = TOP + BH / 2;
+body.castShadow = true;
+bottle.add(body);
+
+// heavy glass base (visible through the frosted shell as a denser block)
+const baseMat = new THREE.MeshPhysicalMaterial({
+  color: 0x08090b, roughness: 0.3, transmission: 0.2, thickness: 0.01, clearcoat: 1, clearcoatRoughness: 0.2
+});
+const base = new THREE.Mesh(new RoundedBoxGeometry(BW - 0.006, 0.014, BD - 0.006, 4, 0.003), baseMat);
+base.position.y = TOP + 0.009;
+bottle.add(base);
+
+// juice inside
+const juiceMat = new THREE.MeshPhysicalMaterial({
+  color: 0x2a1606, roughness: 0.15, transmission: 0.6, thickness: 0.02, ior: 1.36,
+  attenuationColor: new THREE.Color(0x3a1c05), attenuationDistance: 0.03
+});
+const juice = new THREE.Mesh(new RoundedBoxGeometry(BW - 0.01, BH - 0.032, BD - 0.01, 4, 0.003), juiceMat);
+juice.position.y = TOP + 0.016 + (BH - 0.032) / 2;
+bottle.add(juice);
+
+// gold
+const goldMat = new THREE.MeshPhysicalMaterial({
+  color: 0xd9a650, metalness: 1.0, roughness: 0.2,
+  clearcoat: 0.6, clearcoatRoughness: 0.08, envMapIntensity: 2.2
+});
+const brushedGoldMat = goldMat.clone();
+brushedGoldMat.roughness = 0.34;
+
+// neck collar
+const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0095, 0.008, 48), goldMat);
+collar.position.y = TOP + BH + 0.004;
+collar.castShadow = true;
+bottle.add(collar);
+
+// cap: rectangular gold block with a thin bevel band
+const CAP_W = 0.036, CAP_H = 0.034, CAP_D = 0.026;
+const cap = new THREE.Mesh(new RoundedBoxGeometry(CAP_W, CAP_H, CAP_D, 6, 0.004), brushedGoldMat);
+cap.position.y = TOP + BH + 0.008 + CAP_H / 2;
+cap.castShadow = true;
+bottle.add(cap);
+const capBand = new THREE.Mesh(new RoundedBoxGeometry(CAP_W + 0.0012, 0.003, CAP_D + 0.0012, 3, 0.0012), goldMat);
+capBand.position.y = TOP + BH + 0.008 + 0.004;
+bottle.add(capBand);
+const capTop = new THREE.Mesh(new RoundedBoxGeometry(CAP_W - 0.006, 0.002, CAP_D - 0.006, 3, 0.0008), goldMat);
+capTop.position.y = TOP + BH + 0.008 + CAP_H + 0.0004;
+bottle.add(capTop);
+
+// ---------- rose petals ----------
+function petalGeometry(L, W, curl, bend, seed) {
+  const nu = 28, nv = 16;
+  const pos = [], uv = [], idx = [];
+  const rnd = (a) => Math.sin(a * 12.9898 + seed * 78.233) * 0.5;
+  for (let i = 0; i <= nu; i++) {
+    const u = i / nu;
+    // heart-ish outline: wide rounded top, narrow base
+    const w = W * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.62)), 0.75) * (0.92 + 0.08 * Math.sin(u * 9 + seed));
+    for (let j = 0; j <= nv; j++) {
+      const v = j / nv * 2 - 1;
+      let x = v * w * 0.5;
+      let y = u * L;
+      // notch at the tip
+      y -= Math.max(0, 1 - Math.abs(v) * 3) * 0.06 * L * Math.pow(u, 6);
+      // cupping across width, bend along length, little ruffle near edge
+      let z = curl * v * v * (w / W) + bend * Math.pow(u, 2.2)
+            + 0.0009 * Math.sin(u * 14 + v * 5 + seed) * Math.pow(Math.abs(v), 2)
+            + 0.0006 * rnd(i * 31 + j);
+      pos.push(x, y, z);
+      uv.push(j / nv, u);
+    }
+  }
+  for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+    const a = i * (nv + 1) + j, b = a + nv + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  g.translate(0, -L * 0.45, 0);
+  return g;
+}
+
+// subtle vein / color variation texture
+function petalTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const x = c.getContext('2d');
+  const grd = x.createLinearGradient(0, 256, 0, 0);
+  grd.addColorStop(0, '#2a0208');
+  grd.addColorStop(0.25, '#4e0712');
+  grd.addColorStop(1, '#5c0a17');
+  x.fillStyle = grd; x.fillRect(0, 0, 256, 256);
+  x.globalAlpha = 0.12;
+  for (let i = 0; i < 46; i++) {
+    const sx = 128 + (Math.random() - 0.5) * 30;
+    x.strokeStyle = Math.random() < 0.5 ? '#1c0105' : '#7a1426';
+    x.lineWidth = 0.8 + Math.random() * 1.4;
+    x.beginPath();
+    x.moveTo(sx, 256);
+    x.quadraticCurveTo(128 + (Math.random() - 0.5) * 160, 140, (i / 46) * 256, 0);
+    x.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+const petalMap = petalTexture();
+const petalMat = new THREE.MeshPhysicalMaterial({
+  color: 0xffffff, map: petalMap, roughness: 0.55, metalness: 0,
+  sheen: 1.0, sheenRoughness: 0.35, sheenColor: new THREE.Color(0x8a1a2c),
+  clearcoat: 0.25, clearcoatRoughness: 0.4,
+  side: THREE.DoubleSide
+});
+
+const petalsData = [
+  { x: 0.058, z: 0.040, ry: 0.7,  L: 0.040, W: 0.034, curl: 0.0045, bend: 0.004, tilt: 0.05 },
+  { x: -0.050, z: 0.052, ry: -2.2, L: 0.036, W: 0.031, curl: 0.0055, bend: 0.006, tilt: -0.04 },
+  { x: 0.030, z: 0.072, ry: 2.4,  L: 0.034, W: 0.030, curl: 0.0035, bend: -0.002, tilt: 0.08 },
+];
+petalsData.forEach((p, i) => {
+  const holder = new THREE.Group();
+  holder.position.set(p.x, TOP + 0.0016, p.z);
+  holder.rotation.y = p.ry;
+  const m = new THREE.Mesh(petalGeometry(p.L, p.W, p.curl, p.bend, i * 3.7 + 1), petalMat);
+  m.rotation.x = -Math.PI / 2 + p.tilt;
+  m.castShadow = true;
+  m.receiveShadow = true;
+  holder.add(m);
+  turntable.add(holder);
+});
+
+// ---------- lights ----------
+// halo (backlight glow) — camera-facing sprite placed behind the bottle
+function haloTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(256, 256, 0, 256, 256, 256);
+  g.addColorStop(0.0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.18, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.45, 'rgba(255,255,255,0.16)');
+  g.addColorStop(0.75, 'rgba(255,255,255,0.035)');
+  g.addColorStop(1.0, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 512, 512);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const haloMat = new THREE.SpriteMaterial({
+  map: haloTexture(), color: 0xffd9a0, transparent: true, opacity: 0.6,
+  blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false
+});
+const halo = new THREE.Sprite(haloMat);
+halo.scale.set(0.42, 0.42, 1);
+halo.renderOrder = -1;
+scene.add(halo);
+
+// rim / backlights
+const rimL = new THREE.SpotLight(0xffe2b8, 6, 1.5, 0.35, 0.8, 2);
+rimL.position.set(-0.12, 0.24, -0.34);
+rimL.target.position.set(0, 0.07, 0);
+scene.add(rimL, rimL.target);
+const rimR = rimL.clone();
+rimR.position.set(0.12, 0.24, -0.34);
+rimR.target = new THREE.Object3D();
+rimR.target.position.set(0, 0.07, 0);
+scene.add(rimR, rimR.target);
+
+// narrow side light from the left
+const side = new THREE.SpotLight(0xfff1df, 14, 2, 0.11, 0.35, 2);
+side.position.set(-0.6, 0.12, 0.05);
+side.target.position.set(0, 0.06, 0);
+side.castShadow = true;
+side.shadow.mapSize.set(1024, 1024);
+side.shadow.camera.near = 0.2;
+side.shadow.camera.far = 1.2;
+side.shadow.bias = -0.0004;
+side.shadow.radius = 4;
+scene.add(side, side.target);
+
+// soft top key
+const key = new THREE.SpotLight(0xffffff, 3, 2, 0.5, 1, 2);
+key.position.set(0.15, 0.55, 0.3);
+key.target.position.set(0, 0.04, 0);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.bias = -0.0004;
+key.shadow.radius = 6;
+scene.add(key, key.target);
+
+// faint fill from the right
+const fill = new THREE.PointLight(0x9fb4ff, 0.15, 2, 2);
+fill.position.set(0.4, 0.15, 0.35);
+scene.add(fill);
+
+// ---------- lighting presets ----------
+const presets = [
+  { // Noir gold — warm halo, crisp left blade
+    halo: 0xffd29a, haloOp: 0.62, haloScale: 0.42,
+    rim: 0xffe0b0, rimI: 6,
+    side: 0xfff0dc, sideI: 14,
+    key: 0xffffff, keyI: 2.6,
+    fill: 0x9fb4ff, fillI: 0.15,
+    env: 0.18, exposure: 1.0
+  },
+  { // Ice steel — cold halo, blue blade
+    halo: 0x9fc4ff, haloOp: 0.55, haloScale: 0.46,
+    rim: 0xc8dcff, rimI: 7,
+    side: 0xd6e6ff, sideI: 16,
+    key: 0xe8f0ff, keyI: 1.6,
+    fill: 0x6a88ff, fillI: 0.3,
+    env: 0.14, exposure: 0.95
+  },
+  { // Ember — deep red halo, amber edge light
+    halo: 0xff5a3a, haloOp: 0.5, haloScale: 0.5,
+    rim: 0xff7a4a, rimI: 7,
+    side: 0xffb070, sideI: 12,
+    key: 0xffd8b0, keyI: 1.4,
+    fill: 0xff3050, fillI: 0.2,
+    env: 0.12, exposure: 1.05
+  },
+  { // Studio white — bright, clean, high key on black
+    halo: 0xffffff, haloOp: 0.75, haloScale: 0.38,
+    rim: 0xffffff, rimI: 9,
+    side: 0xffffff, sideI: 18,
+    key: 0xffffff, keyI: 4.2,
+    fill: 0xffffff, fillI: 0.35,
+    env: 0.3, exposure: 1.0
+  },
+  { // Blackout — silhouette, only halo and blade
+    halo: 0xffe6c2, haloOp: 0.85, haloScale: 0.34,
+    rim: 0xfff0d8, rimI: 10,
+    side: 0xffffff, sideI: 20,
+    key: 0xffffff, keyI: 0.0,
+    fill: 0x000000, fillI: 0.0,
+    env: 0.05, exposure: 1.0
+  }
+];
+
+const cur = {
+  halo: new THREE.Color(), haloOp: 0, haloScale: 0.42,
+  rim: new THREE.Color(), rimI: 0,
+  side: new THREE.Color(), sideI: 0,
+  key: new THREE.Color(), keyI: 0,
+  fill: new THREE.Color(), fillI: 0,
+  env: 0.18, exposure: 1
+};
+let presetIndex = 0;
+function setTarget(i, instant) {
+  presetIndex = i;
+  if (instant) {
+    const p = presets[i];
+    for (const k in p) {
+      if (cur[k] instanceof THREE.Color) cur[k].set(p[k]); else cur[k] = p[k];
+    }
+  }
+  [...dots.children].forEach((d, n) => d.classList.toggle('on', n === i));
+}
+
+const dots = document.getElementById('dots');
+presets.forEach(() => dots.appendChild(document.createElement('i')));
+setTarget(0, true);
+
+document.getElementById('preset').addEventListener('click', () => {
+  setTarget((presetIndex + 1) % presets.length, false);
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'l' || e.key === 'L' || e.key === ' ') setTarget((presetIndex + 1) % presets.length, false);
+});
+
+const tmpC = new THREE.Color();
+function lerpPreset(dt) {
+  const p = presets[presetIndex];
+  const a = 1 - Math.exp(-dt * 3.0);
+  for (const k in p) {
+    if (cur[k] instanceof THREE.Color) cur[k].lerp(tmpC.set(p[k]), a);
+    else cur[k] += (p[k] - cur[k]) * a;
+  }
+  haloMat.color.copy(cur.halo);
+  haloMat.opacity = cur.haloOp;
+  rimL.color.copy(cur.rim); rimR.color.copy(cur.rim);
+  rimL.intensity = rimR.intensity = cur.rimI;
+  side.color.copy(cur.side); side.intensity = cur.sideI;
+  key.color.copy(cur.key); key.intensity = cur.keyI;
+  fill.color.copy(cur.fill); fill.intensity = cur.fillI;
+  scene.environmentIntensity = cur.env;
+  renderer.toneMappingExposure = cur.exposure;
+}
+
+// ---------- resize ----------
+function onResize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  // keep the product framed on portrait screens
+  camera.fov = w / h < 0.8 ? 30 * Math.min(1.7, 0.8 / (w / h)) : 30;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h);
+  const pr = renderer.getPixelRatio();
+  mirror.getRenderTarget().setSize(Math.min(2048, Math.floor(w * pr)), Math.min(2048, Math.floor(h * pr)));
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+// ---------- loop ----------
+const clock = new THREE.Clock();
+const camDir = new THREE.Vector3();
+function animate() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  turntable.rotation.y += dt * 0.18;   // slow turntable
+  lerpPreset(dt);
+
+  // halo always sits behind the bottle relative to the viewer
+  camera.getWorldDirection(camDir);
+  halo.position.copy(controls.target).addScaledVector(camDir, 0.22);
+  halo.position.y = 0.085;
+  const breathe = 1 + Math.sin(t * 0.8) * 0.02;
+  halo.scale.setScalar(cur.haloScale * breathe);
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+renderer.setAnimationLoop(animate);
+</script>
+</body>
+</html>

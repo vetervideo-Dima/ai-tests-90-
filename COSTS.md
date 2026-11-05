@@ -50,3 +50,4 @@
 | 11-manim-pythagoras | — | high | v1+v2 | 93 329 | 23 | 4.9 | ≈$0.99 | 2026-11-05 |
 | 09-remotion-record-store | — | high | v1+v2 | 128 524 | 48 | 15.9 | ≈$2.05 | 2026-11-05 |
 | 13-tokyo-street-prompts | — | high | v1+v2 | 71 438 | 8 | 2.5 | ≈$0.43 | 2026-11-05 |
+| 14-mammoths-storyboard | — | high | v1+v2 | 74 711 | 11 | 2.9 | ≈$0.52 | 2026-11-05 |

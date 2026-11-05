@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lottie Coffee</title>
+<style>
+  :root { --bg:#1b1310; --card:#2a1d17; --fg:#f6e9da; --muted:#b59a85; --accent:#de6b4a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(120% 90% at 50% 30%, #2f211a 0%, var(--bg) 70%); color: var(--fg);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(512px, 100%); }
+  #anim { width: min(512px, 100%, 72vh); aspect-ratio: 1; border-radius: 22px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.05); background: #2a1b15; }
+  .bar { display: flex; align-items: center; gap: 12px; width: min(512px, 100%, 72vh); }
+  button { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--accent); color: #fff;
+    font-size: 15px; cursor: pointer; display: grid; place-items: center; }
+  button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+  .fr { font-variant-numeric: tabular-nums; color: var(--muted); width: 52px; text-align: right; }
+  .meta { color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="anim" role="img" aria-label="Анимация: чашка кофе с паром"></div>
+  <div class="bar">
+    <button id="play" aria-label="Пауза">❚❚</button>
+    <input id="scrub" type="range" min="0" max="59" step="1" value="0" aria-label="Кадр">
+    <span class="fr" id="fr">0 / 60</span>
+  </div>
+  <div class="meta">Lottie · 512×512 · 60 кадров @ 30 fps · только shape-слои</div>
+</div>
+<script src="../../../vendor/lottie-web/lottie.min.js"></script>
+<script>
+  const q = new URLSearchParams(location.search);
+  const playBtn = document.getElementById('play');
+  const scrub = document.getElementById('scrub');
+  const frLabel = document.getElementById('fr');
+  let anim = null;
+
+  function setPlaying(on) {
+    if (!anim) return;
+    on ? anim.play() : anim.pause();
+    playBtn.textContent = on ? '❚❚' : '▶';
+    playBtn.setAttribute('aria-label', on ? 'Пауза' : 'Играть');
+  }
+
+  fetch('coffee.json')
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => {
+      anim = lottie.loadAnimation({
+        container: document.getElementById('anim'),
+        renderer: 'svg', loop: true, autoplay: true, animationData: data,
+        rendererSettings: { preserveAspectRatio: 'xMidYMid meet', progressiveLoad: false }
+      });
+      scrub.max = Math.round(anim.totalFrames) - 1;
+      anim.addEventListener('enterFrame', () => {
+        const f = Math.floor(anim.currentFrame);
+        scrub.value = f;
+        frLabel.textContent = f + ' / ' + Math.round(anim.totalFrames);
+      });
+      const still = q.get('frame');
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (still !== null) { anim.goToAndStop(+still, true); setPlaying(false); frLabel.textContent = still + ' / 60'; }
+      else if (reduce) { anim.goToAndStop(20, true); setPlaying(false); }
+      document.addEventListener('visibilitychange', () => { if (document.hidden && !anim.isPaused) { anim.pause(); anim.__auto = true; } else if (!document.hidden && anim.__auto) { anim.play(); anim.__auto = false; } });
+    })
+    .catch(err => {
+      console.error('Не удалось загрузить coffee.json', err);
+      document.getElementById('anim').innerHTML = '<p style="padding:24px">Не удалось загрузить coffee.json (откройте через локальный сервер).</p>';
+    });
+
+  playBtn.addEventListener('click', () => setPlaying(anim && anim.isPaused));
+  scrub.addEventListener('input', () => { if (!anim) return; setPlaying(false); anim.goToAndStop(+scrub.value, true); frLabel.textContent = scrub.value + ' / 60'; });
+  document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPlaying(anim && anim.isPaused); } });
+</script>
+</body>
+</html>

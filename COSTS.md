@@ -36,3 +36,4 @@
 | 23-pelican-bicycle | — | high | v1+v2 | 78 871 | 14 | 4.1 | ≈$0.63 | 2026-11-05 |
 | 24-pelican-california | — | high | v1+v2 | 98 491 | 18 | 7.3 | ≈$1.01 | 2026-11-05 |
 | 25-octopus-pipe-organ | — | high | v1+v2 | 98 051 | 18 | 7.0 | ≈$1.00 | 2026-11-05 |
+| 26-gally-six-scenes | — | high | v1+v2 | 110 922 | 17 | 9.4 | ≈$1.20 | 2026-11-05 |

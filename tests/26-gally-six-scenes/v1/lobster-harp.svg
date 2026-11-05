@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7d774"/>
+      <stop offset="0.5" stop-color="#d4a017"/>
+      <stop offset="1" stop-color="#9a6f08"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="#fbeee0"/>
+  <rect y="355" width="400" height="45" fill="#8a5a44"/>
+  <!-- strings -->
+  <g stroke="#f4f0e6" stroke-width="1.5">
+    <line x1="154" y1="69" x2="154" y2="338"/>
+    <line x1="165" y1="66" x2="165" y2="320"/>
+    <line x1="176" y1="64" x2="176" y2="302"/>
+    <line x1="187" y1="63" x2="187" y2="284"/>
+    <line x1="198" y1="63" x2="198" y2="266"/>
+    <line x1="209" y1="64" x2="209" y2="247"/>
+    <line x1="220" y1="66" x2="220" y2="229"/>
+    <line x1="231" y1="69" x2="231" y2="211"/>
+    <line x1="242" y1="73" x2="242" y2="193"/>
+    <line x1="253" y1="78" x2="253" y2="175"/>
+    <line x1="264" y1="84" x2="264" y2="156"/>
+    <line x1="275" y1="91" x2="275" y2="138"/>
+    <line x1="286" y1="99" x2="286" y2="120"/>
+  </g>
+  <g stroke="#c0392b" stroke-width="1.5">
+    <line x1="165" y1="66" x2="165" y2="320"/>
+    <line x1="242" y1="73" x2="242" y2="193"/>
+  </g>
+  <!-- soundboard -->
+  <polygon points="292,98 312,110 168,354 140,346" fill="url(#gold)" stroke="#7a5506" stroke-width="2"/>
+  <!-- neck -->
+  <path d="M110 85 Q205 20 300 105" fill="none" stroke="url(#gold)" stroke-width="16" stroke-linecap="round"/>
+  <!-- pillar -->
+  <rect x="100" y="82" width="16" height="266" fill="url(#gold)" stroke="#7a5506" stroke-width="2"/>
+  <path d="M94 82 Q108 58 122 82 Z" fill="#d4a017" stroke="#7a5506" stroke-width="2"/>
+  <circle cx="108" cy="64" r="7" fill="#f7d774" stroke="#7a5506" stroke-width="2"/>
+  <!-- base -->
+  <rect x="90" y="342" width="94" height="18" rx="6" fill="url(#gold)" stroke="#7a5506" stroke-width="2"/>
+  <!-- lobster -->
+  <g>
+    <!-- antennae -->
+    <path d="M300 250 Q290 160 340 120" fill="none" stroke="#b02a1c" stroke-width="2.5"/>
+    <path d="M308 250 Q320 170 375 150" fill="none" stroke="#b02a1c" stroke-width="2.5"/>
+    <!-- tail -->
+    <ellipse cx="322" cy="300" rx="22" ry="14" fill="#d63a2a" transform="rotate(35 322 300)"/>
+    <ellipse cx="335" cy="318" rx="19" ry="12" fill="#c83223" transform="rotate(45 335 318)"/>
+    <ellipse cx="345" cy="335" rx="16" ry="10" fill="#d63a2a" transform="rotate(55 345 335)"/>
+    <path d="M350 345 L330 362 L352 360 L366 368 L366 346 Z" fill="#b02a1c"/>
+    <!-- legs -->
+    <g stroke="#b02a1c" stroke-width="4" stroke-linecap="round" fill="none">
+      <path d="M295 285 L282 305 L285 320"/>
+      <path d="M305 290 L296 312 L300 328"/>
+      <path d="M315 292 L312 316 L318 332"/>
+    </g>
+    <!-- carapace -->
+    <ellipse cx="305" cy="270" rx="30" ry="22" fill="#e04a33" transform="rotate(20 305 270)"/>
+    <path d="M285 262 Q305 254 322 270" fill="none" stroke="#a52418" stroke-width="2"/>
+    <!-- eyes -->
+    <line x1="292" y1="252" x2="288" y2="238" stroke="#b02a1c" stroke-width="3"/>
+    <line x1="302" y1="250" x2="304" y2="236" stroke="#b02a1c" stroke-width="3"/>
+    <circle cx="288" cy="236" r="5" fill="#111"/><circle cx="304" cy="234" r="5" fill="#111"/>
+    <circle cx="289" cy="234" r="1.5" fill="#fff"/><circle cx="305" cy="232" r="1.5" fill="#fff"/>
+    <!-- upper arm to cloth -->
+    <path d="M285 265 Q262 258 245 248" fill="none" stroke="#d63a2a" stroke-width="10" stroke-linecap="round"/>
+    <!-- claw -->
+    <path d="M248 250 Q225 225 215 232 Q228 240 230 250 Q222 258 210 262 Q232 272 252 258 Z" fill="#e04a33" stroke="#a52418" stroke-width="2"/>
+    <!-- cloth -->
+    <path d="M200 230 Q214 220 226 236 Q220 252 228 266 Q210 270 200 258 Q206 244 200 230 Z" fill="#7fc8e8" stroke="#4a9cc0" stroke-width="2"/>
+    <!-- second claw holding polish -->
+    <path d="M290 290 Q270 305 262 318" fill="none" stroke="#d63a2a" stroke-width="9" stroke-linecap="round"/>
+    <path d="M264 316 Q246 318 244 334 Q254 330 260 334 Q258 342 252 350 Q270 348 272 326 Z" fill="#e04a33" stroke="#a52418" stroke-width="2"/>
+    <rect x="236" y="322" width="14" height="24" rx="3" fill="#f5f5f5" stroke="#777" stroke-width="2"/>
+    <rect x="239" y="316" width="8" height="7" fill="#777"/>
+  </g>
+  <!-- sparkles -->
+  <g fill="#fff8c0" stroke="#e1b12c" stroke-width="1">
+    <path d="M190 200 L194 210 L204 214 L194 218 L190 228 L186 218 L176 214 L186 210 Z"/>
+    <path d="M128 140 L131 147 L138 150 L131 153 L128 160 L125 153 L118 150 L125 147 Z"/>
+    <path d="M255 110 L258 117 L265 120 L258 123 L255 130 L252 123 L245 120 L252 117 Z"/>
+  </g>
+</svg>

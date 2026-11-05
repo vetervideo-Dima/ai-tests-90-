@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd59a"/>
+      <stop offset="1" stop-color="#fff2dc"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#sky)"/>
+  <rect y="320" width="400" height="80" fill="#a07a4f"/>
+  <path d="M330 320 Q360 270 400 290 L400 320 Z" fill="#8a6440"/>
+  <!-- tracks -->
+  <rect x="60" y="292" width="210" height="44" rx="22" fill="#2d2d2d"/>
+  <g fill="#666" stroke="#2d2d2d" stroke-width="3">
+    <circle cx="84" cy="314" r="16"/><circle cx="130" cy="314" r="13"/>
+    <circle cx="170" cy="314" r="13"/><circle cx="210" cy="314" r="13"/>
+    <circle cx="248" cy="314" r="16"/>
+  </g>
+  <rect x="110" y="278" width="120" height="16" fill="#444"/>
+  <!-- body -->
+  <rect x="70" y="212" width="190" height="70" rx="8" fill="#f39c12" stroke="#a5620a" stroke-width="3"/>
+  <rect x="62" y="225" width="20" height="50" rx="4" fill="#d9860c"/>
+  <g stroke="#a5620a" stroke-width="3">
+    <line x1="95" y1="232" x2="160" y2="232"/><line x1="95" y1="244" x2="160" y2="244"/>
+    <line x1="95" y1="256" x2="160" y2="256"/>
+  </g>
+  <!-- cab -->
+  <rect x="172" y="128" width="84" height="90" rx="6" fill="#f39c12" stroke="#a5620a" stroke-width="3"/>
+  <rect x="182" y="138" width="64" height="58" rx="4" fill="#e3f4ff"/>
+  <!-- sloth -->
+  <circle cx="214" cy="168" r="23" fill="#8d6e52"/>
+  <ellipse cx="214" cy="171" rx="17" ry="14" fill="#e3cfae"/>
+  <ellipse cx="206" cy="168" rx="7" ry="4" fill="#4a3424" transform="rotate(20 206 168)"/>
+  <ellipse cx="222" cy="168" rx="7" ry="4" fill="#4a3424" transform="rotate(-20 222 168)"/>
+  <path d="M203 168 Q206 170 209 168" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"/>
+  <path d="M219 168 Q222 170 225 168" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"/>
+  <ellipse cx="214" cy="176" rx="3.5" ry="2.5" fill="#2b1d12"/>
+  <path d="M208 181 Q214 186 220 181" fill="none" stroke="#2b1d12" stroke-width="2" stroke-linecap="round"/>
+  <path d="M196 188 Q200 196 214 196" fill="none" stroke="#8d6e52" stroke-width="9" stroke-linecap="round"/>
+  <path d="M232 188 Q234 196 226 197" fill="none" stroke="#8d6e52" stroke-width="9" stroke-linecap="round"/>
+  <ellipse cx="220" cy="198" rx="15" ry="5" fill="none" stroke="#333" stroke-width="3"/>
+  <g stroke="#f5ecd8" stroke-width="2" stroke-linecap="round">
+    <line x1="212" y1="196" x2="210" y2="201"/><line x1="215" y1="196" x2="214" y2="202"/>
+    <line x1="226" y1="196" x2="228" y2="201"/>
+  </g>
+  <path d="M186 141 L202 141 L186 164 Z" fill="#fff" opacity="0.55"/>
+  <rect x="182" y="138" width="64" height="58" rx="4" fill="none" stroke="#a5620a" stroke-width="3"/>
+  <!-- boom and arm -->
+  <line x1="250" y1="232" x2="318" y2="118" stroke="#f39c12" stroke-width="22" stroke-linecap="round"/>
+  <line x1="250" y1="232" x2="318" y2="118" stroke="#a5620a" stroke-width="2" stroke-dasharray="1 0" opacity="0.4"/>
+  <line x1="262" y1="250" x2="300" y2="170" stroke="#888" stroke-width="6" stroke-linecap="round"/>
+  <line x1="318" y1="118" x2="356" y2="238" stroke="#f39c12" stroke-width="15" stroke-linecap="round"/>
+  <line x1="326" y1="112" x2="350" y2="200" stroke="#888" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="318" cy="118" r="7" fill="#555"/>
+  <!-- bucket -->
+  <path d="M346 232 L388 244 L382 282 Q360 292 342 274 Z" fill="#555" stroke="#333" stroke-width="3"/>
+  <path d="M348 236 Q364 228 384 244 L384 248 L348 238 Z" fill="#7a5a36"/>
+  <g fill="#333">
+    <polygon points="344,276 340,288 350,282"/><polygon points="356,284 354,296 364,288"/>
+    <polygon points="370,286 372,298 378,286"/>
+  </g>
+  <!-- zzz -->
+  <text x="236" y="120" font-family="Verdana, sans-serif" font-size="16" font-weight="bold" fill="#8d6e52">z</text>
+  <text x="248" y="104" font-family="Verdana, sans-serif" font-size="20" font-weight="bold" fill="#8d6e52">z</text>
+  <text x="262" y="84" font-family="Verdana, sans-serif" font-size="25" font-weight="bold" fill="#8d6e52">Z</text>
+</svg>
